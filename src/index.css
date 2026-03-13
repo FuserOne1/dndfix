@@ -1,0 +1,141 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --color-primary: var(--theme-primary);
+  --color-primary-hover: var(--theme-primary-hover);
+  --color-primary-bg: var(--theme-primary-bg);
+  --color-primary-border: var(--theme-primary-border);
+  --color-primary-glow: var(--theme-primary-glow);
+  --color-primary-text: var(--theme-primary-text);
+}
+
+/* Default theme (Emerald) */
+:root {
+  --theme-primary: #10b981;
+  --theme-primary-hover: #059669;
+  --theme-primary-bg: rgba(16, 185, 129, 0.1);
+  --theme-primary-border: rgba(16, 185, 129, 0.2);
+  --theme-primary-glow: rgba(16, 185, 129, 0.2);
+  --theme-primary-text: #34d399;
+}
+
+/* PWA: Safe area insets for iOS */
+@supports (padding: max(0px)) {
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* Theme classes - apply to any element */
+.theme-emerald,
+:root:has(.theme-emerald) {
+  --theme-primary: #10b981 !important;
+  --theme-primary-hover: #059669 !important;
+  --theme-primary-bg: rgba(16, 185, 129, 0.1) !important;
+  --theme-primary-border: rgba(16, 185, 129, 0.2) !important;
+  --theme-primary-glow: rgba(16, 185, 129, 0.2) !important;
+  --theme-primary-text: #34d399 !important;
+}
+
+.theme-crimson,
+:root:has(.theme-crimson) {
+  --theme-primary: #e11d48 !important;
+  --theme-primary-hover: #be123c !important;
+  --theme-primary-bg: rgba(225, 29, 72, 0.1) !important;
+  --theme-primary-border: rgba(225, 29, 72, 0.2) !important;
+  --theme-primary-glow: rgba(225, 29, 72, 0.2) !important;
+  --theme-primary-text: #fb7185 !important;
+}
+
+.theme-amethyst,
+:root:has(.theme-amethyst) {
+  --theme-primary: #8b5cf6 !important;
+  --theme-primary-hover: #7c3aed !important;
+  --theme-primary-bg: rgba(139, 92, 246, 0.1) !important;
+  --theme-primary-border: rgba(139, 92, 246, 0.2) !important;
+  --theme-primary-glow: rgba(139, 92, 246, 0.2) !important;
+  --theme-primary-text: #a78bfa !important;
+}
+
+.theme-amber,
+:root:has(.theme-amber) {
+  --theme-primary: #f59e0b !important;
+  --theme-primary-hover: #d97706 !important;
+  --theme-primary-bg: rgba(245, 158, 11, 0.1) !important;
+  --theme-primary-border: rgba(245, 158, 11, 0.2) !important;
+  --theme-primary-glow: rgba(245, 158, 11, 0.2) !important;
+  --theme-primary-text: #fbbf24 !important;
+}
+
+html, body, #root {
+  @apply bg-zinc-950 h-full w-full overflow-hidden m-0 p-0;
+  
+  /* Mobile optimizations */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  touch-action: manipulation;
+}
+
+/* Mobile: Prevent zoom on input focus */
+@media (max-width: 768px) {
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+}
+
+/* Mobile: Better scrolling */
+@media (max-width: 768px) {
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Fix word wrapping for long messages */
+.prose p, .prose-invert p {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+/* Fix code blocks and long words */
+.prose code, .prose-invert code,
+.prose pre, .prose-invert pre {
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+/* LaTeX/KaTeX styling for beautiful math formulas */
+.katex {
+  font-size: 1.1em !important;
+  font-weight: 500;
+}
+
+.katex .katex-html {
+  color: var(--theme-primary-text);
+}
+
+.katex .katex-mathml {
+  display: none;
+}
+
+/* Make math expressions stand out */
+.prose .katex-display {
+  background: var(--theme-primary-bg);
+  border-left: 3px solid var(--theme-primary);
+  padding: 1rem;
+  border-radius: 0.5rem;
+  margin: 1rem 0;
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
