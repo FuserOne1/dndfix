@@ -301,6 +301,35 @@ export default function App() {
         user_session_id: userSessionId,
       });
 
+      // Инициализируем character_stats для этого персонажа
+      const characterStatsData = {
+        [character.name]: {
+          name: character.name,
+          race: character.race,
+          class: character.class,
+          level: character.level,
+          hp: { current: character.hp_current, max: character.hp_max },
+          xp: character.xp,
+          stats: {
+            strength: character.strength,
+            dexterity: character.dexterity,
+            constitution: character.constitution,
+            intelligence: character.intelligence,
+            wisdom: character.wisdom,
+            charisma: character.charisma,
+          },
+          background: character.background,
+          equipment: character.equipment,
+          story_summary: character.story_summary,
+        }
+      };
+
+      await supabase.from('game_sessions')
+        .update({ 
+          character_stats: characterStatsData 
+        })
+        .eq('id', sessionId);
+
       // Переход в игру
       setSessionId(sessionId);
       setCurrentScreen('game');
@@ -314,6 +343,35 @@ export default function App() {
         character_id: character.id,
         user_session_id: userSessionId,
       });
+
+      // Инициализируем character_stats
+      const characterStatsData = {
+        [character.name]: {
+          name: character.name,
+          race: character.race,
+          class: character.class,
+          level: character.level,
+          hp: { current: character.hp_current, max: character.hp_max },
+          xp: character.xp,
+          stats: {
+            strength: character.strength,
+            dexterity: character.dexterity,
+            constitution: character.constitution,
+            intelligence: character.intelligence,
+            wisdom: character.wisdom,
+            charisma: character.charisma,
+          },
+          background: character.background,
+          equipment: character.equipment,
+          story_summary: character.story_summary,
+        }
+      };
+
+      await supabase.from('game_sessions')
+        .update({ 
+          character_stats: characterStatsData 
+        })
+        .eq('id', sessionId || currentRoomId);
 
       setCurrentScreen('game');
     }
@@ -338,6 +396,8 @@ export default function App() {
       const { data, error } = await supabase.from('game_sessions').insert({
         id: sessionCode,
         created_by: userSessionId,
+        character_stats: {}, // Инициализируем пустыми статами
+        is_ai_generating: false,
       }).select();
 
       if (error) {
@@ -346,7 +406,7 @@ export default function App() {
       }
 
       console.log('Session created:', data);
-      
+
       // Сохраняем сессию и переходим к выбору персонажа
       setSessionId(sessionCode);
       saveSessionToRecent(sessionCode);
