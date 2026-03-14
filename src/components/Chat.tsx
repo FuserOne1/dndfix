@@ -109,6 +109,8 @@ export default function Chat({ roomId, userName, character, onLeave, onCharacter
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isGeneratingAI = useRef(false);
+  // Глобальное состояние генерации AI — синхронизируется между всеми игроками
+  const [isAIGenerating, setIsAIGenerating] = useState(false);
   // Храним краткую историю для экономии токенов
   const [storySummary, setStorySummary] = useState<string>('');
   // AI Orchestrator для генерации ответов
@@ -273,11 +275,32 @@ export default function Chat({ roomId, userName, character, onLeave, onCharacter
           }
           if (newMessage.is_ai) {
             setDailyPromptCount(prev => prev + 1);
+            // AI ответил — сбрасываем флаг генерации
+            setIsAIGenerating(false);
           }
           setMessages((prev) => {
             if (prev.some(m => m.id === newMessage.id)) return prev;
             return [...prev, newMessage];
           });
+        }
+      )
+      // Подписка на статус генерации AI
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'rooms',
+          filter: `id=eq.${roomId}`,
+        },
+        (payload) => {
+          // Проверяем, изменился ли флаг is_ai_generating
+          const newIsGenerating = payload.new.is_ai_generating;
+          const oldIsGenerating = payload.old.is_ai_generating;
+          if (newIsGenerating !== oldIsGenerating) {
+            setIsAIGenerating(!!newIsGenerating);
+            console.log('AI generating status changed:', newIsGenerating);
+          }
         }
       )
       .on('presence', { event: 'sync' }, () => {
@@ -661,6 +684,13 @@ export default function Chat({ roomId, userName, character, onLeave, onCharacter
     }
 
     isGeneratingAI.current = true;
+    
+    // Устанавливаем флаг генерации AI в БД — все игроки увидят индикатор
+    setIsAIGenerating(true);
+    await supabase
+      .from('rooms')
+      .update({ is_ai_generating: true })
+      .eq('id', roomId);
 
     // Get unique players who have sent a message RECENTLY (last 10 minutes)
     const TEN_MINUTES = 10 * 60 * 1000;
@@ -1003,6 +1033,18 @@ XP: ${stats.xp}
     }
 
     isGeneratingAI.current = false;
+    // Сбрасываем флаг генерации AI в БД
+    supabase
+      .from('rooms')
+      .update({ is_ai_generating: false })
+      .eq('id', roomId)
+      .then(() => {
+        console.log('AI generating flag reset');
+      })
+      .catch(err => {
+        console.error('Failed to reset AI generating flag:', err);
+      });
+    
     if (!wasLoading) setIsLoading(false);
   };
 
@@ -1380,7 +1422,7 @@ XP: ${stats.xp}
             })()}
           </div>
         )}
-        {isLoading && (
+        {isAIGenerating && (
           <div className="p-12 flex flex-col items-center justify-center gap-4 text-primary/50 animate-pulse">
             <Loader2 className="w-8 h-8 animate-spin" />
             <span className="text-xs font-mono uppercase tracking-[0.3em]">Мастер плетет историю...</span>
