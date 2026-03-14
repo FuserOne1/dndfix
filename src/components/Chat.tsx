@@ -113,6 +113,7 @@ export default function Chat({ roomId, userName, character, onLeave, onCharacter
   const [players, setPlayers] = useState<{user: string, avatar?: string}[]>([]);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [isStatsOpen, setIsStatsOpen] = useState(false);
+  const [selectedPlayerForStats, setSelectedPlayerForStats] = useState<string>('');
   // Храним характеристики для всех игроков в комнате
   const [characterStats, setCharacterStats] = useState<Record<string, CharacterStats> | null>(null);
   const [currentPrompt, setCurrentPrompt] = useState('');
@@ -384,20 +385,25 @@ export default function Chat({ roomId, userName, character, onLeave, onCharacter
     }
   };
 
-  // Получаем характеристики текущего игрока
+  // Получаем характеристики текущего игрока или выбранного
   const getCurrentPlayerStats = (): CharacterStats | null => {
     if (!characterStats) return null;
-    
+
+    // Если выбран конкретный игрок - показываем его
+    if (selectedPlayerForStats && characterStats[selectedPlayerForStats]) {
+      return characterStats[selectedPlayerForStats];
+    }
+
     // Сначала пробуем найти по имени персонажа
     if (character && characterStats[character.name]) {
       return characterStats[character.name];
     }
-    
+
     // Потом по userName
     if (userName && characterStats[userName]) {
       return characterStats[userName];
     }
-    
+
     // Если ничего не нашли, возвращаем первого доступного
     const firstPlayer = Object.keys(characterStats)[0];
     return firstPlayer ? characterStats[firstPlayer] : null;
@@ -1539,16 +1545,15 @@ XP: ${character.xp}
         </div>
       )}
       {/* Character Stats Modal */}
-      {isStatsOpen && (() => {
-        console.log('=== STATS MODAL OPENED ===');
-        console.log('characterStats:', characterStats);
-        console.log('character:', character);
-        console.log('userName:', userName);
-        console.log('getCurrentPlayerStats():', getCurrentPlayerStats());
-        return null;
-      })()}
       {isStatsOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-zinc-950/90 backdrop-blur-xl animate-in fade-in duration-300">
+          {/* Устанавливаем текущего игрока при открытии */}
+          {(() => {
+            if (!selectedPlayerForStats && character) {
+              setSelectedPlayerForStats(character.name);
+            }
+            return null;
+          })()}
           <div className="max-w-4xl w-full h-[90vh] bg-zinc-900 border border-zinc-800 rounded-[3rem] shadow-2xl flex flex-col overflow-hidden relative">
             {/* Header */}
             <div className="p-8 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50 backdrop-blur-xl">
@@ -1563,12 +1568,26 @@ XP: ${character.xp}
                   </p>
                 </div>
               </div>
-              <button
-                onClick={() => setIsStatsOpen(false)}
-                className="p-3 hover:bg-zinc-800 rounded-2xl transition-all text-zinc-500 hover:text-white group"
-              >
-                <X className="w-6 h-6 group-hover:rotate-90 transition-transform" />
-              </button>
+              <div className="flex items-center gap-2">
+                {/* Selector игроков */}
+                {characterStats && Object.keys(characterStats).length > 1 && (
+                  <select
+                    value={selectedPlayerForStats || character?.name || userName || ''}
+                    onChange={(e) => setSelectedPlayerForStats(e.target.value)}
+                    className="bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  >
+                    {Object.keys(characterStats).map((playerName) => (
+                      <option key={playerName} value={playerName}>{playerName}</option>
+                    ))}
+                  </select>
+                )}
+                <button
+                  onClick={() => setIsStatsOpen(false)}
+                  className="p-3 hover:bg-zinc-800 rounded-2xl transition-all text-zinc-500 hover:text-white group"
+                >
+                  <X className="w-6 h-6 group-hover:rotate-90 transition-transform" />
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-8 scrollbar-thin scrollbar-thumb-zinc-800">
