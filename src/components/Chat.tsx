@@ -214,7 +214,10 @@ export default function Chat({ roomId, userName, character, onLeave, onCharacter
   useEffect(() => {
     fetchMessages();
     fetchDailyUsage();
-    
+
+    // Сначала загружаем данные комнаты
+    fetchRoomStats();
+
     // Автоматически инициализируем персонажа если он передан
     if (character) {
       const characterStatsData: CharacterStats = {
@@ -239,15 +242,9 @@ export default function Chat({ roomId, userName, character, onLeave, onCharacter
         equipment: character.equipment,
         story_summary: character.story_summary || '',
       };
-      
-      // Сразу устанавливаем состояние
-      setCharacterStats({ [character.name]: characterStatsData });
-      
+
       // Сохраняем в БД асинхронно
       updateRoomStats(character.name, characterStatsData);
-    } else {
-      // Если персонаж не передан, пробуем загрузить из БД
-      fetchRoomStats();
     }
     
     // Загружаем summary из последней характеристики
