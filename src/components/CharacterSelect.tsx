@@ -391,8 +391,8 @@ export default function CharacterSelect({
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-3 md:p-8 overflow-y-auto">
-      <div className="max-w-6xl mx-auto space-y-4 md:space-y-6 pb-8">
+    <div className="h-screen bg-zinc-950 text-zinc-100 p-3 md:p-8 overflow-y-auto">
+      <div className="max-w-6xl mx-auto space-y-4 md:space-y-6 pb-8 min-h-screen">
         {/* Header */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">

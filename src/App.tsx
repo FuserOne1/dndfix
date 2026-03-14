@@ -246,9 +246,10 @@ export default function App() {
     setSelectedCharacter(character);
     
     if (roomId) {
-      // Присоединение к существующей комнате
+      // Присоединение к существующей комнате — сразу показываем чат
       saveRoomToRecent(roomId, character.name);
       setRoomId(roomId);
+      setCurrentScreen('game');
     } else {
       // Создание новой комнаты
       await createRoom(character);
