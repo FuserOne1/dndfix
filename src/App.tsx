@@ -473,7 +473,6 @@ export default function App() {
               </div>
             </div>
           )}
-        </div>
 
           <AnimatePresence>
             {error && (
