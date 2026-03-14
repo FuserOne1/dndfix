@@ -1,24 +1,24 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Character, LobbyParticipant } from '../types';
+import { Character } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
+import {
   User, Swords, Shield, Heart, Zap, Brain, Eye, MessageCircle,
   Plus, Check, Lock, Loader2, ArrowLeft, Sparkles, Trash2, ChevronLeft, ChevronRight
 } from 'lucide-react';
 
 interface CharacterSelectProps {
-  lobbyId: string;
   userSessionId: string;
-  onCharacterSelected: (character: Character) => void;
+  onCharacterSelected: (character: Character, roomId?: string) => void;
   onBack: () => void;
+  roomId?: string;
 }
 
-export default function CharacterSelect({ 
-  lobbyId, 
-  userSessionId, 
+export default function CharacterSelect({
+  userSessionId,
   onCharacterSelected,
-  onBack 
+  onBack,
+  roomId
 }: CharacterSelectProps) {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [occupiedCharacterIds, setOccupiedCharacterIds] = useState<Set<string>>(new Set());
@@ -31,7 +31,6 @@ export default function CharacterSelect({
   const [currentPage, setCurrentPage] = useState(0);
   const charactersPerPage = 6;
 
-  // Форма создания персонажа
   const [newCharacter, setNewCharacter] = useState({
     name: '',
     race: 'Человек',
@@ -50,7 +49,6 @@ export default function CharacterSelect({
     { id: 'ranger',   emoji: '🏹', label: 'Следопыт'},
   ];
 
-  // Характеристики для распределения (27 очков)
   const [pointBuy, setPointBuy] = useState({
     strength: 8,
     dexterity: 8,
@@ -73,43 +71,43 @@ export default function CharacterSelect({
   ];
 
   const classes = [
-    { 
-      name: 'Воин', 
+    {
+      name: 'Воин',
       hitDie: 10,
       equipment: ['Длинный меч', 'Щит', 'Кольчужная рубаха', 'Рюкзак', 'Верёвка (15м)', 'Факел (10шт)', 'Сухой паёк (10 дней)', 'Фляга']
     },
-    { 
-      name: 'Маг', 
+    {
+      name: 'Маг',
       hitDie: 6,
       equipment: ['Посох', 'Книга заклинаний', 'Мантия', 'Рюкзак', 'Компоненты для заклинаний', 'Чернила и перо', 'Сухой паёк (10 дней)', 'Фляга']
     },
-    { 
-      name: 'Плут', 
+    {
+      name: 'Плут',
       hitDie: 8,
       equipment: ['Короткий меч', 'Короткий лук (20 стрел)', 'Кожаная броня', 'Воровские инструменты', 'Рюкзак', 'Верёвка (15м)', 'Сухой паёк (10 дней)', 'Фляга']
     },
-    { 
-      name: 'Клерик', 
+    {
+      name: 'Клерик',
       hitDie: 8,
       equipment: ['Булава', 'Щит', 'Кольчужная рубаха', 'Святой символ', 'Молитвенник', 'Рюкзак', 'Сухой паёк (10 дней)', 'Фляга']
     },
-    { 
-      name: 'Следопыт', 
+    {
+      name: 'Следопыт',
       hitDie: 10,
       equipment: ['Длинный лук (20 стрел)', 'Короткий меч', 'Кожаная броня', 'Рюкзак', 'Верёвка (15м)', 'Капкан', 'Сухой паёк (10 дней)', 'Фляга']
     },
-    { 
-      name: 'Паладин', 
+    {
+      name: 'Паладин',
       hitDie: 10,
       equipment: ['Длинный меч', 'Щит', 'Латная броня', 'Святой символ', 'Рюкзак', 'Сухой паёк (10 дней)', 'Фляга']
     },
-    { 
-      name: 'Варвар', 
+    {
+      name: 'Варвар',
       hitDie: 12,
       equipment: ['Секира', 'Метательные топоры (4шт)', 'Кожаная броня', 'Рюкзак', 'Верёвка (15м)', 'Сухой паёк (10 дней)', 'Фляга']
     },
-    { 
-      name: 'Бард', 
+    {
+      name: 'Бард',
       hitDie: 8,
       equipment: ['Рапира', 'Лютня', 'Кожаная броня', 'Рюкзак', 'Набор для маскировки', 'Сухой паёк (10 дней)', 'Фляга']
     },
@@ -117,43 +115,35 @@ export default function CharacterSelect({
 
   useEffect(() => {
     fetchCharacters();
-    subscribeToParticipants();
-  }, [lobbyId]);
+  }, []);
 
-  // Пересчитываем оставшиеся очки при изменении характеристик
   useEffect(() => {
     const cost = calculatePointBuyCost(pointBuy);
     setPointsRemaining(27 - cost);
   }, [pointBuy]);
 
-  // Расчет стоимости характеристик по Point Buy
   const calculatePointBuyCost = (stats: typeof pointBuy) => {
     const costTable: Record<number, number> = {
       8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9
     };
-    
+
     return Object.values(stats).reduce((total, value) => {
       return total + (costTable[value] || 0);
     }, 0);
   };
 
-  // Изменение характеристики
   const adjustStat = (stat: keyof typeof pointBuy, delta: number) => {
     const newValue = pointBuy[stat] + delta;
-    
-    // Ограничения: 8-15
     if (newValue < 8 || newValue > 15) return;
-    
-    // Проверяем, хватит ли очков
+
     const newStats = { ...pointBuy, [stat]: newValue };
     const newCost = calculatePointBuyCost(newStats);
-    
+
     if (newCost <= 27) {
       setPointBuy(newStats);
     }
   };
 
-  // Получаем финальные характеристики с расовыми бонусами
   const getFinalStats = () => {
     const selectedRace = races.find(r => r.name === newCharacter.race);
     if (!selectedRace) return pointBuy;
@@ -162,13 +152,12 @@ export default function CharacterSelect({
     Object.entries(selectedRace.bonuses).forEach(([stat, bonus]) => {
       final[stat] = (final[stat] || 0) + bonus;
     });
-    
+
     return final;
   };
 
   const fetchCharacters = async () => {
     try {
-      // Получаем всех персонажей
       const { data: chars, error: charsError } = await supabase
         .from('characters')
         .select('*')
@@ -176,44 +165,23 @@ export default function CharacterSelect({
 
       if (charsError) throw charsError;
 
-      // Получаем занятых персонажей в этом лобби
-      const { data: participants, error: partsError } = await supabase
-        .from('lobby_participants')
-        .select('character_id')
-        .eq('lobby_id', lobbyId);
+      // Если есть roomId, проверяем занятых персонажей
+      if (roomId) {
+        const { data: participants } = await supabase
+          .from('lobby_participants')
+          .select('character_id')
+          .eq('lobby_id', roomId);
 
-      if (partsError) throw partsError;
+        setOccupiedCharacterIds(new Set(participants?.map(p => p.character_id) || []));
+      }
 
       setCharacters(chars || []);
-      setOccupiedCharacterIds(new Set(participants?.map(p => p.character_id) || []));
     } catch (err: any) {
       console.error('Error fetching characters:', err);
       setError(err.message);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const subscribeToParticipants = () => {
-    const channel = supabase
-      .channel(`lobby:${lobbyId}:participants`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'lobby_participants',
-          filter: `lobby_id=eq.${lobbyId}`,
-        },
-        () => {
-          fetchCharacters(); // Обновляем список при изменениях
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   };
 
   const handleSelectCharacter = async (character: Character) => {
@@ -223,56 +191,32 @@ export default function CharacterSelect({
     setError(null);
 
     try {
-      console.log('=== JOINING LOBBY ===');
-      console.log('Lobby ID:', lobbyId);
-      console.log('Character ID:', character.id);
-      console.log('Character Name:', character.name);
-      console.log('User Session ID:', userSessionId);
+      // Если есть roomId — добавляем участника в лобби
+      if (roomId) {
+        const { data: existing } = await supabase
+          .from('lobby_participants')
+          .select('id')
+          .eq('lobby_id', roomId)
+          .eq('character_id', character.id)
+          .single();
 
-      // Проверяем, не занят ли персонаж (race condition protection)
-      const { data: existing } = await supabase
-        .from('lobby_participants')
-        .select('id')
-        .eq('lobby_id', lobbyId)
-        .eq('character_id', character.id)
-        .single();
+        if (existing) {
+          setError('Этот персонаж уже занят!');
+          setIsJoining(false);
+          return;
+        }
 
-      if (existing) {
-        setError('Этот персонаж уже занят!');
-        setIsJoining(false);
-        return;
+        await supabase
+          .from('lobby_participants')
+          .insert({
+            lobby_id: roomId,
+            character_id: character.id,
+            user_session_id: userSessionId,
+          });
       }
 
-      // Добавляем участника
-      const { data: insertedData, error: joinError } = await supabase
-        .from('lobby_participants')
-        .insert({
-          lobby_id: lobbyId,
-          character_id: character.id,
-          user_session_id: userSessionId,
-          is_ready: false,
-        })
-        .select();
-
-      if (joinError) {
-        console.error('Insert error:', joinError);
-        throw joinError;
-      }
-
-      console.log('Successfully inserted participant:', insertedData);
-
-      // Проверяем что запись действительно создалась
-      const { data: verifyData, error: verifyError } = await supabase
-        .from('lobby_participants')
-        .select('*')
-        .eq('lobby_id', lobbyId)
-        .eq('user_session_id', userSessionId);
-
-      console.log('Verification query result:', verifyData);
-      if (verifyError) console.error('Verification error:', verifyError);
-
-      // Успешно присоединились
-      onCharacterSelected(character);
+      // Передаём персонажа и roomId родителю
+      onCharacterSelected(character, roomId);
     } catch (err: any) {
       console.error('Error joining with character:', err);
       setError(err.message);
@@ -283,7 +227,7 @@ export default function CharacterSelect({
 
   const handleCreateCharacter = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!newCharacter.name.trim()) {
       setError('Введите имя персонажа');
       return;
@@ -300,18 +244,15 @@ export default function CharacterSelect({
     try {
       const selectedClass = classes.find(c => c.name === newCharacter.class);
       const finalStats = getFinalStats();
-      
-      // Рассчитываем HP
+
       const conModifier = Math.floor((finalStats.constitution - 10) / 2);
       const hp_max = (selectedClass?.hitDie || 10) + conModifier;
 
-      // Формируем снаряжение
       const equipment = [...(selectedClass?.equipment || [])];
       if (newCharacter.specialItem.trim()) {
         equipment.push(newCharacter.specialItem.trim());
       }
 
-      // Создаем персонажа
       const { data: character, error: createError } = await supabase
         .from('characters')
         .insert({
@@ -329,7 +270,7 @@ export default function CharacterSelect({
           charisma: finalStats.charisma,
           equipment: equipment,
           avatar_icon: newCharacter.avatar_icon,
-          story_summary: newCharacter.specialItemDescription.trim() 
+          story_summary: newCharacter.specialItemDescription.trim()
             ? `Особый предмет: ${newCharacter.specialItem}. ${newCharacter.specialItemDescription}`
             : undefined,
         })
@@ -346,11 +287,9 @@ export default function CharacterSelect({
         return;
       }
 
-      // Сразу присоединяемся с новым персонажем
       await handleSelectCharacter(character);
       setShowCreateForm(false);
-      
-      // Сбрасываем форму
+
       setNewCharacter({
         name: '',
         race: 'Человек',
@@ -405,7 +344,7 @@ export default function CharacterSelect({
   const handleDeleteCharacter = async (characterId: string, e: React.MouseEvent) => {
     e.stopPropagation();
 
-    if (!confirm('Вы уверены, что хотите удалить этого персонажа? Это действие необратимо.')) {
+    if (!confirm('Вы уверены, что хотите удалить этого персонажа?')) {
       return;
     }
 
@@ -413,29 +352,18 @@ export default function CharacterSelect({
     setError(null);
 
     try {
-      // Сначала удаляем персонажа из всех лобби, если он там есть
-      const { error: removeError } = await supabase
+      await supabase
         .from('lobby_participants')
         .delete()
         .eq('character_id', characterId);
 
-      if (removeError) {
-        console.error('Error removing from lobby:', removeError);
-        // Не прерываем, продолжаем удаление персонажа
-      }
-
-      // Удаляем персонажа
-      const { error: deleteError } = await supabase
+      await supabase
         .from('characters')
         .delete()
         .eq('id', characterId);
 
-      if (deleteError) throw deleteError;
-
-      // Обновляем список
       setCharacters(prev => prev.filter(c => c.id !== characterId));
 
-      // Корректируем страницу, если удалили последнего персонажа на странице
       const totalPages = Math.ceil((characters.length - 1) / charactersPerPage);
       if (currentPage >= totalPages && currentPage > 0) {
         setCurrentPage(currentPage - 1);
@@ -448,7 +376,6 @@ export default function CharacterSelect({
     }
   };
 
-  // Пагинация
   const totalPages = Math.ceil(characters.length / charactersPerPage);
   const paginatedCharacters = characters.slice(
     currentPage * charactersPerPage,
@@ -477,7 +404,9 @@ export default function CharacterSelect({
             </button>
             <div>
               <h1 className="text-3xl font-bold text-white">Выбор персонажа</h1>
-              <p className="text-sm text-zinc-500">Выберите героя для приключения</p>
+              <p className="text-sm text-zinc-500">
+                {roomId ? `Присоединение к комнате ${roomId}` : 'Создание новой игры'}
+              </p>
             </div>
           </div>
 
@@ -523,7 +452,6 @@ export default function CharacterSelect({
                   }`}
                   onClick={() => !isOccupied && !isJoining && setSelectedCharacterId(character.id)}
                 >
-                  {/* Occupied Badge */}
                   {isOccupied && (
                     <div className="absolute top-4 right-4 flex items-center gap-2 px-3 py-1 bg-red-500/20 border border-red-500/30 rounded-full">
                       <Lock className="w-3 h-3 text-red-400" />
@@ -531,7 +459,6 @@ export default function CharacterSelect({
                     </div>
                   )}
 
-                  {/* Delete Button */}
                   {!isOccupied && (
                     <button
                       onClick={(e) => handleDeleteCharacter(character.id, e)}
@@ -547,14 +474,11 @@ export default function CharacterSelect({
                     </button>
                   )}
 
-                  {/* Character Info */}
                   <div className="space-y-4">
-                    {/* Avatar */}
                     <div className="w-16 h-16 bg-zinc-800 rounded-full flex items-center justify-center text-3xl">
                       {getAvatarEmoji(character.avatar_icon)}
                     </div>
 
-                    {/* Name & Class */}
                     <div>
                       <h3 className="text-xl font-bold text-white">{character.name}</h3>
                       <p className="text-sm text-zinc-500">
@@ -562,7 +486,6 @@ export default function CharacterSelect({
                       </p>
                     </div>
 
-                    {/* HP */}
                     <div className="flex items-center gap-2">
                       <Heart className="w-4 h-4 text-red-500" />
                       <div className="flex-1 bg-zinc-800 rounded-full h-2 overflow-hidden">
@@ -576,7 +499,6 @@ export default function CharacterSelect({
                       </span>
                     </div>
 
-                    {/* Stats */}
                     <div className="grid grid-cols-3 gap-2">
                       {['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'].map((stat) => {
                         const Icon = getStatIcon(stat);
@@ -594,14 +516,12 @@ export default function CharacterSelect({
                       })}
                     </div>
 
-                    {/* Background */}
                     {character.background && (
                       <p className="text-xs text-zinc-500 italic line-clamp-2">
                         {character.background}
                       </p>
                     )}
 
-                    {/* Select Button */}
                     {!isOccupied && (
                       <button
                         onClick={(e) => {
@@ -636,7 +556,7 @@ export default function CharacterSelect({
             >
               <ChevronLeft className="w-5 h-5" />
             </button>
-            
+
             <div className="flex items-center gap-2">
               {Array.from({ length: totalPages }, (_, i) => (
                 <button
@@ -690,7 +610,6 @@ export default function CharacterSelect({
                   </div>
 
                   <form onSubmit={handleCreateCharacter} className="space-y-6">
-                    {/* Имя */}
                     <div>
                       <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
                         Имя персонажа *
@@ -699,213 +618,165 @@ export default function CharacterSelect({
                         type="text"
                         value={newCharacter.name}
                         onChange={(e) => setNewCharacter({ ...newCharacter, name: e.target.value })}
-                        placeholder="Введите имя персонажа"
-                        className="w-full mt-2 px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-white placeholder:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-primary/50"
-                        required
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                        placeholder="Например: Арагорн"
                       />
                     </div>
 
-                    {/* Раса и Класс */}
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                          Раса *
+                          Раса
                         </label>
                         <select
                           value={newCharacter.race}
                           onChange={(e) => setNewCharacter({ ...newCharacter, race: e.target.value })}
-                          className="w-full mt-2 px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
+                          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                         >
                           {races.map((race) => (
-                            <option key={race.name} value={race.name}>
-                              {race.name}
-                            </option>
+                            <option key={race.name} value={race.name}>{race.name}</option>
                           ))}
                         </select>
                       </div>
 
                       <div>
                         <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                          Класс *
+                          Класс
                         </label>
                         <select
                           value={newCharacter.class}
                           onChange={(e) => setNewCharacter({ ...newCharacter, class: e.target.value })}
-                          className="w-full mt-2 px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
+                          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                         >
                           {classes.map((cls) => (
-                            <option key={cls.name} value={cls.name}>
-                              {cls.name}
-                            </option>
+                            <option key={cls.name} value={cls.name}>{cls.name}</option>
                           ))}
                         </select>
                       </div>
                     </div>
 
-                    {/* Выбор аватарки */}
                     <div>
-                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-3 block">
-                        Аватарка
+                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                        Предыстория
                       </label>
-                      <div className="grid grid-cols-5 gap-3">
+                      <input
+                        type="text"
+                        value={newCharacter.background}
+                        onChange={(e) => setNewCharacter({ ...newCharacter, background: e.target.value })}
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                        placeholder="Например: Отшельник"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                        Особый предмет
+                      </label>
+                      <input
+                        type="text"
+                        value={newCharacter.specialItem}
+                        onChange={(e) => setNewCharacter({ ...newCharacter, specialItem: e.target.value })}
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                        placeholder="Например: Семейный амулет"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                        Описание предмета
+                      </label>
+                      <textarea
+                        value={newCharacter.specialItemDescription}
+                        onChange={(e) => setNewCharacter({ ...newCharacter, specialItemDescription: e.target.value })}
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+                        rows={3}
+                        placeholder="Краткая история или особые свойства"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                        Аватар
+                      </label>
+                      <div className="flex gap-2 mt-2">
                         {avatarOptions.map((avatar) => (
                           <button
                             key={avatar.id}
                             type="button"
                             onClick={() => setNewCharacter({ ...newCharacter, avatar_icon: avatar.id })}
-                            className={`aspect-square flex flex-col items-center justify-center gap-2 p-4 rounded-xl transition-all ${
+                            className={`flex-1 p-3 rounded-xl border-2 transition-all ${
                               newCharacter.avatar_icon === avatar.id
-                                ? 'bg-primary border-2 border-primary shadow-lg shadow-primary/20'
-                                : 'bg-zinc-950 border-2 border-zinc-800 hover:border-zinc-700'
+                                ? 'border-primary bg-primary/10'
+                                : 'border-zinc-800 hover:border-zinc-700'
                             }`}
                           >
-                            <span className="text-3xl">{avatar.emoji}</span>
-                            <span className="text-[10px] font-bold text-zinc-400">{avatar.label}</span>
+                            <div className="text-2xl">{avatar.emoji}</div>
+                            <div className="text-xs text-zinc-500 mt-1">{avatar.label}</div>
                           </button>
                         ))}
                       </div>
                     </div>
 
-                    {/* Характеристики (Point Buy) */}
                     <div>
                       <div className="flex items-center justify-between mb-3">
                         <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
                           Характеристики (Point Buy)
                         </label>
-                        <span className={`text-sm font-bold ${pointsRemaining === 0 ? 'text-green-500' : 'text-amber-500'}`}>
-                          Очков: {pointsRemaining}/27
+                        <span className={`text-xs font-bold ${pointsRemaining === 0 ? 'text-green-500' : 'text-amber-500'}`}>
+                          Очков осталось: {pointsRemaining}
                         </span>
                       </div>
-                      
+
                       <div className="grid grid-cols-2 gap-3">
                         {Object.entries(pointBuy).map(([stat, value]) => {
                           const Icon = getStatIcon(stat);
-                          const finalStats = getFinalStats();
-                          const finalValue = finalStats[stat as keyof typeof finalStats];
-                          const bonus = finalValue - value;
-                          
+                          const statName = stat.charAt(0).toUpperCase() + stat.slice(1);
                           return (
-                            <div key={stat} className="bg-zinc-950 border border-zinc-800 rounded-xl p-3">
-                              <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-2">
-                                  <Icon className="w-4 h-4 text-zinc-500" />
-                                  <span className="text-xs font-bold text-zinc-400 uppercase">
-                                    {stat === 'strength' && 'Сила'}
-                                    {stat === 'dexterity' && 'Ловкость'}
-                                    {stat === 'constitution' && 'Телосложение'}
-                                    {stat === 'intelligence' && 'Интеллект'}
-                                    {stat === 'wisdom' && 'Мудрость'}
-                                    {stat === 'charisma' && 'Харизма'}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={() => adjustStat(stat as keyof typeof pointBuy, -1)}
-                                    className="w-6 h-6 bg-zinc-800 hover:bg-zinc-700 rounded text-white text-sm font-bold"
-                                  >
-                                    -
-                                  </button>
-                                  <span className="text-lg font-bold text-white w-8 text-center">
-                                    {value}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => adjustStat(stat as keyof typeof pointBuy, 1)}
-                                    className="w-6 h-6 bg-zinc-800 hover:bg-zinc-700 rounded text-white text-sm font-bold"
-                                  >
-                                    +
-                                  </button>
-                                </div>
+                            <div
+                              key={stat}
+                              className="flex items-center justify-between p-3 bg-zinc-800 rounded-xl"
+                            >
+                              <div className="flex items-center gap-2">
+                                <Icon className="w-4 h-4 text-zinc-500" />
+                                <span className="text-xs font-bold text-zinc-400">{statName}</span>
                               </div>
-                              {bonus > 0 && (
-                                <div className="text-xs text-green-500 text-right">
-                                  +{bonus} от расы = {finalValue} ({getStatModifier(finalValue)})
-                                </div>
-                              )}
-                              {bonus === 0 && (
-                                <div className="text-xs text-zinc-600 text-right">
-                                  Модификатор: {getStatModifier(value)}
-                                </div>
-                              )}
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => adjustStat(stat as keyof typeof pointBuy, -1)}
+                                  className="w-7 h-7 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-white font-bold transition-all disabled:opacity-50"
+                                  disabled={value <= 8}
+                                >
+                                  -
+                                </button>
+                                <span className="text-sm font-bold text-white w-6 text-center">{value}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => adjustStat(stat as keyof typeof pointBuy, 1)}
+                                  className="w-7 h-7 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-white font-bold transition-all disabled:opacity-50"
+                                  disabled={value >= 15}
+                                >
+                                  +
+                                </button>
+                              </div>
                             </div>
                           );
                         })}
                       </div>
                     </div>
 
-                    {/* Предыстория */}
-                    <div>
-                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                        Предыстория
-                      </label>
-                      <textarea
-                        value={newCharacter.background}
-                        onChange={(e) => setNewCharacter({ ...newCharacter, background: e.target.value })}
-                        placeholder="Краткая история персонажа..."
-                        rows={2}
-                        className="w-full mt-2 px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-white placeholder:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
-                      />
-                    </div>
-
-                    {/* Особый предмет */}
-                    <div>
-                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                        Особый предмет (опционально)
-                      </label>
-                      <input
-                        type="text"
-                        value={newCharacter.specialItem}
-                        onChange={(e) => setNewCharacter({ ...newCharacter, specialItem: e.target.value })}
-                        placeholder="Например: Медальон матери, Старая карта..."
-                        className="w-full mt-2 px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-white placeholder:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-primary/50"
-                      />
-                      {newCharacter.specialItem && (
-                        <textarea
-                          value={newCharacter.specialItemDescription}
-                          onChange={(e) => setNewCharacter({ ...newCharacter, specialItemDescription: e.target.value })}
-                          placeholder="Опишите историю или особенности предмета..."
-                          rows={2}
-                          className="w-full mt-2 px-4 py-3 bg-zinc-950 border border-zinc-800 rounded-xl text-white placeholder:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
-                        />
-                      )}
-                    </div>
-
-                    {/* Стартовое снаряжение */}
-                    <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4">
-                      <h3 className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">
-                        Стартовое снаряжение ({newCharacter.class})
-                      </h3>
-                      <div className="flex flex-wrap gap-2">
-                        {classes.find(c => c.name === newCharacter.class)?.equipment.map((item, i) => (
-                          <span key={i} className="px-2 py-1 bg-zinc-800 text-zinc-400 text-xs rounded-lg">
-                            {item}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Кнопки */}
-                    <div className="flex gap-3 pt-4">
-                      <button
-                        type="button"
-                        onClick={() => setShowCreateForm(false)}
-                        disabled={isJoining}
-                        className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-all"
-                      >
-                        Отмена
-                      </button>
+                    <div className="sticky bottom-0 bg-zinc-900 pt-4 border-t border-zinc-800">
                       <button
                         type="submit"
                         disabled={isJoining || pointsRemaining !== 0}
-                        className="flex-1 py-3 bg-primary-hover hover:bg-primary text-white rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        className="w-full py-4 bg-primary-hover hover:bg-primary text-white rounded-xl font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                       >
                         {isJoining ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <Loader2 className="w-5 h-5 animate-spin" />
                         ) : (
-                          <Plus className="w-4 h-4" />
+                          <Check className="w-5 h-5" />
                         )}
-                        Создать персонажа
+                        Создать и продолжить
                       </button>
                     </div>
                   </form>

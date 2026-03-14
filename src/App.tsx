@@ -1,15 +1,13 @@
 import { useState, useEffect } from 'react';
 import Chat from './components/Chat';
 import CharacterSelect from './components/CharacterSelect';
-import LobbyRoom from './components/LobbyRoom';
 import { supabase, isSupabaseConfigured, supabaseUrl, supabaseAnonKey } from './lib/supabase';
-import { Lobby, Character } from './types';
+import { Character } from './types';
 import { Plus, LogIn, Swords, Shield, ScrollText, Map as MapIcon, User as UserIcon, Loader2, AlertTriangle, Trash2, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
   const [roomId, setRoomId] = useState<string | null>(null);
-  const [userName, setUserName] = useState<string>('');
   const [roomInput, setRoomInput] = useState<string>('');
   const [isJoining, setIsJoining] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -20,10 +18,11 @@ export default function App() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
 
-  // Lobby system states
-  const [currentScreen, setCurrentScreen] = useState<'menu' | 'character-select' | 'lobby' | 'game'>('menu');
-  const [currentLobby, setCurrentLobby] = useState<Lobby | null>(null);
+  // Упрощённые состояния — без лобби
+  const [currentScreen, setCurrentScreen] = useState<'menu' | 'character-select' | 'game'>('menu');
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
+  const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
+  
   const [userSessionId] = useState(() => {
     const stored = localStorage.getItem('user_session_id');
     if (stored) return stored;
@@ -32,26 +31,20 @@ export default function App() {
     return newId;
   });
 
-  // Обработчик события установки PWA
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       const beforeInstallPromptEvent = e as any;
       setDeferredPrompt(beforeInstallPromptEvent);
-      // Показываем кнопку установки через 5 секунд
       setTimeout(() => setShowInstallPrompt(true), 5000);
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    };
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
   }, []);
 
   const handleInstallApp = () => {
     if (!deferredPrompt) return;
-    
     deferredPrompt.prompt();
     deferredPrompt.userChoice.then((choiceResult: any) => {
       if (choiceResult.outcome === 'accepted') {
@@ -98,12 +91,12 @@ export default function App() {
 
   const saveRoomToRecent = (id: string, characterName?: string) => {
     const newRecent = [
-      { 
-        id, 
-        name: `Adventure ${id}`, 
-        characterName: characterName || userName,
+      {
+        id,
+        name: `Adventure ${id}`,
+        characterName: characterName || '',
         lastPlayed: new Date().toISOString()
-      }, 
+      },
       ...recentRooms.filter(r => r.id !== id)
     ].slice(0, 5);
     setRecentRooms(newRecent);
@@ -117,30 +110,27 @@ export default function App() {
 
   const confirmFullDelete = async () => {
     if (!roomToDelete) return;
-    
+
     setIsDeleting(true);
     try {
-      // 1. Delete messages first (due to foreign key)
       const { error: msgError } = await supabase
         .from('messages')
         .delete()
         .eq('room_id', roomToDelete);
-      
+
       if (msgError) throw msgError;
 
-      // 2. Delete the room
       const { error: roomError } = await supabase
         .from('rooms')
         .delete()
         .eq('id', roomToDelete);
-      
+
       if (roomError) throw roomError;
 
-      // 3. Remove from local state
       const newRecent = recentRooms.filter(r => r.id !== roomToDelete);
       setRecentRooms(newRecent);
       localStorage.setItem('recent_rooms', JSON.stringify(newRecent));
-      
+
       setRoomToDelete(null);
     } catch (err: any) {
       setError(`Failed to delete room: ${err.message}`);
@@ -182,69 +172,43 @@ export default function App() {
     );
   }
 
-  const createRoom = async () => {
-    if (!userName.trim()) {
-      setError('Пожалуйста, введите имя вашего персонажа.');
-      return;
-    }
-    
+  // Создание новой комнаты — сразу переход в игру
+  const createRoom = async (character: Character) => {
     setIsJoining(true);
     setError(null);
 
-    const newLobbyId = Math.random().toString(36).substring(2, 8).toUpperCase();
-    
-    console.log('=== CREATING LOBBY ===');
-    console.log('Lobby ID:', newLobbyId);
-    console.log('Created by (userName):', userName);
-    console.log('Created by (sessionId):', userSessionId);
-    
+    const newRoomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+    console.log('=== CREATING ROOM ===');
+    console.log('Room ID:', newRoomId);
+    console.log('Character:', character.name);
+
     try {
-      // Создаем лобби
-      const { data: insertedLobby, error: lobbyError } = await supabase.from('lobbies').insert({
-        id: newLobbyId,
-        name: `Приключение ${newLobbyId}`,
-        created_by: userSessionId, // Используем session ID вместо userName
-        max_players: 4,
-        is_active: true,
+      localStorage.removeItem(`room_stats_${newRoomId}`);
+      
+      const { data, error: roomError } = await supabase.from('rooms').insert({
+        id: newRoomId,
+        created_by: character.name,
       }).select();
 
-      if (lobbyError) {
-        console.error('Lobby insert error:', lobbyError);
-        throw lobbyError;
-      }
+      if (roomError) throw roomError;
 
-      console.log('Lobby created successfully:', insertedLobby);
+      console.log('Room created:', data);
 
-      // Получаем созданное лобби
-      const { data: lobby, error: fetchError } = await supabase
-        .from('lobbies')
-        .select('*')
-        .eq('id', newLobbyId)
-        .single();
-
-      if (fetchError) {
-        console.error('Lobby fetch error:', fetchError);
-        throw fetchError;
-      }
-
-      console.log('Lobby fetched:', lobby);
-
-      setCurrentLobby(lobby);
-      setCurrentScreen('character-select');
+      saveRoomToRecent(newRoomId, character.name);
+      setRoomId(newRoomId);
+      setCurrentScreen('game');
     } catch (err: any) {
-      setError(`Ошибка создания лобби: ${err.message}`);
-      console.error('Create lobby error:', err);
+      setError(`Ошибка создания комнаты: ${err.message}`);
+      console.error('Create room error:', err);
     } finally {
       setIsJoining(false);
     }
   };
 
+  // Вход в существующую комнату
   const joinRoom = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userName.trim()) {
-      setError('Пожалуйста, введите имя вашего персонажа.');
-      return;
-    }
     if (!roomInput.trim()) {
       setError('Пожалуйста, введите код лобби.');
       return;
@@ -254,174 +218,80 @@ export default function App() {
     setError(null);
 
     try {
-      // Убираем проверку is_active чтобы можно было вернуться в начатую игру
-      const { data: lobby, error: lobbyError } = await supabase
-        .from('lobbies')
+      const { data: room, error: roomError } = await supabase
+        .from('rooms')
         .select('*')
         .eq('id', roomInput.toUpperCase())
         .single();
 
-      if (lobbyError || !lobby) {
-        setError('Лобби не найдено.');
+      if (roomError || !room) {
+        setError('Комната не найдена.');
         setIsJoining(false);
         return;
       }
 
-      // Если игра уже началась - сразу переходим в игру
-      if (lobby.started_at) {
-        console.log('Game already started, joining directly...');
-        const { data: room } = await supabase
-          .from('rooms')
-          .select('*')
-          .eq('lobby_id', lobby.id)
-          .single();
-        
-        if (room) {
-          setRoomId(room.id);
-          setCurrentScreen('game');
-          setIsJoining(false);
-          return;
-        }
-      }
-
-      // Проверяем, не заполнено ли лобби
-      const { data: participants } = await supabase
-        .from('lobby_participants')
-        .select('id')
-        .eq('lobby_id', lobby.id);
-
-      if (participants && participants.length >= lobby.max_players) {
-        setError('Лобби заполнено.');
-        setIsJoining(false);
-        return;
-      }
-
-      setCurrentLobby(lobby);
-      setCurrentScreen('character-select');
+      saveRoomToRecent(room.id);
+      setRoomId(room.id);
+      setCurrentScreen('game');
     } catch (err: any) {
-      setError(`Ошибка входа в лобби: ${err.message}`);
-      console.error(err);
+      setError(`Ошибка входа: ${err.message}`);
     } finally {
       setIsJoining(false);
     }
   };
 
-  const handleCharacterSelected = (character: Character) => {
+  // Обработчик выбора персонажа — сразу создаём/входим в комнату
+  const handleCharacterSelected = async (character: Character, roomId?: string) => {
     setSelectedCharacter(character);
-    setUserName(character.name);
-    setCurrentScreen('lobby');
-  };
-
-  const handleStartGame = async () => {
-    console.log('=== APP: HANDLE START GAME ===');
-    console.log('Current lobby:', currentLobby);
-    console.log('Selected character:', selectedCharacter);
-
-    if (!currentLobby || !selectedCharacter) {
-      console.error('Missing lobby or character!');
-      return;
-    }
-
-    const newRoomId = currentLobby.id;
-    console.log('Creating/joining room with ID:', newRoomId);
-
-    try {
-      // Очищаем старые данные комнаты из localStorage
-      localStorage.removeItem(`room_stats_${newRoomId}`);
-      console.log('Cleared old room stats from localStorage');
-
-      // Проверяем, существует ли уже комната
-      const { data: existingRoom } = await supabase
-        .from('rooms')
-        .select('*')
-        .eq('lobby_id', currentLobby.id)
-        .single();
-
-      if (existingRoom) {
-        // Комната уже существует (хост создал), просто присоединяемся
-        console.log('Room already exists, joining...');
-        saveRoomToRecent(newRoomId, selectedCharacter.name);
-        setRoomId(newRoomId);
-        setCurrentScreen('game');
-        console.log('Switched to game screen (existing room)');
-        return;
-      }
-
-      // Комнеты нет - создаем (только хост)
-      console.log('Creating new room...');
-      const { data, error: roomError } = await supabase.from('rooms').insert({
-        id: newRoomId,
-        created_by: selectedCharacter.name,
-        lobby_id: currentLobby.id,
-      }).select();
-
-      if (roomError) {
-        console.error('Room insert error:', roomError);
-        throw roomError;
-      }
-
-      console.log('Room created:', data);
-
-      saveRoomToRecent(newRoomId, selectedCharacter.name);
-      setRoomId(newRoomId);
-      setCurrentScreen('game');
-
-      console.log('Switched to game screen');
-    } catch (err: any) {
-      setError(`Ошибка создания комнаты: ${err.message}`);
-      console.error('Start game error:', err);
+    
+    if (roomId) {
+      // Присоединение к существующей комнате
+      saveRoomToRecent(roomId, character.name);
+      setRoomId(roomId);
+    } else {
+      // Создание новой комнаты
+      await createRoom(character);
     }
   };
 
-  const handleLeaveLobby = () => {
-    setCurrentLobby(null);
-    setSelectedCharacter(null);
+  const handleLeaveGame = () => {
+    setRoomId(null);
     setCurrentScreen('menu');
+    setSelectedCharacter(null);
+    setCurrentRoomId(null);
   };
 
+  // Экран игры
   if (currentScreen === 'game' && roomId) {
-    return <Chat 
-      roomId={roomId} 
-      userName={userName} 
-      character={selectedCharacter}
-      onLeave={() => {
-        setRoomId(null);
-        setCurrentScreen('menu');
-        setCurrentLobby(null);
-        setSelectedCharacter(null);
-      }} 
-      theme={theme} 
-      setTheme={handleThemeChange} 
-    />;
+    return (
+      <div className={theme}>
+        <Chat
+          roomId={roomId}
+          userName={selectedCharacter?.name || ''}
+          character={selectedCharacter}
+          onLeave={handleLeaveGame}
+          theme={theme}
+          setTheme={handleThemeChange}
+        />
+      </div>
+    );
   }
 
-  if (currentScreen === 'character-select' && currentLobby) {
+  // Экран выбора персонажа
+  if (currentScreen === 'character-select') {
     return (
       <div className={theme}>
         <CharacterSelect
-          lobbyId={currentLobby.id}
           userSessionId={userSessionId}
           onCharacterSelected={handleCharacterSelected}
-          onBack={handleLeaveLobby}
+          onBack={() => setCurrentScreen('menu')}
+          roomId={currentRoomId || undefined}
         />
       </div>
     );
   }
 
-  if (currentScreen === 'lobby' && currentLobby && selectedCharacter) {
-    return (
-      <div className={theme}>
-        <LobbyRoom
-          lobby={currentLobby}
-          character={selectedCharacter}
-          userSessionId={userSessionId}
-          onStartGame={handleStartGame}
-          onLeave={handleLeaveLobby}
-        />
-      </div>
-    );
-  }
-
+  // Главное меню
   return (
     <div className={`min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-4 font-sans selection:bg-primary/30 ${theme}`}>
       <div className="max-w-md w-full space-y-8 relative">
@@ -430,7 +300,7 @@ export default function App() {
         <div className="absolute -bottom-24 -right-24 w-64 h-64 bg-zinc-900/40 rounded-full blur-[100px] pointer-events-none" />
 
         <div className="text-center space-y-4 relative">
-          <motion.div 
+          <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ duration: 0.5, ease: "easeOut" }}
@@ -438,7 +308,7 @@ export default function App() {
           >
             <Swords className="w-12 h-12 text-primary" />
           </motion.div>
-          <motion.h1 
+          <motion.h1
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.2, duration: 0.5 }}
@@ -446,7 +316,7 @@ export default function App() {
           >
             D&D <span className="text-primary">DARK</span> FANTASY
           </motion.h1>
-          <motion.p 
+          <motion.p
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.3, duration: 0.5 }}
@@ -456,7 +326,7 @@ export default function App() {
           </motion.p>
         </div>
 
-        <motion.div 
+        <motion.div
           initial={{ y: 40, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.4, duration: 0.6 }}
@@ -481,52 +351,42 @@ export default function App() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Имя персонажа</label>
-              <div className="relative">
-                <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
-                <input
-                  type="text"
-                  value={userName}
-                  onChange={(e) => setUserName(e.target.value)}
-                  placeholder="Введите ваше имя..."
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-2xl pl-12 pr-4 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-zinc-700"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <button
-                onClick={createRoom}
-                disabled={isJoining}
-                className="group flex flex-col items-center justify-center gap-3 p-6 bg-zinc-950 border border-zinc-800 rounded-3xl hover:border-primary/50 hover:bg-zinc-900 transition-all duration-300 shadow-lg disabled:opacity-50"
-              >
-                <div className="p-3 bg-primary-bg rounded-2xl group-hover:scale-110 transition-transform">
-                  <Plus className="w-6 h-6 text-primary" />
-                </div>
-                <span className="text-xs font-bold uppercase tracking-widest text-zinc-400">Создать лобби</span>
-              </button>
-              
-              <div className="flex flex-col gap-2">
-                <form onSubmit={joinRoom} className="h-full flex flex-col gap-2">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Код комнаты</label>
+              <form onSubmit={joinRoom} className="space-y-2">
+                <div className="relative">
+                  <ScrollText className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
                   <input
                     type="text"
                     value={roomInput}
                     onChange={(e) => setRoomInput(e.target.value)}
-                    placeholder="Код лобби"
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-2xl px-4 py-4 text-center text-sm font-mono uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-zinc-700"
+                    placeholder="Введите код..."
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-2xl pl-12 pr-4 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-zinc-700 uppercase tracking-widest"
                   />
-                  <button
-                    id="join-btn"
-                    type="submit"
-                    disabled={isJoining}
-                    className="flex-1 flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-2xl text-xs font-bold uppercase tracking-widest transition-all disabled:opacity-50"
-                  >
-                    {isJoining ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
-                    Войти
-                  </button>
-                </form>
-              </div>
+                </div>
+                <button
+                  type="submit"
+                  disabled={isJoining}
+                  className="w-full flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-2xl text-xs font-bold uppercase tracking-widest py-4 transition-all disabled:opacity-50"
+                >
+                  {isJoining ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
+                  Войти
+                </button>
+              </form>
             </div>
+
+            <button
+              onClick={() => {
+                setCurrentRoomId(null);
+                setCurrentScreen('character-select');
+              }}
+              disabled={isJoining}
+              className="w-full group flex flex-col items-center justify-center gap-3 p-6 bg-zinc-950 border border-zinc-800 rounded-3xl hover:border-primary/50 hover:bg-zinc-900 transition-all duration-300 shadow-lg disabled:opacity-50"
+            >
+              <div className="p-3 bg-primary-bg rounded-2xl group-hover:scale-110 transition-transform">
+                <Plus className="w-6 h-6 text-primary" />
+              </div>
+              <span className="text-xs font-bold uppercase tracking-widest text-zinc-400">Создать новую игру</span>
+            </button>
 
             {recentRooms.length > 0 && (
               <div className="space-y-3 pt-2">
@@ -535,19 +395,15 @@ export default function App() {
                   {recentRooms.map((room) => {
                     const lastPlayedDate = room.lastPlayed ? new Date(room.lastPlayed) : null;
                     const timeAgo = lastPlayedDate ? getTimeAgo(lastPlayedDate) : '';
-                    
+
                     return (
                       <div
                         key={room.id}
                         onClick={() => {
-                          if (!userName.trim()) {
-                            setError('Пожалуйста, введите ваше имя.');
-                            return;
-                          }
                           setRoomInput(room.id);
                           setTimeout(() => {
-                             const btn = document.getElementById('join-btn');
-                             btn?.click();
+                            const btn = document.querySelector('button[type="submit"]') as HTMLButtonElement;
+                            btn?.click();
                           }, 10);
                         }}
                         className="flex items-center justify-between p-4 bg-zinc-950/50 border border-zinc-800 rounded-2xl hover:border-primary/30 hover:bg-zinc-900 transition-all group relative cursor-pointer"
@@ -589,36 +445,13 @@ export default function App() {
 
           <AnimatePresence>
             {error && (
-              <motion.div 
+              <motion.div
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: 'auto', opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
                 className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl space-y-2"
               >
                 <p className="text-xs text-red-400 font-medium text-center">{error}</p>
-                {error.includes('Database tables missing') && (
-                  <div className="text-[10px] text-zinc-500 font-mono bg-zinc-950 p-2 rounded-lg border border-zinc-800 overflow-x-auto">
-                    <p className="mb-1 text-emerald-500">Run this in Supabase SQL Editor:</p>
-                    <pre className="whitespace-pre">
-{`CREATE TABLE rooms (
-  id TEXT PRIMARY KEY,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  created_by TEXT,
-  character_stats JSONB
-);
-
-CREATE TABLE messages (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  room_id TEXT REFERENCES rooms(id),
-  sender_id TEXT,
-  sender_name TEXT,
-  content TEXT,
-  is_ai BOOLEAN DEFAULT false,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);`}
-                    </pre>
-                  </div>
-                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -639,7 +472,6 @@ CREATE TABLE messages (
 
         {/* Footer */}
         <div className="pt-6 border-t border-zinc-800/30">
-          {/* Кнопка установки PWA */}
           <AnimatePresence>
             {showInstallPrompt && (
               <motion.div
