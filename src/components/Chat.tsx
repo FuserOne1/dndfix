@@ -1551,6 +1551,12 @@ XP: ${character.xp}
           {(() => {
             if (!selectedPlayerForStats && character) {
               setSelectedPlayerForStats(character.name);
+            } else if (!selectedPlayerForStats && characterStats) {
+              // Если нет character, пробуем найти по userName
+              const currentPlayer = Object.keys(characterStats).find(name => 
+                name === userName || characterStats[name].name === userName
+              );
+              if (currentPlayer) setSelectedPlayerForStats(currentPlayer);
             }
             return null;
           })()}
