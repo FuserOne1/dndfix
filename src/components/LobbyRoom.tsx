@@ -227,10 +227,13 @@ export default function LobbyRoom({
 
     console.log('=== STARTING GAME ===');
     setIsStarting(true);
-    
+
     try {
-      // Обновляем лобби как стартовавшее
-      const { data, error } = await supabase
+      // Генерируем короткий код сессии
+      const sessionId = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+      // 1. Обновляем лобби как стартовавшее
+      const { data: lobbyData, error: lobbyError } = await supabase
         .from('lobbies')
         .update({
           started_at: new Date().toISOString(),
@@ -239,16 +242,60 @@ export default function LobbyRoom({
         .eq('id', lobby.id)
         .select();
 
-      if (error) {
-        console.error('Start game error:', error);
-        throw error;
+      if (lobbyError) {
+        console.error('Lobby update error:', lobbyError);
+        throw lobbyError;
       }
 
-      console.log('Lobby updated:', data);
-      console.log('Calling onStartGame...');
-      
-      // Переход в игру
-      onStartGame();
+      console.log('Lobby updated:', lobbyData);
+
+      // 2. Создаём игровую сессию
+      const { data: sessionData, error: sessionError } = await supabase
+        .from('game_sessions')
+        .insert({
+          id: sessionId,
+          lobby_id: lobby.id,
+          created_by: lobby.created_by,
+        })
+        .select();
+
+      if (sessionError) {
+        console.error('Session creation error:', sessionError);
+        throw sessionError;
+      }
+
+      console.log('Game session created:', sessionData);
+
+      // 3. Переносим всех участников лобби в сессию
+      const { data: participantsData } = await supabase
+        .from('lobby_participants')
+        .select('character_id, user_session_id')
+        .eq('lobby_id', lobby.id);
+
+      if (participantsData && participantsData.length > 0) {
+        const sessionParticipants = participantsData.map(p => ({
+          session_id: sessionId,
+          character_id: p.character_id,
+          user_session_id: p.user_session_id,
+        }));
+
+        const { error: insertError } = await supabase
+          .from('game_session_participants')
+          .insert(sessionParticipants);
+
+        if (insertError) {
+          console.error('Participants transfer error:', insertError);
+          throw insertError;
+        }
+
+        console.log('Participants transferred:', sessionParticipants.length);
+      }
+
+      console.log('=== GAME STARTED ===');
+      console.log('Session ID:', sessionId);
+
+      // 4. Переход в игру (передаём sessionId через closure)
+      window.location.href = `/?session=${sessionId}`;
     } catch (err: any) {
       console.error('Error starting game:', err);
       setError(err.message);

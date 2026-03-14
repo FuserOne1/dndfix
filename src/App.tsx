@@ -1,28 +1,29 @@
 import { useState, useEffect } from 'react';
 import Chat from './components/Chat';
 import CharacterSelect from './components/CharacterSelect';
+import LobbyRoom from './components/LobbyRoom';
 import { supabase, isSupabaseConfigured, supabaseUrl, supabaseAnonKey } from './lib/supabase';
-import { Character } from './types';
-import { Plus, LogIn, Swords, Shield, ScrollText, Map as MapIcon, User as UserIcon, Loader2, AlertTriangle, Trash2, Download } from 'lucide-react';
+import { Character, Lobby, GameSession } from './types';
+import { Plus, LogIn, Swords, Shield, ScrollText, Map as MapIcon, User as UserIcon, Loader2, AlertTriangle, Trash2, Download, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
-  const [roomId, setRoomId] = useState<string | null>(null);
-  const [roomInput, setRoomInput] = useState<string>('');
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionInput, setSessionInput] = useState<string>('');
   const [isJoining, setIsJoining] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [roomToDelete, setRoomToDelete] = useState<string | null>(null);
-  const [recentRooms, setRecentRooms] = useState<{id: string, name: string, characterName?: string, lastPlayed?: string}[]>([]);
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
+  const [recentSessions, setRecentSessions] = useState<{id: string, name: string, characterName?: string, lastPlayed?: string}[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [theme, setTheme] = useState('theme-emerald');
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
 
-  // Упрощённые состояния — без лобби
-  const [currentScreen, setCurrentScreen] = useState<'menu' | 'character-select' | 'game'>('menu');
+  // Состояния экранов
+  const [currentScreen, setCurrentScreen] = useState<'menu' | 'character-select' | 'lobby' | 'game'>('menu');
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
-  const [currentRoomId, setCurrentRoomId] = useState<string | null>(null);
-  
+  const [currentLobby, setCurrentLobby] = useState<Lobby | null>(null);
+
   const [userSessionId] = useState(() => {
     const stored = localStorage.getItem('user_session_id');
     if (stored) return stored;
@@ -36,12 +37,37 @@ export default function App() {
       e.preventDefault();
       const beforeInstallPromptEvent = e as any;
       setDeferredPrompt(beforeInstallPromptEvent);
-      // Показываем кнопку установки сразу
       setShowInstallPrompt(true);
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+  }, []);
+
+  // Обработка sessionId из URL при загрузке
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sessionFromUrl = params.get('session');
+    
+    if (sessionFromUrl) {
+      console.log('=== SESSION FROM URL ===');
+      console.log('Session ID:', sessionFromUrl);
+      
+      // Проверяем сессию в БД
+      supabase
+        .from('game_sessions')
+        .select('*')
+        .eq('id', sessionFromUrl)
+        .single()
+        .then(({ data, error }) => {
+          if (!error && data) {
+            setSessionId(sessionFromUrl);
+            setCurrentScreen('game');
+            // Очищаем URL
+            window.history.replaceState({}, '', window.location.pathname);
+          }
+        });
+    }
   }, []);
 
   const handleInstallApp = () => {
@@ -55,18 +81,17 @@ export default function App() {
         setShowInstallPrompt(false);
       });
     } else {
-      // Если нет prompt - показываем инструкцию
       alert('Чтобы установить приложение:\n\n📱 Android: Меню → "Добавить на главный экран"\n\n🍎 iOS: Кнопка "Поделиться" → "На экран «Домой»"');
     }
   };
 
   useEffect(() => {
-    const saved = localStorage.getItem('recent_rooms');
+    const saved = localStorage.getItem('recent_sessions');
     if (saved) {
       try {
-        setRecentRooms(JSON.parse(saved));
+        setRecentSessions(JSON.parse(saved));
       } catch (e) {
-        console.error('Failed to parse recent rooms', e);
+        console.error('Failed to parse recent sessions', e);
       }
     }
     const savedTheme = localStorage.getItem('app_theme');
@@ -94,7 +119,7 @@ export default function App() {
     return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
   };
 
-  const saveRoomToRecent = (id: string, characterName?: string) => {
+  const saveSessionToRecent = (id: string, characterName?: string) => {
     const newRecent = [
       {
         id,
@@ -102,54 +127,59 @@ export default function App() {
         characterName: characterName || '',
         lastPlayed: new Date().toISOString()
       },
-      ...recentRooms.filter(r => r.id !== id)
+      ...recentSessions.filter(r => r.id !== id)
     ].slice(0, 5);
-    setRecentRooms(newRecent);
-    localStorage.setItem('recent_rooms', JSON.stringify(newRecent));
-  };
-
-  const deleteRoomFromRecent = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    setRoomToDelete(id);
-  };
-
-  const confirmFullDelete = async () => {
-    if (!roomToDelete) return;
-
-    setIsDeleting(true);
-    try {
-      const { error: msgError } = await supabase
-        .from('messages')
-        .delete()
-        .eq('room_id', roomToDelete);
-
-      if (msgError) throw msgError;
-
-      const { error: roomError } = await supabase
-        .from('rooms')
-        .delete()
-        .eq('id', roomToDelete);
-
-      if (roomError) throw roomError;
-
-      const newRecent = recentRooms.filter(r => r.id !== roomToDelete);
-      setRecentRooms(newRecent);
-      localStorage.setItem('recent_rooms', JSON.stringify(newRecent));
-
-      setRoomToDelete(null);
-    } catch (err: any) {
-      setError(`Failed to delete room: ${err.message}`);
-    } finally {
-      setIsDeleting(false);
-    }
+    setRecentSessions(newRecent);
+    localStorage.setItem('recent_sessions', JSON.stringify(newRecent));
   };
 
   const removeOnlyFromList = () => {
-    if (!roomToDelete) return;
-    const newRecent = recentRooms.filter(r => r.id !== roomToDelete);
-    setRecentRooms(newRecent);
-    localStorage.setItem('recent_rooms', JSON.stringify(newRecent));
-    setRoomToDelete(null);
+    if (!sessionToDelete) return;
+    const newRecent = recentSessions.filter(r => r.id !== sessionToDelete);
+    setRecentSessions(newRecent);
+    localStorage.setItem('recent_sessions', JSON.stringify(newRecent));
+    setSessionToDelete(null);
+  };
+
+  const confirmFullDelete = async () => {
+    if (!sessionToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      // Удаляем сообщения
+      const { error: msgError } = await supabase
+        .from('messages')
+        .delete()
+        .eq('session_id', sessionToDelete);
+
+      if (msgError) throw msgError;
+
+      // Удаляем участников сессии
+      const { error: partError } = await supabase
+        .from('game_session_participants')
+        .delete()
+        .eq('session_id', sessionToDelete);
+
+      if (partError) throw partError;
+
+      // Удаляем сессию
+      const { error: sessionError } = await supabase
+        .from('game_sessions')
+        .delete()
+        .eq('id', sessionToDelete);
+
+      if (sessionError) throw sessionError;
+
+      const newRecent = recentSessions.filter(r => r.id !== sessionToDelete);
+      setRecentSessions(newRecent);
+      localStorage.setItem('recent_sessions', JSON.stringify(newRecent));
+
+      setSessionToDelete(null);
+    } catch (err: any) {
+      setError(`Failed to delete session: ${err.message}`);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const isPlaceholder = supabaseUrl.includes('your-project-id') || supabaseAnonKey === 'your-anon-key';
@@ -177,45 +207,52 @@ export default function App() {
     );
   }
 
-  // Создание новой комнаты — сразу переход в игру
-  const createRoom = async (character: Character) => {
+  // Создание новой сессии
+  const createSession = async (character: Character) => {
     setIsJoining(true);
     setError(null);
 
-    const newRoomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const newSessionId = Math.random().toString(36).substring(2, 8).toUpperCase();
 
-    console.log('=== CREATING ROOM ===');
-    console.log('Room ID:', newRoomId);
+    console.log('=== CREATING SESSION ===');
+    console.log('Session ID:', newSessionId);
     console.log('Character:', character.name);
 
     try {
-      localStorage.removeItem(`room_stats_${newRoomId}`);
-      
-      const { data, error: roomError } = await supabase.from('rooms').insert({
-        id: newRoomId,
+      localStorage.removeItem(`session_stats_${newSessionId}`);
+
+      const { data, error: sessionError } = await supabase.from('game_sessions').insert({
+        id: newSessionId,
         created_by: character.name,
       }).select();
 
-      if (roomError) throw roomError;
+      if (sessionError) throw sessionError;
 
-      console.log('Room created:', data);
+      console.log('Session created:', data);
 
-      saveRoomToRecent(newRoomId, character.name);
-      setRoomId(newRoomId);
+      // Добавляем текущего игрока как участника
+      await supabase.from('game_session_participants').insert({
+        session_id: newSessionId,
+        character_id: character.id,
+        user_session_id: userSessionId,
+      });
+
+      saveSessionToRecent(newSessionId, character.name);
+      setSessionId(newSessionId);
       setCurrentScreen('game');
     } catch (err: any) {
-      setError(`Ошибка создания комнаты: ${err.message}`);
-      console.error('Create room error:', err);
+      setError(`Ошибка создания сессии: ${err.message}`);
+      console.error('Create session error:', err);
     } finally {
       setIsJoining(false);
     }
   };
 
-  // Вход в существующую комнату
-  const joinRoom = async (e: React.FormEvent) => {
+  // Вход в существующую сессию
+  const joinSession = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!roomInput.trim()) {
-      setError('Пожалуйста, введите код лобби.');
+    if (!sessionInput.trim()) {
+      setError('Пожалуйста, введите код сессии.');
       return;
     }
 
@@ -223,20 +260,20 @@ export default function App() {
     setError(null);
 
     try {
-      const { data: room, error: roomError } = await supabase
-        .from('rooms')
+      const { data: session, error: sessionError } = await supabase
+        .from('game_sessions')
         .select('*')
-        .eq('id', roomInput.toUpperCase())
+        .eq('id', sessionInput.toUpperCase())
         .single();
 
-      if (roomError || !room) {
-        setError('Комната не найдена.');
+      if (sessionError || !session) {
+        setError('Сессия не найдена.');
         setIsJoining(false);
         return;
       }
 
-      saveRoomToRecent(room.id);
-      setRoomId(room.id);
+      saveSessionToRecent(session.id);
+      setSessionId(session.id);
       setCurrentScreen('game');
     } catch (err: any) {
       setError(`Ошибка входа: ${err.message}`);
@@ -245,38 +282,101 @@ export default function App() {
     }
   };
 
-  // Обработчик выбора персонажа — сразу создаём/входим в комнату
-  const handleCharacterSelected = async (character: Character, roomId?: string) => {
+  // Обработчик выбора персонажа
+  const handleCharacterSelected = async (character: Character, lobbyId?: string) => {
     console.log('=== CHARACTER SELECTED ===');
     console.log('Character:', character);
-    console.log('RoomId:', roomId);
+    console.log('LobbyId:', lobbyId);
     console.log('My userSessionId:', userSessionId);
 
     setSelectedCharacter(character);
 
-    if (roomId) {
-      // Присоединение к существующей комнате — сразу показываем чат
-      console.log('Joining existing room with character:', character.name);
-      saveRoomToRecent(roomId, character.name);
-      setRoomId(roomId);
-      setCurrentScreen('game');
+    if (lobbyId) {
+      // Присоединение к лобби
+      console.log('Joining lobby with character:', character.name);
+      
+      // Добавляем участника в лобби
+      await supabase.from('lobby_participants').insert({
+        lobby_id: lobbyId,
+        character_id: character.id,
+        user_session_id: userSessionId,
+      });
+
+      setCurrentScreen('lobby');
     } else {
-      // Создание новой комнаты
-      console.log('Creating new room with character:', character.name);
-      await createRoom(character);
+      // Создание новой сессии
+      console.log('Creating new session with character:', character.name);
+      await createSession(character);
     }
   };
 
   const handleLeaveGame = () => {
-    setRoomId(null);
+    setSessionId(null);
     setCurrentScreen('menu');
     setSelectedCharacter(null);
-    setCurrentRoomId(null);
+    setCurrentLobby(null);
+  };
+
+  const handleLobbyStart = (newSessionId: string) => {
+    setSessionId(newSessionId);
+    setCurrentScreen('game');
+    // Очищаем URL
+    window.history.replaceState({}, '', window.location.pathname);
+  };
+
+  const handleCreateLobby = async () => {
+    setIsJoining(true);
+    setError(null);
+
+    try {
+      const lobbyId = Math.random().toString(36).substring(2, 8).toUpperCase();
+      
+      const { data, error } = await supabase.from('lobbies').insert({
+        id: lobbyId,
+        name: `Lobby ${lobbyId}`,
+        max_players: 4,
+        created_by: userSessionId,
+      }).select();
+
+      if (error) throw error;
+
+      setCurrentLobby(data[0] as Lobby);
+      setCurrentScreen('lobby');
+    } catch (err: any) {
+      setError(`Ошибка создания лобби: ${err.message}`);
+    } finally {
+      setIsJoining(false);
+    }
+  };
+
+  const handleJoinLobby = async (lobbyId: string) => {
+    setIsJoining(true);
+    setError(null);
+
+    try {
+      const { data: lobby, error } = await supabase
+        .from('lobbies')
+        .select('*')
+        .eq('id', lobbyId.toUpperCase())
+        .single();
+
+      if (error || !lobby) {
+        setError('Лобби не найдено.');
+        setIsJoining(false);
+        return;
+      }
+
+      setCurrentLobby(lobby as Lobby);
+      setCurrentScreen('lobby');
+    } catch (err: any) {
+      setError(`Ошибка входа в лобби: ${err.message}`);
+    } finally {
+      setIsJoining(false);
+    }
   };
 
   // Экран игры
-  if (currentScreen === 'game' && roomId) {
-    // Если нет персонажа - переходим к выбору
+  if (currentScreen === 'game' && sessionId) {
     if (!selectedCharacter) {
       return (
         <div className={theme}>
@@ -284,7 +384,7 @@ export default function App() {
             userSessionId={userSessionId}
             onCharacterSelected={handleCharacterSelected}
             onBack={handleLeaveGame}
-            roomId={roomId}
+            roomId={sessionId}
           />
         </div>
       );
@@ -293,12 +393,30 @@ export default function App() {
     return (
       <div className={theme}>
         <Chat
-          roomId={roomId}
+          sessionId={sessionId}
           userName={selectedCharacter?.name || ''}
           character={selectedCharacter}
           onLeave={handleLeaveGame}
           theme={theme}
           setTheme={handleThemeChange}
+        />
+      </div>
+    );
+  }
+
+  // Экран лобби
+  if (currentScreen === 'lobby' && currentLobby && selectedCharacter) {
+    return (
+      <div className={theme}>
+        <LobbyRoom
+          lobby={currentLobby}
+          character={selectedCharacter}
+          userSessionId={userSessionId}
+          onStartGame={() => {
+            // Лобби стартовало - перезагружаем страницу для обработки URL
+            window.location.reload();
+          }}
+          onLeave={handleLeaveGame}
         />
       </div>
     );
@@ -312,7 +430,7 @@ export default function App() {
           userSessionId={userSessionId}
           onCharacterSelected={handleCharacterSelected}
           onBack={() => setCurrentScreen('menu')}
-          roomId={currentRoomId || undefined}
+          roomId={currentLobby?.id}
         />
       </div>
     );
@@ -326,7 +444,7 @@ export default function App() {
         <div className="absolute -top-24 -left-24 w-64 h-64 bg-primary-bg rounded-full blur-[100px] pointer-events-none" />
         <div className="absolute -bottom-24 -right-24 w-64 h-64 bg-zinc-900/40 rounded-full blur-[100px] pointer-events-none" />
 
-        {/* Install PWA Button - Top Right - Always Visible */}
+        {/* Install PWA Button */}
         <motion.button
           initial={{ scale: 0, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -370,7 +488,7 @@ export default function App() {
           transition={{ delay: 0.4, duration: 0.6 }}
           className="bg-zinc-900/50 backdrop-blur-xl border border-zinc-800 p-4 md:p-8 rounded-[2rem] shadow-2xl space-y-3 md:space-y-6 relative overflow-hidden"
         >
-          <div className="space-y-3 md:space-y-4">
+          <div className="space-y-2 md:space-y-4">
             {/* Theme Selector */}
             <div className="flex justify-center gap-3 pb-2">
               {[
@@ -388,15 +506,16 @@ export default function App() {
               ))}
             </div>
 
+            {/* Ввод кода сессии */}
             <div className="space-y-2">
-              <label className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Код комнаты</label>
-              <form onSubmit={joinRoom} className="space-y-2">
+              <label className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Код сессии</label>
+              <form onSubmit={joinSession} className="space-y-2">
                 <div className="relative">
                   <ScrollText className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 md:w-4 md:h-4 text-zinc-600" />
                   <input
                     type="text"
-                    value={roomInput}
-                    onChange={(e) => setRoomInput(e.target.value)}
+                    value={sessionInput}
+                    onChange={(e) => setSessionInput(e.target.value)}
                     placeholder="Введите код..."
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-2xl pl-10 md:pl-12 pr-4 py-2.5 md:py-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-zinc-700 uppercase tracking-widest"
                   />
@@ -412,9 +531,21 @@ export default function App() {
               </form>
             </div>
 
+            {/* Создать лобби */}
+            <button
+              onClick={handleCreateLobby}
+              disabled={isJoining}
+              className="w-full group flex flex-col items-center justify-center gap-2 md:gap-3 p-4 md:p-6 bg-zinc-950 border border-zinc-800 rounded-3xl hover:border-primary/50 hover:bg-zinc-900 transition-all duration-300 shadow-lg disabled:opacity-50"
+            >
+              <div className="p-2 md:p-3 bg-primary-bg rounded-2xl group-hover:scale-110 transition-transform">
+                <Users className="w-5 h-5 md:w-6 md:h-6 text-primary" />
+              </div>
+              <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-zinc-400">Создать лобби</span>
+            </button>
+
+            {/* Одиночная игра */}
             <button
               onClick={() => {
-                setCurrentRoomId(null);
                 setCurrentScreen('character-select');
               }}
               disabled={isJoining}
@@ -427,20 +558,20 @@ export default function App() {
             </button>
           </div>
 
-          {/* Сохранения - снизу */}
-          {recentRooms.length > 0 && (
+          {/* Сохранения */}
+          {recentSessions.length > 0 && (
             <div className="space-y-2 pt-2 border-t border-zinc-800/50">
               <h3 className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Сохраненные путешествия</h3>
               <div className="grid grid-cols-1 gap-2">
-                {recentRooms.map((room) => {
-                  const lastPlayedDate = room.lastPlayed ? new Date(room.lastPlayed) : null;
+                {recentSessions.map((session) => {
+                  const lastPlayedDate = session.lastPlayed ? new Date(session.lastPlayed) : null;
                   const timeAgo = lastPlayedDate ? getTimeAgo(lastPlayedDate) : '';
 
                   return (
                     <div
-                      key={room.id}
+                      key={session.id}
                       onClick={() => {
-                        setRoomInput(room.id);
+                        setSessionInput(session.id);
                         setTimeout(() => {
                           const btn = document.querySelector('button[type="submit"]') as HTMLButtonElement;
                           btn?.click();
@@ -453,11 +584,11 @@ export default function App() {
                           <ScrollText className="w-3.5 h-3.5 text-zinc-600 group-hover:text-primary transition-colors" />
                         </div>
                         <div className="flex flex-col gap-0.5 min-w-0">
-                          <span className="text-xs font-medium text-zinc-300 truncate">{room.id}</span>
-                          {room.characterName && (
+                          <span className="text-xs font-medium text-zinc-300 truncate">{session.id}</span>
+                          {session.characterName && (
                             <span className="text-[9px] text-zinc-600 truncate">
                               <UserIcon className="w-2.5 h-2.5 inline mr-1" />
-                              {room.characterName}
+                              {session.characterName}
                             </span>
                           )}
                           {timeAgo && (
@@ -466,7 +597,10 @@ export default function App() {
                         </div>
                       </div>
                       <button
-                        onClick={(e) => deleteRoomFromRecent(e, room.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSessionToDelete(session.id);
+                        }}
                         className="p-1.5 hover:bg-red-500/10 rounded-lg transition-colors text-zinc-700 hover:text-red-500 shrink-0"
                         title="Удалить из истории"
                       >
@@ -547,7 +681,7 @@ export default function App() {
 
         {/* Delete Confirmation Modal */}
         <AnimatePresence>
-          {roomToDelete && (
+          {sessionToDelete && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -566,7 +700,7 @@ export default function App() {
                   </div>
                   <h2 className="text-xl font-bold text-white">Удалить приключение?</h2>
                   <p className="text-zinc-400 text-sm">
-                    Комната <span className="text-zinc-200 font-mono">{roomToDelete}</span> будет потеряна навсегда.
+                    Сессия <span className="text-zinc-200 font-mono">{sessionToDelete}</span> будет потеряна навсегда.
                   </p>
                 </div>
 
@@ -587,7 +721,7 @@ export default function App() {
                     Убрать только из списка
                   </button>
                   <button
-                    onClick={() => setRoomToDelete(null)}
+                    onClick={() => setSessionToDelete(null)}
                     disabled={isDeleting}
                     className="w-full py-4 text-zinc-500 hover:text-zinc-300 text-[10px] font-bold uppercase tracking-widest transition-all"
                   >
@@ -602,5 +736,3 @@ export default function App() {
     </div>
   );
 }
-"// rebuild trigger"  
-"// rebuild"  

@@ -7,7 +7,7 @@
  * 3. Кэширование сводок для экономии токенов
  */
 
-import { Message, CharacterStats } from '../types';
+import { Message, CharacterStats, Character } from '../types';
 
 // ============================================================================
 // ТИПЫ
@@ -40,6 +40,33 @@ export interface SummarizationResult {
   currentQuests: string[];
   inventory: string[];
   keyEvents: string[];
+}
+
+// ============================================================================
+// ТИПЫ ДЛЯ ПАРСИНГА СТАТОВ
+// ============================================================================
+
+export interface CharacterStatChanges {
+  characterName: string;
+  hp?: {
+    current: number;
+    max: number;
+    change?: number; // +5 или -3
+  };
+  xp?: {
+    current: number;
+    change?: number; // +50
+  };
+  level?: {
+    current: number;
+    previous?: number;
+  };
+  story_summary?: string;
+}
+
+export interface StatsParseResult {
+  changes: CharacterStatChanges[];
+  error?: string;
 }
 
 // ============================================================================
@@ -570,6 +597,167 @@ export class AIOrchestrator {
     
     // Затем генерируем изображение
     return await this.generateImage(prompt);
+  }
+
+  /**
+   * Парсит изменения статов из ответа DM через Gemini Flash
+   * Анализирует последнее сообщение AI и извлекает изменения HP, XP, level
+   */
+  async parseStatsChanges(
+    aiResponse: string,
+    currentCharacterStats?: Record<string, CharacterStats>
+  ): Promise<StatsParseResult> {
+    const prompt = `Ты парсер изменений D&D 5e. Проанализируй сообщение DM и извлеки изменения характеристик персонажей.
+
+ТЕКУЩИЕ ПЕРСОНАЖИ (для контекста):
+${currentCharacterStats ? JSON.stringify(currentCharacterStats, null, 2) : 'Неизвестно'}
+
+СООБЩЕНИЕ DM:
+${aiResponse}
+
+НАЙДИ ИЗМЕНЕНИЯ:
+- Кто получил урон или лечение (изменение HP)
+- Кто получил опыт (изменение XP)
+- Кто повысил уровень
+- Краткое событие для истории (1 предложение)
+
+Верни JSON в формате:
+{
+  "changes": [
+    {
+      "characterName": "Имя Персонажа",
+      "hp": {"current": 7, "max": 10, "change": -3},
+      "xp": {"current": 50, "change": 50},
+      "level": {"current": 2, "previous": 1},
+      "story_summary": "Победили гоблина в пещере"
+    }
+  ]
+}
+
+Если изменений нет, верни: {"changes": []}
+ВАЖНО: Верни ТОЛЬКО JSON, без объяснений и markdown.`;
+
+    try {
+      const response = await withRetry(async () => {
+        const res = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.config.openRouterApiKey}`,
+            'HTTP-Referer': window.location.origin,
+            'X-Title': 'D&D RPG App',
+          },
+          body: JSON.stringify({
+            model: this.config.summaryModel, // Gemini 2.5 Flash
+            messages: [
+              {
+                role: 'user',
+                content: prompt
+              }
+            ],
+            temperature: 0.1, // Минимальная температура для точности
+            max_tokens: 512,
+          })
+        });
+
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(`OpenRouter API error: ${res.status} - ${errorText}`);
+        }
+
+        return res.json();
+      });
+
+      const text = response.choices?.[0]?.message?.content || '{}';
+      
+      // Извлекаем JSON из markdown блока, если есть
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      const jsonText = jsonMatch ? jsonMatch[0] : text;
+
+      try {
+        const result = JSON.parse(jsonText);
+        return {
+          changes: Array.isArray(result.changes) ? result.changes : []
+        };
+      } catch (e) {
+        console.error('Failed to parse stats changes:', e);
+        return {
+          changes: [],
+          error: 'Failed to parse JSON response'
+        };
+      }
+    } catch (error: any) {
+      console.error('Error parsing stats changes:', error);
+      return {
+        changes: [],
+        error: error.message || 'Failed to parse stats'
+      };
+    }
+  }
+
+  /**
+   * Обновляет story_summary через Gemini Flash
+   * Добавляет новое событие в существующую сводку
+   */
+  async updateStorySummary(
+    currentSummary: string | undefined,
+    newEvent: string,
+    aiResponse: string
+  ): Promise<string> {
+    const prompt = `Обнови краткую сводку приключения (максимум 300 токенов).
+
+ТЕКУЩАЯ СВОДКА:
+${currentSummary || 'Пусто'}
+
+НОВОЕ СОБЫТИЕ:
+${newEvent}
+
+ОТВЕТ DM:
+${aiResponse}
+
+ЗАДАЧА:
+1. Добавь новое событие в сводку (1-2 предложения)
+2. Сохрани важные детали из старой сводки
+3. Удали неважные детали если сводка становится слишком длинной
+4. Верни ТОЛЬКО обновлённую сводку (без объяснений)
+
+ОБНОВЛЁННАЯ СВОДКА:`;
+
+    try {
+      const response = await withRetry(async () => {
+        const res = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.config.openRouterApiKey}`,
+            'HTTP-Referer': window.location.origin,
+            'X-Title': 'D&D RPG App',
+          },
+          body: JSON.stringify({
+            model: this.config.summaryModel, // Gemini 2.5 Flash
+            messages: [
+              {
+                role: 'user',
+                content: prompt
+              }
+            ],
+            temperature: 0.3,
+            max_tokens: 512,
+          })
+        });
+
+        if (!res.ok) {
+          throw new Error(`OpenRouter API error: ${res.status}`);
+        }
+
+        return res.json();
+      });
+
+      return response.choices?.[0]?.message?.content?.trim() || currentSummary || '';
+    } catch (error: any) {
+      console.error('Error updating story summary:', error);
+      return currentSummary || '';
+    }
   }
 
   /**
