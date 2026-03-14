@@ -196,6 +196,7 @@
   },
   "homepage": "https://github.com/FuserOne1/dndfix#readme",
   "devDependencies": {
-    "@tailwindcss/vite": "^4.2.1"
+    "@tailwindcss/vite": "^4.2.1",
+    "@vitejs/plugin-react": "^5.2.0"
   }
 }
