@@ -272,13 +272,13 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
           });
         }
       )
-      // Подписка на изменения характеристик персонажей
+      // Подписка на изменения характеристик персонажей и флага генерации
       .on(
         'postgres_changes',
         {
           event: 'UPDATE',
           schema: 'public',
-          table: 'rooms',
+          table: 'game_sessions',
           filter: `id=eq.${sessionId}`,
         },
         (payload) => {
@@ -289,16 +289,16 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
             setIsAIGenerating(!!newIsGenerating);
             console.log('AI generating status changed:', newIsGenerating);
           }
-          
+
           // Проверяем, изменились ли характеристики персонажей
           const newStats = payload.new.character_stats;
           const oldStats = payload.old.character_stats;
           if (newStats && newStats !== oldStats) {
             console.log('📊 Character stats changed via postgres_changes');
             setCharacterStats(newStats as Record<string, CharacterStats>);
-            
+
             // Обновляем story_summary если изменилось
-            const currentPlayer = Object.keys(newStats).find(name => 
+            const currentPlayer = Object.keys(newStats).find(name =>
               name === userName || newStats[name]?.name === userName
             );
             if (currentPlayer && newStats[currentPlayer]?.story_summary) {
