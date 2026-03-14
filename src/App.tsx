@@ -325,11 +325,13 @@ export default function App() {
   };
 
   const handleCreateLobby = async () => {
+    console.log('=== CREATING LOBBY ===');
     setIsJoining(true);
     setError(null);
 
     try {
       const lobbyCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+      console.log('Generated lobby code:', lobbyCode);
 
       const { data, error } = await supabase.from('lobbies').insert({
         code: lobbyCode,
@@ -338,11 +340,16 @@ export default function App() {
         created_by: userSessionId,
       }).select();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Lobby creation error:', error);
+        throw error;
+      }
 
+      console.log('Lobby created:', data);
       setCurrentLobby(data[0] as Lobby);
       setCurrentScreen('lobby');
     } catch (err: any) {
+      console.error('Create lobby error:', err);
       setError(`Ошибка создания лобби: ${err.message}`);
     } finally {
       setIsJoining(false);
