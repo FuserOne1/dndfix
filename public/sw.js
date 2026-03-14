@@ -1,22 +1,21 @@
-const CACHE_NAME = 'dnd-ai-v2';
-const ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/sw.js'
-];
+// Simple service worker for PWA
+const CACHE_NAME = 'dnd-dark-fantasy-v1';
 
-// Установка service worker
+// Install event - cache assets
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS);
+      return cache.addAll([
+        '/',
+        '/index.html',
+        '/manifest.json'
+      ]);
     })
   );
   self.skipWaiting();
 });
 
-// Активация и очистка старого кэша
+// Activate event - clean old caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -30,30 +29,30 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Стратегия: Cache First, затем Network
+// Fetch event - network first, fallback to cache
 self.addEventListener('fetch', (event) => {
-  // Игнорируем запросы не к нашему домену
-  if (!event.request.url.startsWith(self.location.origin)) {
-    return;
-  }
+  // Skip non-GET requests
+  if (event.request.method !== 'GET') return;
+
+  // Skip cross-origin requests
+  if (!event.request.url.startsWith(self.location.origin)) return;
 
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      const fetchPromise = fetch(event.request).then((networkResponse) => {
-        // Кэшируем успешные GET запросы
-        if (event.request.method === 'GET' && networkResponse.ok) {
-          const cacheClone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, cacheClone);
-          });
-        }
-        return networkResponse;
-      }).catch(() => {
-        // Если сеть недоступна, возвращаем кэш
-        return cachedResponse;
-      });
+    fetch(event.request)
+      .then((response) => {
+        // Clone the response for caching
+        const responseClone = response.clone();
+        
+        // Open cache and store the new response
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, responseClone);
+        });
 
-      return cachedResponse || fetchPromise;
-    })
+        return response;
+      })
+      .catch(() => {
+        // Network failed, try cache
+        return caches.match(event.request);
+      })
   );
 });

@@ -486,6 +486,25 @@ export default function App() {
 
         {/* Footer */}
         <div className="pt-6 border-t border-zinc-800/30">
+          <AnimatePresence>
+            {showInstallPrompt && (
+              <motion.div
+                initial={{ y: 20, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 20, opacity: 0 }}
+                className="mb-4"
+              >
+                <button
+                  onClick={handleInstallApp}
+                  className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-primary-hover hover:bg-primary text-white rounded-2xl text-sm font-bold uppercase tracking-widest transition-all shadow-lg shadow-primary-glow"
+                >
+                  <Download className="w-4 h-4" />
+                  Установить приложение
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -500,7 +519,7 @@ export default function App() {
             transition={{ delay: 1.2 }}
             className="text-center text-[10px] text-zinc-600 font-mono mt-2"
           >
-            Powered by <span className="text-zinc-400">Llama 3.1</span> & <span className="text-zinc-400">Gemini 2.5 Flash</span>
+            Powered by <span className="text-zinc-400">Claude 3.5</span>, <span className="text-zinc-400">Gemini 2.5</span> & <span className="text-zinc-400">River Flow</span>
           </motion.p>
         </div>
 
