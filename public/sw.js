@@ -1,57 +1,70 @@
-// Simple service worker for PWA
-const CACHE_NAME = 'dnd-dark-fantasy-v1';
+// Service Worker для D&D Dark Fantasy AI
+const CACHE_NAME = 'dnd-dark-fantasy-v2';
+const urlsToCache = [
+  '/',
+  '/index.html',
+  '/manifest.json'
+];
 
-// Install event - cache assets
+// Install - кэшируем файлы
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll([
-        '/',
-        '/index.html',
-        '/manifest.json'
-      ]);
-    })
+    caches.open(CACHE_NAME)
+      .then((cache) => {
+        console.log('SW: кэш открыт');
+        return cache.addAll(urlsToCache);
+      })
   );
+  // Активируем новый SW сразу
   self.skipWaiting();
 });
 
-// Activate event - clean old caches
+// Activate - удаляем старый кэш
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames
           .filter((name) => name !== CACHE_NAME)
-          .map((name) => caches.delete(name))
+          .map((name) => {
+            console.log('SW: удаляю старый кэш:', name);
+            return caches.delete(name);
+          })
       );
     })
   );
+  // Берём под контроль все страницы
   self.clients.claim();
 });
 
-// Fetch event - network first, fallback to cache
+// Fetch - сеть сначала, потом кэш
 self.addEventListener('fetch', (event) => {
-  // Skip non-GET requests
+  // Пропускаем не-GET запросы
   if (event.request.method !== 'GET') return;
 
-  // Skip cross-origin requests
+  // Пропускаем cross-origin запросы
   if (!event.request.url.startsWith(self.location.origin)) return;
 
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Clone the response for caching
-        const responseClone = response.clone();
-        
-        // Open cache and store the new response
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseClone);
-        });
+        // Кэшируем успешные ответы
+        if (!response || response.status !== 200 || response.type !== 'basic') {
+          return response;
+        }
+
+        // Клонируем ответ для кэша
+        const responseToCache = response.clone();
+
+        caches.open(CACHE_NAME)
+          .then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
 
         return response;
       })
       .catch(() => {
-        // Network failed, try cache
+        // Сеть не доступна - берём из кэша
         return caches.match(event.request);
       })
   );
