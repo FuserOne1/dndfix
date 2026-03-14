@@ -273,7 +273,7 @@ export default function CharacterSelect({
       </div>
 
       {/* Cards Container */}
-      <div className="flex-1 flex flex-col justify-center px-3 md:px-8 pb-8">
+      <div className="flex-1 flex flex-col justify-center px-3 md:px-8 pb-8 overflow-y-auto">
         <div className="max-w-4xl mx-auto w-full">
           {characters.length > 0 ? (
             (() => {
@@ -282,52 +282,52 @@ export default function CharacterSelect({
               const hpPercent = (character.hp_current / character.hp_max) * 100;
 
               return (
-                <div className="bg-zinc-900 border-2 border-zinc-800 rounded-3xl p-6 md:p-8 mb-6">
-                  <div className="space-y-6">
+                <div className="bg-zinc-900 border-2 border-zinc-800 rounded-2xl p-4 md:p-6 mb-4">
+                  <div className="space-y-4">
                     {/* Header */}
                     <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="w-20 h-20 bg-zinc-800 rounded-full flex items-center justify-center text-4xl">
+                      <div className="flex items-center gap-3">
+                        <div className="w-14 h-14 md:w-16 md:h-16 bg-zinc-800 rounded-full flex items-center justify-center text-3xl">
                           {getAvatarEmoji(character.avatar_icon)}
                         </div>
                         <div>
-                          <h3 className="text-2xl font-bold text-white">{character.name}</h3>
-                          <p className="text-sm text-zinc-500">{character.race} • {character.class} • Ур. {character.level}</p>
+                          <h3 className="text-lg md:text-xl font-bold text-white truncate">{character.name}</h3>
+                          <p className="text-xs md:text-sm text-zinc-500">{character.race} • {character.class} • Ур. {character.level}</p>
                           {isOccupied && (
-                            <div className="flex items-center gap-2 mt-2 px-3 py-1 bg-red-500/20 border border-red-500/30 rounded-full w-fit">
-                              <Lock className="w-3 h-3 text-red-400" />
-                              <span className="text-xs font-bold text-red-400">Занят</span>
+                            <div className="flex items-center gap-2 mt-1 px-2 py-0.5 bg-red-500/20 border border-red-500/30 rounded-full w-fit">
+                              <Lock className="w-2.5 h-2.5 md:w-3 md:h-3 text-red-400" />
+                              <span className="text-[10px] md:text-xs font-bold text-red-400">Занят</span>
                             </div>
                           )}
                         </div>
                       </div>
                       {!isOccupied && (
-                        <button onClick={(e) => handleDeleteCharacter(character.id, e)} disabled={deletingCharacterId === character.id} className="p-2 bg-zinc-800 hover:bg-red-500/20 border border-zinc-700 hover:border-red-500/30 rounded-lg transition-all">
-                          <Trash2 className="w-5 h-5 text-zinc-500 hover:text-red-400" />
+                        <button onClick={(e) => handleDeleteCharacter(character.id, e)} disabled={deletingCharacterId === character.id} className="p-1.5 md:p-2 bg-zinc-800 hover:bg-red-500/20 border border-zinc-700 hover:border-red-500/30 rounded-lg transition-all">
+                          <Trash2 className="w-4 h-4 md:w-5 md:h-5 text-zinc-500 hover:text-red-400" />
                         </button>
                       )}
                     </div>
 
                     {/* HP Bar */}
-                    <div className="flex items-center gap-3">
-                      <Heart className="w-5 h-5 text-red-500" />
-                      <div className="flex-1 bg-zinc-800 rounded-full h-3 overflow-hidden">
+                    <div className="flex items-center gap-2">
+                      <Heart className="w-4 h-4 md:w-5 md:h-5 text-red-500" />
+                      <div className="flex-1 bg-zinc-800 rounded-full h-2 overflow-hidden">
                         <div className="bg-red-500 h-full transition-all" style={{ width: hpPercent + '%' }} />
                       </div>
-                      <span className="text-sm text-zinc-400">{character.hp_current} - {character.hp_max}</span>
+                      <span className="text-xs md:text-sm text-zinc-400 whitespace-nowrap">{character.hp_current} - {character.hp_max}</span>
                     </div>
 
                     {/* Stats */}
-                    <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+                    <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
                       {['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'].map((stat) => {
                         const Icon = getStatIcon(stat);
                         const value = character[stat as keyof Character] as number;
                         return (
-                          <div key={stat} className="flex flex-col items-center gap-2 p-3 bg-zinc-800 rounded-xl">
-                            <Icon className="w-5 h-5 text-zinc-500" />
+                          <div key={stat} className="flex flex-col items-center gap-1 p-2 bg-zinc-800 rounded-lg">
+                            <Icon className="w-3.5 h-3.5 md:w-4 md:h-4 text-zinc-500" />
                             <div className="text-center">
-                              <span className="text-lg font-bold text-white block">{value}</span>
-                              <span className="text-xs text-zinc-500">{getStatModifier(value)}</span>
+                              <span className="text-base md:text-lg font-bold text-white block">{value}</span>
+                              <span className="text-[10px] md:text-xs text-zinc-500">{getStatModifier(value)}</span>
                             </div>
                           </div>
                         );
@@ -336,13 +336,13 @@ export default function CharacterSelect({
 
                     {/* Background */}
                     {character.background && (
-                      <p className="text-sm text-zinc-500 italic border-l-2 border-zinc-800 pl-4">{character.background}</p>
+                      <p className="text-xs md:text-sm text-zinc-500 italic border-l-2 border-zinc-800 pl-3 line-clamp-2">{character.background}</p>
                     )}
 
                     {/* Select Button */}
                     {!isOccupied && (
-                      <button onClick={() => handleSelectCharacter(character)} disabled={isJoining} className="w-full py-4 bg-primary-hover hover:bg-primary text-white rounded-xl font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-lg">
-                        {isJoining ? <Loader2 className="w-6 h-6 animate-spin" /> : <Check className="w-6 h-6" />}
+                      <button onClick={() => handleSelectCharacter(character)} disabled={isJoining} className="w-full py-3 md:py-4 bg-primary-hover hover:bg-primary text-white rounded-xl font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-base md:text-lg">
+                        {isJoining ? <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin" /> : <Check className="w-5 h-5 md:w-6 md:h-6" />}
                         Выбрать
                       </button>
                     )}
@@ -357,17 +357,17 @@ export default function CharacterSelect({
           {/* Navigation */}
           {characters.length > 1 && (
             <div className="flex items-center justify-between gap-4">
-              <button onClick={goToPrev} disabled={currentIndex === 0} className="flex-1 py-4 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                <ChevronLeft className="w-6 h-6" />
-                <span className="font-bold">Назад</span>
+              <button onClick={goToPrev} disabled={currentIndex === 0} className="flex-1 py-3 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                <ChevronLeft className="w-5 h-5" />
+                <span className="font-bold text-sm md:text-base">Назад</span>
               </button>
               <div className="text-center">
-                <span className="text-lg font-bold text-white">{currentIndex + 1}</span>
-                <span className="text-zinc-500 text-sm"> из {characters.length}</span>
+                <span className="text-base md:text-lg font-bold text-white">{currentIndex + 1}</span>
+                <span className="text-zinc-500 text-xs md:text-sm"> из {characters.length}</span>
               </div>
-              <button onClick={goToNext} disabled={currentIndex >= characters.length - 1} className="flex-1 py-4 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                <span className="font-bold">Вперёд</span>
-                <ChevronRight className="w-6 h-6" />
+              <button onClick={goToNext} disabled={currentIndex >= characters.length - 1} className="flex-1 py-3 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                <span className="font-bold text-sm md:text-base">Вперёд</span>
+                <ChevronRight className="w-5 h-5" />
               </button>
             </div>
           )}
