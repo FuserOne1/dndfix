@@ -286,6 +286,8 @@ export default function App() {
           onLeave={handleLeaveGame}
           theme={theme}
           setTheme={handleThemeChange}
+          showInstallPrompt={showInstallPrompt}
+          handleInstallApp={handleInstallApp}
         />
       </div>
     );
@@ -312,6 +314,22 @@ export default function App() {
         {/* Background Glow */}
         <div className="absolute -top-24 -left-24 w-64 h-64 bg-primary-bg rounded-full blur-[100px] pointer-events-none" />
         <div className="absolute -bottom-24 -right-24 w-64 h-64 bg-zinc-900/40 rounded-full blur-[100px] pointer-events-none" />
+
+        {/* Install PWA Button - Top Right */}
+        <AnimatePresence>
+          {showInstallPrompt && (
+            <motion.button
+              initial={{ scale: 0, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0, opacity: 0 }}
+              onClick={handleInstallApp}
+              className="fixed top-4 right-4 z-50 p-2 bg-primary-hover hover:bg-primary text-white rounded-xl shadow-lg shadow-primary-glow md:hidden"
+              title="Установить приложение"
+            >
+              <Download className="w-5 h-5" />
+            </motion.button>
+          )}
+        </AnimatePresence>
 
         <div className="text-center space-y-2 md:space-y-4 relative">
           <motion.div
