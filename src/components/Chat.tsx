@@ -135,12 +135,14 @@ export default function Chat({ roomId, userName, character, onLeave, onCharacter
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
 
   // Если нет персонажа - показываем уведомление
+  // Эта проверка теперь в App.tsx, но оставим на всякий случай
   if (!character) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-        <div className="text-center space-y-4">
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
+        <div className="text-center space-y-4 max-w-md">
           <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto" />
-          <p className="text-zinc-400">Загрузка персонажа...</p>
+          <p className="text-zinc-400 text-sm">Загрузка персонажа...</p>
+          <p className="text-zinc-500 text-xs">Если долго загружается — обновите страницу</p>
         </div>
       </div>
     );
@@ -1140,7 +1142,7 @@ XP: ${character.xp}
             </div>
           </div>
         ) : (
-          <div className="flex flex-col min-h-full">
+          <div className="flex flex-col flex-grow min-h-0">
             {(() => {
               let currentPauseState = false;
               const renderableMessages = messages
