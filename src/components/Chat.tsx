@@ -1298,7 +1298,9 @@ XP: ${character.xp}
       </div>
 
       {/* Input */}
-      <div className="shrink-0 p-3 md:p-4 bg-zinc-900/80 backdrop-blur-md border-t border-zinc-800 pb-[calc(0.75rem+max(env(safe-area-inset-bottom),20px))] md:pb-[calc(1rem+env(safe-area-inset-bottom))] z-50 relative">
+      <div className="shrink-0 p-3 md:p-4 bg-zinc-900/80 backdrop-blur-md border-t border-zinc-800 z-50 relative">
+        {/* Safe area padding - больше отступ снизу */}
+        <div className="pb-4 md:pb-4" />
         <div className="max-w-4xl mx-auto">
           {isPaused && (
             <div className="flex items-center justify-center gap-2 py-1 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-500 text-[10px] font-bold uppercase tracking-widest mb-2">

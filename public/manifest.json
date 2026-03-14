@@ -3,7 +3,9 @@
   "short_name": "D&D AI",
   "description": "Cooperative AI Dungeon Master for Dark Fantasy Adventures",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "orientation": "portrait",
   "background_color": "#09090b",
   "theme_color": "#10b981",
@@ -19,8 +21,16 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    },
+    {
+      "src": "https://picsum.photos/seed/dnd/512/512",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "categories": ["games", "entertainment"],
-  "lang": "ru-RU"
+  "lang": "ru-RU",
+  "dir": "ltr",
+  "prefer_related_applications": false
 }
