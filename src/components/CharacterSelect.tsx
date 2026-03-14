@@ -593,21 +593,21 @@ export default function CharacterSelect({
 
       {/* Create Character Modal */}
       <AnimatePresence>
-          {showCreateForm && (
+        {showCreateForm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-start justify-center p-4 bg-zinc-950/80 backdrop-blur-sm"
+            onClick={() => !isJoining && setShowCreateForm(false)}
+          >
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-start justify-center p-4 bg-zinc-950/80 backdrop-blur-sm overflow-y-auto"
-              onClick={() => !isJoining && setShowCreateForm(false)}
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="max-w-2xl w-full bg-zinc-900 border border-zinc-800 p-8 rounded-3xl shadow-2xl my-8 max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
             >
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0, y: 20 }}
-                animate={{ scale: 1, opacity: 1, y: 0 }}
-                exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                className="max-w-2xl w-full bg-zinc-900 border border-zinc-800 p-8 rounded-3xl shadow-2xl my-8 max-h-[90vh] overflow-y-auto"
-                onClick={(e) => e.stopPropagation()}
-              >
                 <div className="space-y-6">
                   <div className="text-center sticky top-0 bg-zinc-900 pb-4 z-10">
                     <div className="inline-flex p-3 bg-primary-bg rounded-2xl mb-4">
@@ -793,7 +793,6 @@ export default function CharacterSelect({
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
     </div>
   );
 }
