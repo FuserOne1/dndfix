@@ -595,191 +595,190 @@ export default function CharacterSelect({
               onClick={(e) => e.stopPropagation()}
             >
               <div className="space-y-6">
-                  <div className="text-center sticky top-0 bg-zinc-900 pb-4 z-10">
-                    <div className="inline-flex p-3 bg-primary-bg rounded-2xl mb-4">
-                      <Sparkles className="w-6 h-6 text-primary" />
-                    </div>
-                    <h2 className="text-2xl font-bold text-white">Создать персонажа</h2>
-                    <p className="text-sm text-zinc-500 mt-2">Заполните карточку героя по правилам D&D 5e</p>
+                <div className="text-center sticky top-0 bg-zinc-900 pb-4 z-10">
+                  <div className="inline-flex p-3 bg-primary-bg rounded-2xl mb-4">
+                    <Sparkles className="w-6 h-6 text-primary" />
+                  </div>
+                  <h2 className="text-2xl font-bold text-white">Создать персонажа</h2>
+                  <p className="text-sm text-zinc-500 mt-2">Заполните карточку героя по правилам D&D 5e</p>
+                </div>
+
+                <form onSubmit={handleCreateCharacter} className="space-y-6">
+                  <div>
+                    <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                      Имя персонажа *
+                    </label>
+                    <input
+                      type="text"
+                      value={newCharacter.name}
+                      onChange={(e) => setNewCharacter({ ...newCharacter, name: e.target.value })}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      placeholder="Например: Арагорн"
+                    />
                   </div>
 
-                  <form onSubmit={handleCreateCharacter} className="space-y-6">
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                        Имя персонажа *
+                        Раса
                       </label>
-                      <input
-                        type="text"
-                        value={newCharacter.name}
-                        onChange={(e) => setNewCharacter({ ...newCharacter, name: e.target.value })}
+                      <select
+                        value={newCharacter.race}
+                        onChange={(e) => setNewCharacter({ ...newCharacter, race: e.target.value })}
                         className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                        placeholder="Например: Арагорн"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                          Раса
-                        </label>
-                        <select
-                          value={newCharacter.race}
-                          onChange={(e) => setNewCharacter({ ...newCharacter, race: e.target.value })}
-                          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                        >
-                          {races.map((race) => (
-                            <option key={race.name} value={race.name}>{race.name}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                          Класс
-                        </label>
-                        <select
-                          value={newCharacter.class}
-                          onChange={(e) => setNewCharacter({ ...newCharacter, class: e.target.value })}
-                          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                        >
-                          {classes.map((cls) => (
-                            <option key={cls.name} value={cls.name}>{cls.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                        Предыстория
-                      </label>
-                      <input
-                        type="text"
-                        value={newCharacter.background}
-                        onChange={(e) => setNewCharacter({ ...newCharacter, background: e.target.value })}
-                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                        placeholder="Например: Отшельник"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                        Особый предмет
-                      </label>
-                      <input
-                        type="text"
-                        value={newCharacter.specialItem}
-                        onChange={(e) => setNewCharacter({ ...newCharacter, specialItem: e.target.value })}
-                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                        placeholder="Например: Семейный амулет"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                        Описание предмета
-                      </label>
-                      <textarea
-                        value={newCharacter.specialItemDescription}
-                        onChange={(e) => setNewCharacter({ ...newCharacter, specialItemDescription: e.target.value })}
-                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
-                        rows={3}
-                        placeholder="Краткая история или особые свойства"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                        Аватар
-                      </label>
-                      <div className="flex gap-2 mt-2">
-                        {avatarOptions.map((avatar) => (
-                          <button
-                            key={avatar.id}
-                            type="button"
-                            onClick={() => setNewCharacter({ ...newCharacter, avatar_icon: avatar.id })}
-                            className={`flex-1 p-3 rounded-xl border-2 transition-all ${
-                              newCharacter.avatar_icon === avatar.id
-                                ? 'border-primary bg-primary/10'
-                                : 'border-zinc-800 hover:border-zinc-700'
-                            }`}
-                          >
-                            <div className="text-2xl">{avatar.emoji}</div>
-                            <div className="text-xs text-zinc-500 mt-1">{avatar.label}</div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                          Характеристики (Point Buy)
-                        </label>
-                        <span className={`text-xs font-bold ${pointsRemaining === 0 ? 'text-green-500' : 'text-amber-500'}`}>
-                          Очков осталось: {pointsRemaining}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        {Object.entries(pointBuy).map(([stat, value]) => {
-                          const Icon = getStatIcon(stat);
-                          const statName = stat.charAt(0).toUpperCase() + stat.slice(1);
-                          return (
-                            <div
-                              key={stat}
-                              className="flex items-center justify-between p-3 bg-zinc-800 rounded-xl"
-                            >
-                              <div className="flex items-center gap-2">
-                                <Icon className="w-4 h-4 text-zinc-500" />
-                                <span className="text-xs font-bold text-zinc-400">{statName}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => adjustStat(stat as keyof typeof pointBuy, -1)}
-                                  className="w-7 h-7 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-white font-bold transition-all disabled:opacity-50"
-                                  disabled={value <= 8}
-                                >
-                                  -
-                                </button>
-                                <span className="text-sm font-bold text-white w-6 text-center">{value}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => adjustStat(stat as keyof typeof pointBuy, 1)}
-                                  className="w-7 h-7 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-white font-bold transition-all disabled:opacity-50"
-                                  disabled={value >= 15}
-                                >
-                                  +
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="sticky bottom-0 bg-zinc-900 pt-4 border-t border-zinc-800">
-                      <button
-                        type="submit"
-                        disabled={isJoining || pointsRemaining !== 0}
-                        className="w-full py-4 bg-primary-hover hover:bg-primary text-white rounded-xl font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                       >
-                        {isJoining ? (
-                          <Loader2 className="w-5 h-5 animate-spin" />
-                        ) : (
-                          <Check className="w-5 h-5" />
-                        )}
-                        Создать и продолжить
-                      </button>
+                        {races.map((race) => (
+                          <option key={race.name} value={race.name}>{race.name}</option>
+                        ))}
+                      </select>
                     </div>
-                  </form>
-                </div>
-              </motion.div>
+
+                    <div>
+                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                        Класс
+                      </label>
+                      <select
+                        value={newCharacter.class}
+                        onChange={(e) => setNewCharacter({ ...newCharacter, class: e.target.value })}
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      >
+                        {classes.map((cls) => (
+                          <option key={cls.name} value={cls.name}>{cls.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                      Предыстория
+                    </label>
+                    <input
+                      type="text"
+                      value={newCharacter.background}
+                      onChange={(e) => setNewCharacter({ ...newCharacter, background: e.target.value })}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      placeholder="Например: Отшельник"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                      Особый предмет
+                    </label>
+                    <input
+                      type="text"
+                      value={newCharacter.specialItem}
+                      onChange={(e) => setNewCharacter({ ...newCharacter, specialItem: e.target.value })}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      placeholder="Например: Семейный амулет"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                      Описание предмета
+                    </label>
+                    <textarea
+                      value={newCharacter.specialItemDescription}
+                      onChange={(e) => setNewCharacter({ ...newCharacter, specialItemDescription: e.target.value })}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+                      rows={3}
+                      placeholder="Краткая история или особые свойства"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                      Аватар
+                    </label>
+                    <div className="flex gap-2 mt-2">
+                      {avatarOptions.map((avatar) => (
+                        <button
+                          key={avatar.id}
+                          type="button"
+                          onClick={() => setNewCharacter({ ...newCharacter, avatar_icon: avatar.id })}
+                          className={`flex-1 p-3 rounded-xl border-2 transition-all ${
+                            newCharacter.avatar_icon === avatar.id
+                              ? 'border-primary bg-primary/10'
+                              : 'border-zinc-800 hover:border-zinc-700'
+                          }`}
+                        >
+                          <div className="text-2xl">{avatar.emoji}</div>
+                          <div className="text-xs text-zinc-500 mt-1">{avatar.label}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                        Характеристики (Point Buy)
+                      </label>
+                      <span className={`text-xs font-bold ${pointsRemaining === 0 ? 'text-green-500' : 'text-amber-500'}`}>
+                        Очков осталось: {pointsRemaining}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      {Object.entries(pointBuy).map(([stat, value]) => {
+                        const Icon = getStatIcon(stat);
+                        const statName = stat.charAt(0).toUpperCase() + stat.slice(1);
+                        return (
+                          <div
+                            key={stat}
+                            className="flex items-center justify-between p-3 bg-zinc-800 rounded-xl"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Icon className="w-4 h-4 text-zinc-500" />
+                              <span className="text-xs font-bold text-zinc-400">{statName}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => adjustStat(stat as keyof typeof pointBuy, -1)}
+                                className="w-7 h-7 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-white font-bold transition-all disabled:opacity-50"
+                                disabled={value <= 8}
+                              >
+                                -
+                              </button>
+                              <span className="text-sm font-bold text-white w-6 text-center">{value}</span>
+                              <button
+                                type="button"
+                                onClick={() => adjustStat(stat as keyof typeof pointBuy, 1)}
+                                className="w-7 h-7 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-white font-bold transition-all disabled:opacity-50"
+                                disabled={value >= 15}
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="sticky bottom-0 bg-zinc-900 pt-4 border-t border-zinc-800">
+                    <button
+                      type="submit"
+                      disabled={isJoining || pointsRemaining !== 0}
+                      className="w-full py-4 bg-primary-hover hover:bg-primary text-white rounded-xl font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {isJoining ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <Check className="w-5 h-5" />
+                      )}
+                      Создать и продолжить
+                    </button>
+                  </div>
+                </form>
+              </div>
             </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
