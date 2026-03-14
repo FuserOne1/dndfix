@@ -783,30 +783,29 @@ export default function Chat({ roomId, userName, character, onLeave, onCharacter
       console.log('=== AI GENERATION STARTED ===');
       console.log('Character props:', character);
       console.log('CharacterStats:', characterStats);
-      
-      // Добавляем данные персонажа в промпт ВСЕГДА, если character передан
+
+      // Добавляем данные ВСЕХ персонажей в промпт
       let effectiveSystemPrompt = SYSTEM_PROMPT;
-      if (character) {
-        const charInfo = `
+      
+      if (characterStats && Object.keys(characterStats).length > 0) {
+        const allCharactersInfo = '\n\n[ДАННЫЕ ПЕРСОНАЖЕЙ ИГРОКОВ - ИСПОЛЬЗУЙ ЭТИ ДАННЫЕ ВСЕГДА]:\n' + 
+          Object.values(characterStats).map((stats: CharacterStats) => `
+=== ПЕРСОНАЖ: ${stats.name} ===
+Раса: ${stats.race}
+Класс: ${stats.class}
+Уровень: ${stats.level}
+HP: ${stats.hp.current}/${stats.hp.max}
+XP: ${stats.xp}
+Характеристики: STR ${stats.stats.strength}, DEX ${stats.stats.dexterity}, CON ${stats.stats.constitution}, INT ${stats.stats.intelligence}, WIS ${stats.stats.wisdom}, CHA ${stats.stats.charisma}
+Предыстория: ${stats.background}
+Снаряжение: ${stats.equipment ? stats.equipment.join(', ') : 'Нет'}
+`).join('\n');
 
-[ДАННЫЕ ПЕРСОНАЖА ИГРОКА - ИСПОЛЬЗУЙ ЭТИ ДАННЫЕ ВСЕГДА]:
-Имя: ${character.name}
-Раса: ${character.race}
-Класс: ${character.class}
-Уровень: ${character.level}
-HP: ${character.hp_current + '/' + character.hp_max}
-XP: ${character.xp}
-Характеристики: STR ${character.strength}, DEX ${character.dexterity}, CON ${character.constitution}, INT ${character.intelligence}, WIS ${character.wisdom}, CHA ${character.charisma}
-Предыстория: ${character.background}
-Снаряжение: ${character.equipment ? character.equipment.join(', ') : 'Нет'}
+        effectiveSystemPrompt = SYSTEM_PROMPT + allCharactersInfo;
 
-ВАЖНО: Это данные персонажа игрока. НЕ придумывай другого персонажа, используй эти данные!
-`;
-        effectiveSystemPrompt = SYSTEM_PROMPT + charInfo;
-        
-        console.log('✅ Character data ADDED to prompt:', character.name, character.race, character.class);
+        console.log('✅ All characters data ADDED to prompt:', Object.keys(characterStats).join(', '));
         console.log('Full system prompt length:', effectiveSystemPrompt.length);
-      } else {
+      } else if (character) {
         console.log('❌ WARNING: No character data available!');
       }
 
