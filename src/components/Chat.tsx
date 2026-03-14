@@ -915,8 +915,7 @@ XP: ${character.xp}
   };
 
   return (
-    <div className={cn("flex flex-col w-full bg-zinc-950 text-zinc-100 font-sans overflow-hidden relative", theme)}>
-      <div className="flex-1 flex flex-col min-h-0 h-[100dvh]">
+    <div className={cn("flex flex-col h-screen w-full bg-zinc-950 text-zinc-100 font-sans overflow-hidden relative", theme)}>
       {/* Header */}
       <div className="shrink-0 p-2 md:p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50 backdrop-blur-md z-30 pt-[calc(0.75rem+env(safe-area-inset-top))] md:pt-[calc(1rem+env(safe-area-inset-top))]">
         <div className="flex items-center gap-1 md:gap-4 min-w-0">
@@ -1300,8 +1299,6 @@ XP: ${character.xp}
 
       {/* Input */}
       <div className="shrink-0 p-3 md:p-4 bg-zinc-900/80 backdrop-blur-md border-t border-zinc-800 z-50 relative">
-        {/* Safe area padding - больше отступ снизу */}
-        <div className="pb-4 md:pb-4" />
         <div className="max-w-4xl mx-auto">
           {isPaused && (
             <div className="flex items-center justify-center gap-2 py-1 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-500 text-[10px] font-bold uppercase tracking-widest mb-2">
@@ -1706,7 +1703,6 @@ XP: ${character.xp}
           </div>
         </div>
       )}
-      </div>
     </div>
   );
 }
