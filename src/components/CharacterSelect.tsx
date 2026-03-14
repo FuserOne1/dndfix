@@ -391,48 +391,53 @@ export default function CharacterSelect({
   }
 
   return (
-    <div className="h-screen bg-zinc-950 text-zinc-100 p-3 md:p-8 overflow-y-auto">
-      <div className="max-w-6xl mx-auto space-y-4 md:space-y-6 pb-8 min-h-screen">
-        {/* Header */}
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
-            <button
-              onClick={onBack}
-              className="p-2 md:p-3 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 transition-colors shrink-0"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <div className="min-w-0 flex-1">
-              <h1 className="text-lg md:text-3xl font-bold text-white truncate">Выбор персонажа</h1>
-              <p className="text-xs md:text-sm text-zinc-500 truncate">
-                {roomId ? `Присоединение к комнате ${roomId}` : 'Создание новой игры'}
-              </p>
+    <div className="bg-zinc-950 text-zinc-100 h-screen flex flex-col">
+      {/* Header - фиксированный */}
+      <div className="shrink-0 p-3 md:p-8 pb-4">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
+              <button
+                onClick={onBack}
+                className="p-2 md:p-3 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 transition-colors shrink-0"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <div className="min-w-0 flex-1">
+                <h1 className="text-lg md:text-3xl font-bold text-white truncate">Выбор персонажа</h1>
+                <p className="text-xs md:text-sm text-zinc-500 truncate">
+                  {roomId ? `Присоединение к комнате ${roomId}` : 'Создание новой игры'}
+                </p>
+              </div>
             </div>
+
+            <button
+              onClick={() => setShowCreateForm(true)}
+              className="flex items-center gap-1 md:gap-2 px-3 md:px-6 py-2 md:py-3 bg-primary-hover hover:bg-primary text-white rounded-xl font-bold transition-all shrink-0 text-xs md:text-base"
+            >
+              <Plus className="w-4 h-4 md:w-5 md:h-5" />
+              <span className="hidden md:inline">Создать персонажа</span>
+              <span className="md:hidden">+</span>
+            </button>
           </div>
 
-          <button
-            onClick={() => setShowCreateForm(true)}
-            className="flex items-center gap-1 md:gap-2 px-3 md:px-6 py-2 md:py-3 bg-primary-hover hover:bg-primary text-white rounded-xl font-bold transition-all shrink-0 text-xs md:text-base"
-          >
-            <Plus className="w-4 h-4 md:w-5 md:h-5" />
-            <span className="hidden md:inline">Создать персонажа</span>
-            <span className="md:hidden">+</span>
-          </button>
+          {/* Error */}
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-red-400 text-sm mt-4"
+            >
+              {error}
+            </motion.div>
+          )}
         </div>
+      </div>
 
-        {/* Error */}
-        {error && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-red-500/10 border border-red-500/20 p-4 rounded-xl text-red-400 text-sm"
-          >
-            {error}
-          </motion.div>
-        )}
-
-        {/* Characters Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+      {/* Characters Grid - прокручиваемый блок */}
+      <div className="flex-1 overflow-y-auto px-3 md:px-8 pb-8 scrollbar-thin scrollbar-thumb-zinc-800">
+        <div className="max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
           <AnimatePresence mode="popLayout">
             {paginatedCharacters.map((character) => {
               const isOccupied = occupiedCharacterIds.has(character.id);
@@ -549,7 +554,7 @@ export default function CharacterSelect({
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-4">
+          <div className="flex items-center justify-center gap-4 py-4">
             <button
               onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
               disabled={currentPage === 0}
@@ -583,9 +588,12 @@ export default function CharacterSelect({
             </button>
           </div>
         )}
+        </div>
+      </div>
+    </div>
 
-        {/* Create Character Modal */}
-        <AnimatePresence>
+    {/* Create Character Modal */}
+    <AnimatePresence>
           {showCreateForm && (
             <motion.div
               initial={{ opacity: 0 }}
@@ -786,7 +794,5 @@ export default function CharacterSelect({
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
-    </div>
   );
 }
