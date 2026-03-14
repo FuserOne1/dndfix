@@ -793,7 +793,6 @@ export default function CharacterSelect({
             </motion.div>
           )}
         </AnimatePresence>
-      </div>
     </div>
   );
 }
