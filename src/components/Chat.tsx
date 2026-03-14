@@ -784,7 +784,7 @@ export default function Chat({ roomId, userName, character, onLeave, onCharacter
 Раса: ${character.race}
 Класс: ${character.class}
 Уровень: ${character.level}
-HP: ${character.hp_current}/${character.hp_max}
+HP: ${character.hp_current + '/' + character.hp_max}
 XP: ${character.xp}
 Характеристики: STR ${character.strength}, DEX ${character.dexterity}, CON ${character.constitution}, INT ${character.intelligence}, WIS ${character.wisdom}, CHA ${character.charisma}
 Предыстория: ${character.background}
