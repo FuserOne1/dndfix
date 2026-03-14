@@ -497,7 +497,7 @@ export default function CharacterSelect({
                       <div className="flex-1 bg-zinc-800 rounded-full h-1.5 md:h-2 overflow-hidden">
                         <div
                           className="bg-red-500 h-full transition-all"
-                          style={{ width: `${(character.hp_current / character.hp_max) * 100}%` }}
+                          style={{ width: ((character.hp_current / character.hp_max) * 100) + '%' }}
                         />
                       </div>
                       <span className="text-[10px] md:text-xs text-zinc-500 whitespace-nowrap">
