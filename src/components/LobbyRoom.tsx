@@ -346,7 +346,7 @@ export default function LobbyRoom({
   };
 
   const copyLobbyId = () => {
-    navigator.clipboard.writeText(lobby.id);
+    navigator.clipboard.writeText(lobby.code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -366,7 +366,7 @@ export default function LobbyRoom({
             <div>
               <h1 className="text-3xl font-bold text-white">{lobby.name}</h1>
               <div className="flex items-center gap-2 mt-1">
-                <p className="text-sm text-zinc-500">Код лобби: {lobby.id}</p>
+                <p className="text-sm text-zinc-500">Код лобби: {lobby.code}</p>
                 <button
                   onClick={copyLobbyId}
                   className="p-1 hover:bg-zinc-800 rounded transition-colors"

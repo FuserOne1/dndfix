@@ -329,11 +329,11 @@ export default function App() {
     setError(null);
 
     try {
-      const lobbyId = Math.random().toString(36).substring(2, 8).toUpperCase();
-      
+      const lobbyCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+
       const { data, error } = await supabase.from('lobbies').insert({
-        id: lobbyId,
-        name: `Lobby ${lobbyId}`,
+        code: lobbyCode,
+        name: `Lobby ${lobbyCode}`,
         max_players: 4,
         created_by: userSessionId,
       }).select();
@@ -349,7 +349,7 @@ export default function App() {
     }
   };
 
-  const handleJoinLobby = async (lobbyId: string) => {
+  const handleJoinLobby = async (lobbyCode: string) => {
     setIsJoining(true);
     setError(null);
 
@@ -357,7 +357,7 @@ export default function App() {
       const { data: lobby, error } = await supabase
         .from('lobbies')
         .select('*')
-        .eq('id', lobbyId.toUpperCase())
+        .eq('code', lobbyCode.toUpperCase())
         .single();
 
       if (error || !lobby) {

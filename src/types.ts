@@ -74,7 +74,8 @@ export interface Message {
 // ═══════════════════════════════════════════════════════════════
 
 export interface Lobby {
-  id: string;
+  id: string; // UUID
+  code: string; // Короткий код для ввода (например "A1B2C3")
   name: string;
   max_players: number;
   is_active: boolean;
