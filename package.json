@@ -194,5 +194,8 @@
   "bugs": {
     "url": "https://github.com/FuserOne1/dndfix/issues"
   },
-  "homepage": "https://github.com/FuserOne1/dndfix#readme"
+  "homepage": "https://github.com/FuserOne1/dndfix#readme",
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.1"
+  }
 }
