@@ -20,9 +20,8 @@ export default function App() {
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
 
   // Состояния экранов
-  const [currentScreen, setCurrentScreen] = useState<'menu' | 'character-select' | 'lobby' | 'game'>('menu');
+  const [currentScreen, setCurrentScreen] = useState<'menu' | 'character-select' | 'game'>('menu');
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
-  const [currentLobby, setCurrentLobby] = useState<Lobby | null>(null);
 
   const [userSessionId] = useState(() => {
     const stored = localStorage.getItem('user_session_id');
@@ -283,30 +282,40 @@ export default function App() {
   };
 
   // Обработчик выбора персонажа
-  const handleCharacterSelected = async (character: Character, lobbyId?: string) => {
+  const handleCharacterSelected = async (character: Character, sessionId?: string) => {
     console.log('=== CHARACTER SELECTED ===');
     console.log('Character:', character);
-    console.log('LobbyId:', lobbyId);
+    console.log('SessionId:', sessionId);
     console.log('My userSessionId:', userSessionId);
 
     setSelectedCharacter(character);
 
-    if (lobbyId) {
-      // Присоединение к лобби
-      console.log('Joining lobby with character:', character.name);
-      
-      // Добавляем участника в лобби
-      await supabase.from('lobby_participants').insert({
-        lobby_id: lobbyId,
+    if (sessionId) {
+      // Присоединение к существующей сессии
+      console.log('Joining session with character:', character.name);
+
+      // Добавляем участника в сессию
+      await supabase.from('game_session_participants').insert({
+        session_id: sessionId,
         character_id: character.id,
         user_session_id: userSessionId,
       });
 
-      setCurrentScreen('lobby');
+      // Переход в игру
+      setSessionId(sessionId);
+      setCurrentScreen('game');
     } else {
-      // Создание новой сессии
-      console.log('Creating new session with character:', character.name);
-      await createSession(character);
+      // Создание новой сессии (уже создана, просто переходим в игру)
+      console.log('Starting new session with character:', character.name);
+      
+      // Добавляем участника в сессию
+      await supabase.from('game_session_participants').insert({
+        session_id: sessionId || currentRoomId,
+        character_id: character.id,
+        user_session_id: userSessionId,
+      });
+
+      setCurrentScreen('game');
     }
   };
 
@@ -314,71 +323,37 @@ export default function App() {
     setSessionId(null);
     setCurrentScreen('menu');
     setSelectedCharacter(null);
-    setCurrentLobby(null);
-  };
-
-  const handleLobbyStart = (newSessionId: string) => {
-    setSessionId(newSessionId);
-    setCurrentScreen('game');
-    // Очищаем URL
-    window.history.replaceState({}, '', window.location.pathname);
   };
 
   const handleCreateLobby = async () => {
-    console.log('=== CREATING LOBBY ===');
+    // Создаём сессию напрямую без лобби
+    console.log('=== CREATING SESSION DIRECTLY ===');
     setIsJoining(true);
     setError(null);
 
     try {
-      const lobbyCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-      console.log('Generated lobby code:', lobbyCode);
+      const sessionCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+      console.log('Generated session code:', sessionCode);
 
-      const { data, error } = await supabase.from('lobbies').insert({
-        code: lobbyCode,
-        name: `Lobby ${lobbyCode}`,
-        max_players: 4,
+      const { data, error } = await supabase.from('game_sessions').insert({
+        id: sessionCode,
         created_by: userSessionId,
       }).select();
 
       if (error) {
-        console.error('Lobby creation error:', error);
+        console.error('Session creation error:', error);
         throw error;
       }
 
-      console.log('Lobby created:', data);
+      console.log('Session created:', data);
       
-      // Сохраняем лобби и переходим к выбору персонажа
-      setCurrentLobby(data[0] as Lobby);
+      // Сохраняем сессию и переходим к выбору персонажа
+      setSessionId(sessionCode);
+      saveSessionToRecent(sessionCode);
       setCurrentScreen('character-select');
     } catch (err: any) {
-      console.error('Create lobby error:', err);
-      setError(`Ошибка создания лобби: ${err.message}`);
-    } finally {
-      setIsJoining(false);
-    }
-  };
-
-  const handleJoinLobby = async (lobbyCode: string) => {
-    setIsJoining(true);
-    setError(null);
-
-    try {
-      const { data: lobby, error } = await supabase
-        .from('lobbies')
-        .select('*')
-        .eq('code', lobbyCode.toUpperCase())
-        .single();
-
-      if (error || !lobby) {
-        setError('Лобби не найдено.');
-        setIsJoining(false);
-        return;
-      }
-
-      setCurrentLobby(lobby as Lobby);
-      setCurrentScreen('lobby');
-    } catch (err: any) {
-      setError(`Ошибка входа в лобби: ${err.message}`);
+      console.error('Create session error:', err);
+      setError(`Ошибка создания сессии: ${err.message}`);
     } finally {
       setIsJoining(false);
     }
@@ -413,24 +388,6 @@ export default function App() {
     );
   }
 
-  // Экран лобби
-  if (currentScreen === 'lobby' && currentLobby && selectedCharacter) {
-    return (
-      <div className={theme}>
-        <LobbyRoom
-          lobby={currentLobby}
-          character={selectedCharacter}
-          userSessionId={userSessionId}
-          onStartGame={() => {
-            // Лобби стартовало - перезагружаем страницу для обработки URL
-            window.location.reload();
-          }}
-          onLeave={handleLeaveGame}
-        />
-      </div>
-    );
-  }
-
   // Экран выбора персонажа
   if (currentScreen === 'character-select') {
     return (
@@ -439,7 +396,7 @@ export default function App() {
           userSessionId={userSessionId}
           onCharacterSelected={handleCharacterSelected}
           onBack={() => setCurrentScreen('menu')}
-          roomId={currentLobby?.id}
+          roomId={sessionId || undefined}
         />
       </div>
     );
@@ -540,7 +497,7 @@ export default function App() {
               </form>
             </div>
 
-            {/* Создать лобби */}
+            {/* Создать сессию */}
             <button
               onClick={handleCreateLobby}
               disabled={isJoining}
@@ -549,7 +506,7 @@ export default function App() {
               <div className="p-2 md:p-3 bg-primary-bg rounded-2xl group-hover:scale-110 transition-transform">
                 <Users className="w-5 h-5 md:w-6 md:h-6 text-primary" />
               </div>
-              <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-zinc-400">Создать лобби</span>
+              <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-zinc-400">Создать сессию</span>
             </button>
 
             {/* Одиночная игра */}
