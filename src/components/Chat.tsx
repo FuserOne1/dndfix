@@ -239,7 +239,13 @@ export default function Chat({ roomId, userName, character, onLeave, onCharacter
     // Это гарантирует что все игроки видят актуальные данные
     setTimeout(() => {
       fetchRoomStats();
-    }, 1000);
+    }, 500);
+
+    // Повторная загрузка через 2 секунды для синхронизации
+    setTimeout(() => {
+      fetchRoomStats();
+      console.log('🔄 Re-fetching room stats for sync');
+    }, 2000);
     
     // Загружаем summary из последней характеристики
     const savedStats = localStorage.getItem(`room_stats_${roomId}`);
@@ -366,18 +372,21 @@ export default function Chat({ roomId, userName, character, onLeave, onCharacter
       }
 
       if (data?.character_stats) {
+        console.log('📥 Fetched room stats:', Object.keys(data.character_stats));
         setCharacterStats(data.character_stats as Record<string, CharacterStats>);
-        
+
         // Устанавливаем текущего игрока если ещё не выбран
         if (character && !selectedPlayerForStats) {
           setSelectedPlayerForStats(character.name);
         } else if (!character && userName && !selectedPlayerForStats) {
           // Если нет character, ищем по userName
-          const currentPlayer = Object.keys(data.character_stats).find(name => 
+          const currentPlayer = Object.keys(data.character_stats).find(name =>
             name === userName || data.character_stats[name].name === userName
           );
           if (currentPlayer) setSelectedPlayerForStats(currentPlayer);
         }
+      } else {
+        console.log('No character stats in room yet');
       }
     } catch (err) {
       console.error('Failed to fetch room stats:', err);
@@ -715,6 +724,8 @@ export default function Chat({ roomId, userName, character, onLeave, onCharacter
     const TEN_MINUTES = 10 * 60 * 1000;
     const now = Date.now();
 
+    // ВАЖНО: Берём игроков из characterStats, а не из presence
+    // Потому что presence может быть неточным
     const activePlayersSet = new Set(
       history
         .filter(m => !m.is_ai && m.sender_id !== 'system' && m.content && typeof m.content === 'string')
@@ -726,11 +737,14 @@ export default function Chat({ roomId, userName, character, onLeave, onCharacter
     );
 
     const activePlayers = Array.from(activePlayersSet);
+    
+    console.log('Active players from history:', activePlayers);
+    console.log('Character stats available:', characterStats ? Object.keys(characterStats) : 'none');
 
-    // Если только один игрок в комнате, не ждём никого
-    if (activePlayers.length <= 1) {
-      // Single player, proceed immediately
-    } else {
+    // Ждём только если есть несколько игроков в characterStats
+    const playersInRoom = characterStats ? Object.keys(characterStats) : [];
+    
+    if (playersInRoom.length > 1) {
       // Find messages since the last DM (storyteller) response
       const reversedHistory = [...history].reverse();
       const lastAiIndex = reversedHistory.findIndex(m => m.is_ai && m.sender_name === 'Dungeon Master');
@@ -746,14 +760,20 @@ export default function Chat({ roomId, userName, character, onLeave, onCharacter
           .map(m => m.sender_name)
       );
 
-      // Check if ALL active players have sent at least one message
-      const allPlayersActed = activePlayers.every(player => playersWhoActedSet.has(player));
+      // Проверяем, отправили ли ВСЕ игроки из комнаты сообщения
+      const allPlayersActed = playersInRoom.every(player => playersWhoActedSet.has(player));
 
       if (!allPlayersActed) {
-        console.log(`Waiting for all active players to respond... Active: ${activePlayers.join(', ')}, Acted: ${Array.from(playersWhoActedSet).join(', ')}`);
+        const waitingFor = playersInRoom.filter(p => !playersWhoActedSet.has(p));
+        console.log(`⏳ Waiting for all players to respond... In room: ${playersInRoom.join(', ')}, Acted: ${Array.from(playersWhoActedSet).join(', ')}, Waiting for: ${waitingFor.join(', ')}`);
         isGeneratingAI.current = false;
+        // НЕ сбрасываем isAIGenerating - пусть другие игроки видят что идёт ожидание
         return;
       }
+      
+      console.log('✅ All players have acted, generating AI response');
+    } else {
+      console.log('Single player or no character stats, proceeding immediately');
     }
 
     const wasLoading = isLoading;
