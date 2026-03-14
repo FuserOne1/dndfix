@@ -391,20 +391,20 @@ export default function CharacterSelect({
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4 md:p-8">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 p-3 md:p-8">
+      <div className="max-w-6xl mx-auto space-y-4 md:space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
             <button
               onClick={onBack}
-              className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 transition-colors"
+              className="p-2 md:p-3 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 transition-colors shrink-0"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <div>
-              <h1 className="text-3xl font-bold text-white">Выбор персонажа</h1>
-              <p className="text-sm text-zinc-500">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-lg md:text-3xl font-bold text-white truncate">Выбор персонажа</h1>
+              <p className="text-xs md:text-sm text-zinc-500 truncate">
                 {roomId ? `Присоединение к комнате ${roomId}` : 'Создание новой игры'}
               </p>
             </div>
@@ -412,10 +412,11 @@ export default function CharacterSelect({
 
           <button
             onClick={() => setShowCreateForm(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-primary-hover hover:bg-primary text-white rounded-xl font-bold transition-all"
+            className="flex items-center gap-1 md:gap-2 px-3 md:px-6 py-2 md:py-3 bg-primary-hover hover:bg-primary text-white rounded-xl font-bold transition-all shrink-0 text-xs md:text-base"
           >
-            <Plus className="w-5 h-5" />
-            Создать персонажа
+            <Plus className="w-4 h-4 md:w-5 md:h-5" />
+            <span className="hidden md:inline">Создать персонажа</span>
+            <span className="md:hidden">+</span>
           </button>
         </div>
 
@@ -431,7 +432,7 @@ export default function CharacterSelect({
         )}
 
         {/* Characters Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
           <AnimatePresence mode="popLayout">
             {paginatedCharacters.map((character) => {
               const isOccupied = occupiedCharacterIds.has(character.id);
@@ -443,7 +444,7 @@ export default function CharacterSelect({
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.9 }}
-                  className={`relative bg-zinc-900 border-2 rounded-2xl p-6 transition-all ${
+                  className={`relative bg-zinc-900 border-2 rounded-xl md:rounded-2xl p-3 md:p-6 transition-all ${
                     isOccupied
                       ? 'border-zinc-800 opacity-50 cursor-not-allowed'
                       : isSelected
@@ -453,9 +454,9 @@ export default function CharacterSelect({
                   onClick={() => !isOccupied && !isJoining && setSelectedCharacterId(character.id)}
                 >
                   {isOccupied && (
-                    <div className="absolute top-4 right-4 flex items-center gap-2 px-3 py-1 bg-red-500/20 border border-red-500/30 rounded-full">
-                      <Lock className="w-3 h-3 text-red-400" />
-                      <span className="text-xs font-bold text-red-400">Занят</span>
+                    <div className="absolute top-2 right-2 md:top-4 md:right-4 flex items-center gap-1 md:gap-2 px-2 md:px-3 py-0.5 md:py-1 bg-red-500/20 border border-red-500/30 rounded-full">
+                      <Lock className="w-2.5 h-2.5 md:w-3 md:h-3 text-red-400" />
+                      <span className="text-[10px] md:text-xs font-bold text-red-400">Занят</span>
                     </div>
                   )}
 
@@ -463,61 +464,61 @@ export default function CharacterSelect({
                     <button
                       onClick={(e) => handleDeleteCharacter(character.id, e)}
                       disabled={deletingCharacterId === character.id}
-                      className="absolute top-4 right-4 p-2 bg-zinc-800/80 hover:bg-red-500/20 border border-zinc-700 hover:border-red-500/30 rounded-lg transition-all group/delete"
+                      className="absolute top-2 right-2 md:top-4 md:right-4 p-1.5 md:p-2 bg-zinc-800/80 hover:bg-red-500/20 border border-zinc-700 hover:border-red-500/30 rounded-lg transition-all group/delete"
                       title="Удалить персонажа"
                     >
                       {deletingCharacterId === character.id ? (
-                        <Loader2 className="w-3 h-3 text-zinc-500 animate-spin" />
+                        <Loader2 className="w-2.5 h-2.5 md:w-3 md:h-3 text-zinc-500 animate-spin" />
                       ) : (
-                        <Trash2 className="w-3 h-3 text-zinc-500 group-hover/delete:text-red-400 transition-colors" />
+                        <Trash2 className="w-2.5 h-2.5 md:w-3 md:h-3 text-zinc-500 group-hover/delete:text-red-400 transition-colors" />
                       )}
                     </button>
                   )}
 
-                  <div className="space-y-4">
-                    <div className="w-16 h-16 bg-zinc-800 rounded-full flex items-center justify-center text-3xl">
+                  <div className="space-y-3 md:space-y-4">
+                    <div className="w-12 h-12 md:w-16 md:h-16 bg-zinc-800 rounded-full flex items-center justify-center text-2xl md:text-3xl">
                       {getAvatarEmoji(character.avatar_icon)}
                     </div>
 
                     <div>
-                      <h3 className="text-xl font-bold text-white">{character.name}</h3>
-                      <p className="text-sm text-zinc-500">
+                      <h3 className="text-base md:text-xl font-bold text-white truncate">{character.name}</h3>
+                      <p className="text-xs md:text-sm text-zinc-500 truncate">
                         {character.race} • {character.class} • Ур. {character.level}
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <Heart className="w-4 h-4 text-red-500" />
-                      <div className="flex-1 bg-zinc-800 rounded-full h-2 overflow-hidden">
+                    <div className="flex items-center gap-1.5 md:gap-2">
+                      <Heart className="w-3.5 h-3.5 md:w-4 md:h-4 text-red-500" />
+                      <div className="flex-1 bg-zinc-800 rounded-full h-1.5 md:h-2 overflow-hidden">
                         <div
                           className="bg-red-500 h-full transition-all"
                           style={{ width: `${(character.hp_current / character.hp_max) * 100}%` }}
                         />
                       </div>
-                      <span className="text-xs text-zinc-500">
+                      <span className="text-[10px] md:text-xs text-zinc-500 whitespace-nowrap">
                         {character.hp_current}/{character.hp_max}
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-3 gap-1.5 md:gap-2">
                       {['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'].map((stat) => {
                         const Icon = getStatIcon(stat);
                         const value = character[stat as keyof Character] as number;
                         return (
                           <div
                             key={stat}
-                            className="flex flex-col items-center gap-1 p-2 bg-zinc-800 rounded-lg"
+                            className="flex flex-col items-center gap-0.5 md:gap-1 p-1.5 md:p-2 bg-zinc-800 rounded-lg"
                           >
-                            <Icon className="w-3 h-3 text-zinc-500" />
-                            <span className="text-xs font-bold text-white">{value}</span>
-                            <span className="text-[10px] text-zinc-600">{getStatModifier(value)}</span>
+                            <Icon className="w-2.5 h-2.5 md:w-3 md:h-3 text-zinc-500" />
+                            <span className="text-xs md:text-sm font-bold text-white">{value}</span>
+                            <span className="text-[9px] md:text-[10px] text-zinc-600">{getStatModifier(value)}</span>
                           </div>
                         );
                       })}
                     </div>
 
                     {character.background && (
-                      <p className="text-xs text-zinc-500 italic line-clamp-2">
+                      <p className="text-[10px] md:text-xs text-zinc-500 italic line-clamp-2">
                         {character.background}
                       </p>
                     )}
@@ -529,12 +530,12 @@ export default function CharacterSelect({
                           handleSelectCharacter(character);
                         }}
                         disabled={isJoining}
-                        className="w-full py-3 bg-primary-hover hover:bg-primary text-white rounded-xl font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                        className="w-full py-2 md:py-3 bg-primary-hover hover:bg-primary text-white rounded-lg md:rounded-xl font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 md:gap-2 text-xs md:text-base"
                       >
                         {isJoining && selectedCharacterId === character.id ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <Loader2 className="w-3.5 h-3.5 md:w-4 md:h-4 animate-spin" />
                         ) : (
-                          <Check className="w-4 h-4" />
+                          <Check className="w-3.5 h-3.5 md:w-4 md:h-4" />
                         )}
                         Выбрать
                       </button>
