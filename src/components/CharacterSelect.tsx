@@ -22,7 +22,6 @@ export default function CharacterSelect({
 }: CharacterSelectProps) {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [occupiedCharacterIds, setOccupiedCharacterIds] = useState<Set<string>>(new Set());
-  const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isJoining, setIsJoining] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -155,7 +154,7 @@ export default function CharacterSelect({
   const handleCreateCharacter = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCharacter.name.trim()) { setError('Введите имя персонажа'); return; }
-    if (pointsRemaining !== 0) { setError('Распределите все очки характеристик (осталось: ' + pointsRemaining + ')'); return; }
+    if (pointsRemaining !== 0) { setError('Распределите все очки (осталось: ' + pointsRemaining + ')'); return; }
     setIsJoining(true);
     setError(null);
     try {
@@ -215,7 +214,7 @@ export default function CharacterSelect({
 
   const handleDeleteCharacter = async (characterId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm('Вы уверены, что хотите удалить этого персонажа?')) return;
+    if (!confirm('Вы уверены?')) return;
     setDeletingCharacterId(characterId);
     setError(null);
     try {
@@ -315,7 +314,7 @@ export default function CharacterSelect({
                       <div className="flex-1 bg-zinc-800 rounded-full h-3 overflow-hidden">
                         <div className="bg-red-500 h-full transition-all" style={{ width: hpPercent + '%' }} />
                       </div>
-                      <span className="text-sm text-zinc-400">{character.hp_current}/{character.hp_max}</span>
+                      <span className="text-sm text-zinc-400">{character.hp_current} - {character.hp_max}</span>
                     </div>
 
                     {/* Stats */}
@@ -364,7 +363,7 @@ export default function CharacterSelect({
               </button>
               <div className="text-center">
                 <span className="text-lg font-bold text-white">{currentIndex + 1}</span>
-                <span className="text-zinc-500 text-sm"> / {characters.length}</span>
+                <span className="text-zinc-500 text-sm"> из {characters.length}</span>
               </div>
               <button onClick={goToNext} disabled={currentIndex >= characters.length - 1} className="flex-1 py-4 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2">
                 <span className="font-bold">Вперёд</span>
@@ -384,12 +383,12 @@ export default function CharacterSelect({
                 <div className="text-center sticky top-0 bg-zinc-900 pb-4 z-10">
                   <div className="inline-flex p-3 bg-primary-bg rounded-2xl mb-4"><Sparkles className="w-6 h-6 text-primary" /></div>
                   <h2 className="text-2xl font-bold text-white">Создать персонажа</h2>
-                  <p className="text-sm text-zinc-500 mt-2">Заполните карточку героя по правилам D&D 5e</p>
+                  <p className="text-sm text-zinc-500 mt-2">Заполните карточку героя</p>
                 </div>
                 <form onSubmit={handleCreateCharacter} className="space-y-6">
                   <div>
-                    <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Имя персонажа *</label>
-                    <input type="text" value={newCharacter.name} onChange={(e) => setNewCharacter({ ...newCharacter, name: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" placeholder="Например: Арагорн" />
+                    <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Имя *</label>
+                    <input type="text" value={newCharacter.name} onChange={(e) => setNewCharacter({ ...newCharacter, name: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" placeholder="Арагорн" />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -407,15 +406,15 @@ export default function CharacterSelect({
                   </div>
                   <div>
                     <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Предыстория</label>
-                    <input type="text" value={newCharacter.background} onChange={(e) => setNewCharacter({ ...newCharacter, background: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" placeholder="Например: Отшельник" />
+                    <input type="text" value={newCharacter.background} onChange={(e) => setNewCharacter({ ...newCharacter, background: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" placeholder="Отшельник" />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Особый предмет</label>
-                    <input type="text" value={newCharacter.specialItem} onChange={(e) => setNewCharacter({ ...newCharacter, specialItem: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" placeholder="Например: Семейный амулет" />
+                    <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Предмет</label>
+                    <input type="text" value={newCharacter.specialItem} onChange={(e) => setNewCharacter({ ...newCharacter, specialItem: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" placeholder="Амулет" />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Описание предмета</label>
-                    <textarea value={newCharacter.specialItemDescription} onChange={(e) => setNewCharacter({ ...newCharacter, specialItemDescription: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none" rows={3} placeholder="Краткая история или особые свойства" />
+                    <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Описание</label>
+                    <textarea value={newCharacter.specialItemDescription} onChange={(e) => setNewCharacter({ ...newCharacter, specialItemDescription: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none" rows={3} placeholder="История предмета" />
                   </div>
                   <div>
                     <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Аватар</label>
@@ -430,8 +429,8 @@ export default function CharacterSelect({
                   </div>
                   <div>
                     <div className="flex items-center justify-between mb-3">
-                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Характеристики (Point Buy)</label>
-                      <span className={'text-xs font-bold ' + (pointsRemaining === 0 ? 'text-green-500' : 'text-amber-500')}>Очков осталось: {pointsRemaining}</span>
+                      <label className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Характеристики</label>
+                      <span className={'text-xs font-bold ' + (pointsRemaining === 0 ? 'text-green-500' : 'text-amber-500')}>Очков: {pointsRemaining}</span>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       {Object.entries(pointBuy).map(([stat, value]) => {
@@ -444,23 +443,9 @@ export default function CharacterSelect({
                               <span className="text-xs font-bold text-zinc-400">{statName}</span>
                             </div>
                             <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => adjustStat(stat, -1)}
-                                className="w-7 h-7 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-white font-bold transition-all disabled:opacity-50"
-                                disabled={value <= 8}
-                              >
-                                -
-                              </button>
+                              <button type="button" onClick={() => adjustStat(stat as any, -1)} className="w-7 h-7 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-white font-bold transition-all disabled:opacity-50" disabled={value <= 8}>-</button>
                               <span className="text-sm font-bold text-white w-6 text-center">{value}</span>
-                              <button
-                                type="button"
-                                onClick={() => adjustStat(stat, 1)}
-                                className="w-7 h-7 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-white font-bold transition-all disabled:opacity-50"
-                                disabled={value >= 15}
-                              >
-                                +
-                              </button>
+                              <button type="button" onClick={() => adjustStat(stat as any, 1)} className="w-7 h-7 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-white font-bold transition-all disabled:opacity-50" disabled={value >= 15}>+</button>
                             </div>
                           </div>
                         );
@@ -470,7 +455,7 @@ export default function CharacterSelect({
                   <div className="sticky bottom-0 bg-zinc-900 pt-4 border-t border-zinc-800">
                     <button type="submit" disabled={isJoining || pointsRemaining !== 0} className="w-full py-4 bg-primary-hover hover:bg-primary text-white rounded-xl font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2">
                       {isJoining ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
-                      Создать и продолжить
+                      Создать
                     </button>
                   </div>
                 </form>
@@ -479,7 +464,6 @@ export default function CharacterSelect({
           </motion.div>
         )}
       </AnimatePresence>
-      </div>
     </div>
   );
-}  
+}
