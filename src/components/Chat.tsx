@@ -206,37 +206,16 @@ export default function Chat({ roomId, userName, character, onLeave, onCharacter
     fetchMessages();
     fetchDailyUsage();
 
-    // Автоматически инициализируем персонажа если он передан
-    if (character) {
-      const characterStatsData: CharacterStats = {
-        name: character.name,
-        race: character.race,
-        class: character.class,
-        level: character.level,
-        hp: {
-          current: character.hp_current,
-          max: character.hp_max,
-        },
-        xp: character.xp,
-        stats: {
-          strength: character.strength,
-          dexterity: character.dexterity,
-          constitution: character.constitution,
-          intelligence: character.intelligence,
-          wisdom: character.wisdom,
-          charisma: character.charisma,
-        },
-        background: character.background,
-        equipment: character.equipment,
-        story_summary: character.story_summary || '',
-      };
+    // НЕ инициализируем characterStats из character сразу!
+    // Сначала загрузим данные из БД - там актуальная информация
+    // Это предотвращает перезапись данных другого игрока
+    
+    console.log('=== CHAT MOUNTED ===');
+    console.log('Room ID:', roomId);
+    console.log('User Name:', userName);
+    console.log('Character:', character ? character.name : 'null');
 
-      // Сохраняем в БД асинхронно
-      updateRoomStats(character.name, characterStatsData);
-    }
-
-    // Загружаем данные комнаты ПОСЛЕ того как игрок добавил себя
-    // Это гарантирует что все игроки видят актуальные данные
+    // Загружаем данные комнаты - это главный источник правды
     setTimeout(() => {
       fetchRoomStats();
     }, 500);
@@ -372,15 +351,27 @@ export default function Chat({ roomId, userName, character, onLeave, onCharacter
       }
 
       if (data?.character_stats) {
-        console.log('📥 Fetched room stats:', Object.keys(data.character_stats));
+        const statsKeys = Object.keys(data.character_stats);
+        console.log('📥 Fetched room stats:', statsKeys);
+        console.log('Current userName:', userName);
+        console.log('Current character:', character?.name);
+        
         setCharacterStats(data.character_stats as Record<string, CharacterStats>);
+
+        // Проверяем, есть ли наш персонаж в статах
+        const myStats = data.character_stats[userName];
+        if (!myStats && character) {
+          console.warn('⚠️ WARNING: No stats for userName "' + userName + '" in room stats!');
+          console.warn('Available stats:', statsKeys);
+          console.warn('My character:', character.name);
+        }
 
         // Устанавливаем текущего игрока если ещё не выбран
         if (character && !selectedPlayerForStats) {
           setSelectedPlayerForStats(character.name);
         } else if (!character && userName && !selectedPlayerForStats) {
           // Если нет character, ищем по userName
-          const currentPlayer = Object.keys(data.character_stats).find(name =>
+          const currentPlayer = statsKeys.find(name =>
             name === userName || data.character_stats[name].name === userName
           );
           if (currentPlayer) setSelectedPlayerForStats(currentPlayer);

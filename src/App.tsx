@@ -250,18 +250,19 @@ export default function App() {
     console.log('=== CHARACTER SELECTED ===');
     console.log('Character:', character);
     console.log('RoomId:', roomId);
-    
+    console.log('My userSessionId:', userSessionId);
+
     setSelectedCharacter(character);
-    
+
     if (roomId) {
       // Присоединение к существующей комнате — сразу показываем чат
-      console.log('Joining existing room');
+      console.log('Joining existing room with character:', character.name);
       saveRoomToRecent(roomId, character.name);
       setRoomId(roomId);
       setCurrentScreen('game');
     } else {
       // Создание новой комнаты
-      console.log('Creating new room');
+      console.log('Creating new room with character:', character.name);
       await createRoom(character);
     }
   };
