@@ -391,9 +391,9 @@ export default function CharacterSelect({
   }
 
   return (
-    <div className="bg-zinc-950 text-zinc-100 h-screen flex flex-col">
+    <div className="bg-zinc-950 text-zinc-100 min-h-screen">
       {/* Header - фиксированный */}
-      <div className="shrink-0 p-3 md:p-8 pb-4">
+      <div className="sticky top-0 z-10 bg-zinc-950 p-3 md:p-8 pb-4">
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
@@ -435,7 +435,7 @@ export default function CharacterSelect({
       </div>
 
       {/* Characters Grid - прокручиваемый блок */}
-      <div className="flex-1 overflow-y-auto px-3 md:px-8 pb-8 scrollbar-thin scrollbar-thumb-zinc-800">
+      <div className="px-3 md:px-8 pb-8">
         <div className="max-w-6xl mx-auto">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
           <AnimatePresence mode="popLayout">
