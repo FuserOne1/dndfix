@@ -25,6 +25,7 @@ interface ChatProps {
   userName: string;
   character?: Character | null;
   onLeave: () => void;
+  onCharacterNeeded?: () => void;
   theme: string;
   setTheme: (theme: string) => void;
 }
@@ -102,7 +103,7 @@ const SYSTEM_PROMPT = `SYSTEM ROLE: ты - Архитектор Темного �
 - Прогрессия: Герои начинают слабыми. Отслеживай XP и повышай уровень согласно правилам D&D 5e.
 - Лор: Используй [[ТЕКСТ]] для справок по лору.`;
 
-export default function Chat({ roomId, userName, character, onLeave, theme, setTheme }: ChatProps) {
+export default function Chat({ roomId, userName, character, onLeave, onCharacterNeeded, theme, setTheme }: ChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -130,6 +131,18 @@ export default function Chat({ roomId, userName, character, onLeave, theme, setT
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
+
+  // Если нет персонажа - показываем уведомление
+  if (!character) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto" />
+          <p className="text-zinc-400">Загрузка персонажа...</p>
+        </div>
+      </div>
+    );
+  }
 
   // Логгируем character при монтировании
   useEffect(() => {
@@ -1287,7 +1300,7 @@ XP: ${character.xp}
             </div>
           )}
 
-          <div className="flex items-end gap-3">
+          <div className="flex items-center gap-3">
             <TextareaAutosize
               ref={textareaRef}
               value={input}
@@ -1295,7 +1308,7 @@ XP: ${character.xp}
               placeholder="Опишите ваше действие..."
               minRows={1}
               maxRows={5}
-              className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-zinc-600 resize-none leading-relaxed"
+              className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-zinc-600 resize-none leading-relaxed self-end"
               onKeyDown={(e) => {
                 const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
                 if (e.key === 'Enter' && !e.shiftKey && !isTouchDevice) {

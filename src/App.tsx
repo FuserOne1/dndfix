@@ -263,6 +263,20 @@ export default function App() {
 
   // Экран игры
   if (currentScreen === 'game' && roomId) {
+    // Если нет персонажа - переходим к выбору
+    if (!selectedCharacter) {
+      return (
+        <div className={theme}>
+          <CharacterSelect
+            userSessionId={userSessionId}
+            onCharacterSelected={handleCharacterSelected}
+            onBack={handleLeaveGame}
+            roomId={roomId}
+          />
+        </div>
+      );
+    }
+
     return (
       <div className={theme}>
         <Chat
