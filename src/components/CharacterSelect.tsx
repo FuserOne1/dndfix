@@ -797,4 +797,3 @@ export default function CharacterSelect({
     </div>
   );
 }
-""  
