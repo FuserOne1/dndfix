@@ -226,6 +226,9 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
     setTimeout(async () => {
       if (character && (!characterStats || Object.keys(characterStats).length === 0)) {
         console.log('🆕 Initializing character_stats from character props');
+        console.log('Character name:', character.name);
+        console.log('User name:', userName);
+        
         const initialStats: CharacterStats = {
           name: character.name,
           race: character.race || '',
@@ -246,10 +249,10 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
           story_summary: character.story_summary || '',
         };
         
-        // Обновляем БД атомарно
+        // Обновляем БД атомарно (ключом будет character.name)
         await updateRoomStats(character.name, initialStats);
         
-        // Обновляем локальное состояние
+        // Обновляем локальное состояние (ключом character.name)
         setCharacterStats({ [character.name]: initialStats });
         console.log('✅ Character stats initialized:', character.name);
       }
@@ -1070,7 +1073,9 @@ XP: ${stats.xp}
     }
 
     isGeneratingAI.current = false;
-    // Сбрасываем флаг генерации AI в БД
+    
+    // Сбрасываем флаг генерации AI в БД И локально
+    setIsAIGenerating(false); // Сбрасываем локально СРАЗУ
     supabase
       .from('game_sessions')
       .update({ is_ai_generating: false })
@@ -1081,7 +1086,7 @@ XP: ${stats.xp}
       .catch(err => {
         console.error('Failed to reset AI generating flag:', err);
       });
-    
+
     if (!wasLoading) setIsLoading(false);
   };
 
