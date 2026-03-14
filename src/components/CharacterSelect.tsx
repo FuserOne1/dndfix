@@ -14,6 +14,7 @@ interface CharacterSelectProps {
   roomId?: string;
 }
 
+// Refreshed: 1773454227004
 export default function CharacterSelect({
   userSessionId,
   onCharacterSelected,
