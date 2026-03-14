@@ -216,9 +216,6 @@ export default function Chat({ roomId, userName, character, onLeave, onCharacter
     fetchMessages();
     fetchDailyUsage();
 
-    // Сначала загружаем данные комнаты
-    fetchRoomStats();
-
     // Автоматически инициализируем персонажа если он передан
     if (character) {
       const characterStatsData: CharacterStats = {
@@ -247,6 +244,12 @@ export default function Chat({ roomId, userName, character, onLeave, onCharacter
       // Сохраняем в БД асинхронно
       updateRoomStats(character.name, characterStatsData);
     }
+
+    // Загружаем данные комнаты ПОСЛЕ того как игрок добавил себя
+    // Это гарантирует что все игроки видят актуальные данные
+    setTimeout(() => {
+      fetchRoomStats();
+    }, 1000);
     
     // Загружаем summary из последней характеристики
     const savedStats = localStorage.getItem(`room_stats_${roomId}`);
@@ -337,6 +340,17 @@ export default function Chat({ roomId, userName, character, onLeave, onCharacter
 
       if (data?.character_stats) {
         setCharacterStats(data.character_stats as Record<string, CharacterStats>);
+        
+        // Устанавливаем текущего игрока если ещё не выбран
+        if (character && !selectedPlayerForStats) {
+          setSelectedPlayerForStats(character.name);
+        } else if (!character && userName && !selectedPlayerForStats) {
+          // Если нет character, ищем по userName
+          const currentPlayer = Object.keys(data.character_stats).find(name => 
+            name === userName || data.character_stats[name].name === userName
+          );
+          if (currentPlayer) setSelectedPlayerForStats(currentPlayer);
+        }
       }
     } catch (err) {
       console.error('Failed to fetch room stats:', err);
