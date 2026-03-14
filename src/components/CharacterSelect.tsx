@@ -445,9 +445,23 @@ export default function CharacterSelect({
                               <span className="text-xs font-bold text-zinc-400">{statName}</span>
                             </div>
                             <div className="flex items-center gap-2">
-                              <button type="button" onClick={() => adjustStat(stat as keyof typeof pointBuy, -1)} className="w-7 h-7 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-white font-bold transition-all disabled:opacity-50" disabled={value <= 8}>-</button>
+                              <button
+                                type="button"
+                                onClick={() => adjustStat(stat, -1)}
+                                className="w-7 h-7 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-white font-bold transition-all disabled:opacity-50"
+                                disabled={value <= 8}
+                              >
+                                -
+                              </button>
                               <span className="text-sm font-bold text-white w-6 text-center">{value}</span>
-                              <button type="button" onClick={() => adjustStat(stat as keyof typeof pointBuy, 1)} className="w-7 h-7 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-white font-bold transition-all disabled:opacity-50" disabled={value >= 15}>+</button>
+                              <button
+                                type="button"
+                                onClick={() => adjustStat(stat, 1)}
+                                className="w-7 h-7 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-white font-bold transition-all disabled:opacity-50"
+                                disabled={value >= 15}
+                              >
+                                +
+                              </button>
                             </div>
                           </div>
                         );
