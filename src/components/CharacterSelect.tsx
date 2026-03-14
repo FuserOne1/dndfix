@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { Character } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  User, Swords, Shield, Heart, Zap, Brain, Eye, MessageCircle,
+  User, User as UserIcon, Swords, Shield, Heart, Zap, Brain, Eye, MessageCircle,
   Plus, Check, Lock, Loader2, ArrowLeft, Sparkles, Trash2, ChevronLeft, ChevronRight
 } from 'lucide-react';
 
@@ -22,6 +22,7 @@ export default function CharacterSelect({
 }: CharacterSelectProps) {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [occupiedCharacterIds, setOccupiedCharacterIds] = useState<Set<string>>(new Set());
+  const [myCharacterId, setMyCharacterId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isJoining, setIsJoining] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -116,8 +117,16 @@ export default function CharacterSelect({
       const { data: chars, error: charsError } = await supabase.from('characters').select('*').order('created_at', { ascending: false });
       if (charsError) throw charsError;
       if (roomId) {
-        const { data: participants } = await supabase.from('lobby_participants').select('character_id').eq('lobby_id', roomId);
-        setOccupiedCharacterIds(new Set(participants?.map(p => p.character_id) || []));
+        const { data: participants } = await supabase.from('lobby_participants').select('character_id, user_session_id').eq('lobby_id', roomId);
+        const occupiedIds = new Set(participants?.map(p => p.character_id) || []);
+        setOccupiedCharacterIds(occupiedIds);
+        // Находим мой персонаж в лобби
+        const myParticipant = participants?.find(p => p.user_session_id === userSessionId);
+        setMyCharacterId(myParticipant?.character_id || null);
+        console.log('=== FETCH CHARACTERS ===');
+        console.log('My session ID:', userSessionId);
+        console.log('My character ID:', myParticipant?.character_id);
+        console.log('All occupied IDs:', Array.from(occupiedIds));
       }
       setCharacters(chars || []);
     } catch (err: any) {
@@ -129,18 +138,43 @@ export default function CharacterSelect({
   };
 
   const handleSelectCharacter = async (character: Character) => {
-    if (occupiedCharacterIds.has(character.id)) return;
+    // Проверяем, занят ли персонаж ДРУГИМ игроком
+    const isOccupiedByOther = occupiedCharacterIds.has(character.id) && character.id !== myCharacterId;
+    if (isOccupiedByOther) {
+      setError('Этот персонаж уже занят другим игроком!');
+      return;
+    }
     setIsJoining(true);
     setError(null);
     try {
       if (roomId) {
-        const { data: existing } = await supabase.from('lobby_participants').select('id').eq('lobby_id', roomId).eq('character_id', character.id).single();
+        // Проверяем, есть ли уже запись для меня в лобби
+        const { data: existing } = await supabase.from('lobby_participants').select('id').eq('lobby_id', roomId).eq('user_session_id', userSessionId).single();
+        
         if (existing) {
-          setError('Этот персонаж уже занят!');
-          setIsJoining(false);
-          return;
+          // Я уже в лобби - обновляем персонажа если нужно
+          if (existing.character_id !== character.id) {
+            // Проверяем, не занят ли новый персонаж
+            const { data: alreadyTaken } = await supabase.from('lobby_participants').select('id').eq('lobby_id', roomId).eq('character_id', character.id).neq('user_session_id', userSessionId).single();
+            if (alreadyTaken) {
+              setError('Этот персонаж уже занят!');
+              setIsJoining(false);
+              return;
+            }
+            // Обновляем персонажа
+            await supabase.from('lobby_participants').update({ character_id: character.id }).eq('id', existing.id);
+          }
+        } else {
+          // Я новый в лобби - проверяем что персонаж свободен
+          const { data: alreadyTaken } = await supabase.from('lobby_participants').select('id').eq('lobby_id', roomId).eq('character_id', character.id).single();
+          if (alreadyTaken) {
+            setError('Этот персонаж уже занят!');
+            setIsJoining(false);
+            return;
+          }
+          // Создаём новую запись
+          await supabase.from('lobby_participants').insert({ lobby_id: roomId, character_id: character.id, user_session_id: userSessionId });
         }
-        await supabase.from('lobby_participants').insert({ lobby_id: roomId, character_id: character.id, user_session_id: userSessionId });
       }
       onCharacterSelected(character, roomId);
     } catch (err: any) {
@@ -279,12 +313,14 @@ export default function CharacterSelect({
             (() => {
               const character = characters[currentIndex];
               const isOccupied = occupiedCharacterIds.has(character.id);
+              const isMyCharacter = character.id === myCharacterId;
+              const isOccupiedByOther = isOccupied && !isMyCharacter;
               const hpPercent = (character.hp_current / character.hp_max) * 100;
 
               return (
                 <div className="bg-zinc-900 border-2 border-zinc-800 rounded-2xl p-3 md:p-6 mb-4 w-full">
                   <div className="space-y-3 md:space-y-4">
-                    
+
                     {/* Навигация сверху */}
                     {characters.length > 1 && (
                       <div className="flex items-center justify-between gap-2">
@@ -300,11 +336,11 @@ export default function CharacterSelect({
                       </div>
                     )}
 
-                    {/* Кнопка выбора сверху */}
-                    {!isOccupied && (
+                    {/* Кнопка выбора сверху - показываем если не занят ИЛИ это мой персонаж */}
+                    {!isOccupiedByOther && (
                       <button onClick={() => handleSelectCharacter(character)} disabled={isJoining} className="w-full py-3 bg-primary-hover hover:bg-primary text-white rounded-xl font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2">
                         {isJoining ? <Loader2 className="w-5 h-5 animate-spin" /> : <Check className="w-5 h-5" />}
-                        <span className="text-sm md:text-base">В ИГРУ</span>
+                        <span className="text-sm md:text-base">{isMyCharacter ? 'МОЙ ПЕРСОНАЖ' : 'В ИГРУ'}</span>
                       </button>
                     )}
 
@@ -317,15 +353,21 @@ export default function CharacterSelect({
                         <div className="min-w-0">
                           <h3 className="text-base md:text-xl font-bold text-white truncate">{character.name}</h3>
                           <p className="text-[10px] md:text-sm text-zinc-500 truncate">{character.race} • {character.class} • Ур. {character.level}</p>
-                          {isOccupied && (
+                          {isOccupiedByOther && (
                             <div className="flex items-center gap-1 mt-1 px-2 py-0.5 bg-red-500/20 border border-red-500/30 rounded-full w-fit">
                               <Lock className="w-2 h-2 md:w-3 md:h-3 text-red-400" />
                               <span className="text-[9px] md:text-xs font-bold text-red-400">Занят</span>
                             </div>
                           )}
+                          {isMyCharacter && (
+                            <div className="flex items-center gap-1 mt-1 px-2 py-0.5 bg-primary/20 border border-primary/30 rounded-full w-fit">
+                              <UserIcon className="w-2 h-2 md:w-3 md:h-3 text-primary" />
+                              <span className="text-[9px] md:text-xs font-bold text-primary">Ваш персонаж</span>
+                            </div>
+                          )}
                         </div>
                       </div>
-                      {!isOccupied && (
+                      {!isOccupiedByOther && (
                         <button onClick={(e) => handleDeleteCharacter(character.id, e)} disabled={deletingCharacterId === character.id} className="p-1.5 md:p-2 bg-zinc-800 hover:bg-red-500/20 border border-zinc-700 hover:border-red-500/30 rounded-lg transition-all shrink-0">
                           <Trash2 className="w-4 h-4 md:w-5 md:h-5 text-zinc-500 hover:text-red-400" />
                         </button>
