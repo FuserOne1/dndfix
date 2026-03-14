@@ -243,15 +243,21 @@ export default function App() {
 
   // Обработчик выбора персонажа — сразу создаём/входим в комнату
   const handleCharacterSelected = async (character: Character, roomId?: string) => {
+    console.log('=== CHARACTER SELECTED ===');
+    console.log('Character:', character);
+    console.log('RoomId:', roomId);
+    
     setSelectedCharacter(character);
     
     if (roomId) {
       // Присоединение к существующей комнате — сразу показываем чат
+      console.log('Joining existing room');
       saveRoomToRecent(roomId, character.name);
       setRoomId(roomId);
       setCurrentScreen('game');
     } else {
       // Создание новой комнаты
+      console.log('Creating new room');
       await createRoom(character);
     }
   };

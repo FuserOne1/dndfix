@@ -137,12 +137,16 @@ export default function Chat({ roomId, userName, character, onLeave, onCharacter
   // Если нет персонажа - показываем уведомление
   // Эта проверка теперь в App.tsx, но оставим на всякий случай
   if (!character) {
+    console.error('=== CHAT: NO CHARACTER ===');
+    console.error('roomId:', roomId);
+    console.error('userName:', userName);
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
         <div className="text-center space-y-4 max-w-md">
           <Loader2 className="w-8 h-8 text-primary animate-spin mx-auto" />
           <p className="text-zinc-400 text-sm">Загрузка персонажа...</p>
           <p className="text-zinc-500 text-xs">Если долго загружается — обновите страницу</p>
+          <p className="text-red-500 text-xs">roomId: {roomId}</p>
         </div>
       </div>
     );
