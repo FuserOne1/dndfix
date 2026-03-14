@@ -1609,7 +1609,7 @@ XP: ${character.xp}
                       <div className="w-full h-3 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
                         <motion.div
                           initial={{ width: 0 }}
-                          animate={{ width: `${(getCurrentPlayerStats()!.hp.current / getCurrentPlayerStats()!.hp.max) * 100}%` }}
+                          animate={{ width: ((getCurrentPlayerStats()!.hp.current / getCurrentPlayerStats()!.hp.max) * 100) + '%' }}
                           className={cn(
                             "h-full transition-all duration-500",
                             (getCurrentPlayerStats()!.hp.current / getCurrentPlayerStats()!.hp.max) < 0.3 ? "bg-red-500" : "bg-primary"
