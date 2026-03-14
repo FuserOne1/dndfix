@@ -624,15 +624,8 @@ export default function Chat({ roomId, userName, character, onLeave, onCharacter
 
       console.log('Image saved successfully to gallery:', data);
 
-      // НЕ добавляем в чат, только в галерею
-      // Обновляем messages только если нужно для галереи
-      if (data && data[0]) {
-        setMessages(prev => {
-          // Проверяем, есть ли уже это сообщение
-          if (prev.some(m => m.id === data[0].id)) return prev;
-          return [...prev, data[0] as Message];
-        });
-      }
+      // НЕ добавляем в чат локально - придёт через postgres_changes подписку
+      // Это гарантирует что ВСЕ игроки увидят изображение
 
       setIsImageModalOpen(false);
       setGeneratedImageUrl(null);
