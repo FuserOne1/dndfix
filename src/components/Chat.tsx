@@ -206,16 +206,12 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
     fetchMessages();
     fetchDailyUsage();
 
-    // НЕ инициализируем characterStats из character сразу!
-    // Сначала загрузим данные из БД - там актуальная информация
-    // Это предотвращает перезапись данных другого игрока
-    
     console.log('=== CHAT MOUNTED ===');
-    console.log('Room ID:', sessionId);
+    console.log('Session ID:', sessionId);
     console.log('User Name:', userName);
     console.log('Character:', character ? character.name : 'null');
 
-    // Загружаем данные комнаты - это главный источник правды
+    // Загружаем данные сессии - это главный источник правды
     setTimeout(() => {
       fetchRoomStats();
     }, 500);
@@ -225,20 +221,39 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
       fetchRoomStats();
       console.log('🔄 Re-fetching room stats for sync');
     }, 2000);
-    
-    // Загружаем summary из последней характеристики
-    const savedStats = localStorage.getItem(`room_stats_${sessionId}`);
-    if (savedStats) {
-      try {
-        const stats = JSON.parse(savedStats);
-        const playerStats = stats[userName];
-        if (playerStats?.story_summary) {
-          setStorySummary(playerStats.story_summary);
-        }
-      } catch (e) {
-        console.error('Failed to load story summary:', e);
+
+    // Инициализация character_stats из character если БД пуста
+    setTimeout(async () => {
+      if (character && (!characterStats || Object.keys(characterStats).length === 0)) {
+        console.log('🆕 Initializing character_stats from character props');
+        const initialStats: CharacterStats = {
+          name: character.name,
+          race: character.race || '',
+          class: character.class || '',
+          level: character.level || 1,
+          hp: { current: character.hp_current, max: character.hp_max },
+          xp: character.xp || 0,
+          stats: {
+            strength: character.strength,
+            dexterity: character.dexterity,
+            constitution: character.constitution,
+            intelligence: character.intelligence,
+            wisdom: character.wisdom,
+            charisma: character.charisma,
+          },
+          background: character.background || '',
+          equipment: character.equipment || [],
+          story_summary: character.story_summary || '',
+        };
+        
+        // Обновляем БД атомарно
+        await updateRoomStats(character.name, initialStats);
+        
+        // Обновляем локальное состояние
+        setCharacterStats({ [character.name]: initialStats });
+        console.log('✅ Character stats initialized:', character.name);
       }
-    }
+    }, 1500);
     
     const channel = supabase
       .channel(`room:${sessionId}`, {
@@ -263,8 +278,7 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
           }
           if (newMessage.is_ai) {
             setDailyPromptCount(prev => prev + 1);
-            // AI ответил — сбрасываем флаг генерации
-            setIsAIGenerating(false);
+            // НЕ сбрасываем здесь - флаг будет сброшен в triggerAIResponse
           }
           setMessages((prev) => {
             if (prev.some(m => m.id === newMessage.id)) return prev;
@@ -387,34 +401,13 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
   const updateRoomStats = async (playerName: string, stats: CharacterStats) => {
     try {
       console.log('💾 Updating room stats for:', playerName);
-      
-      // Получаем текущие характеристики
-      const { data: currentData } = await supabase
-        .from('game_sessions')
-        .select('character_stats')
-        .eq('id', sessionId)
-        .single();
 
-      const allStats = currentData?.character_stats || {};
-
-      // Обновляем характеристики конкретного игрока
-      const updatedStats = {
-        ...allStats,
-        [playerName]: stats
-      };
-
-      console.log('Saving to database:', {
-        session_id: sessionId,
-        character: playerName,
-        hp: stats.hp,
-        xp: stats.xp,
-        level: stats.level
+      // Используем RPC для атомарного обновления (решает проблему race condition)
+      const { error } = await supabase.rpc('update_character_stats_atomic', {
+        p_session_id: sessionId,
+        p_player_name: playerName,
+        p_stats: stats as any,
       });
-
-      const { error } = await supabase
-        .from('game_sessions')
-        .update({ character_stats: updatedStats })
-        .eq('id', sessionId);
 
       if (error) {
         console.error('Error updating room stats:', error);
@@ -917,14 +910,23 @@ XP: ${stats.xp}
             }
           }
 
+          // Проверяем есть ли изменения
+          const prevStats = characterStats?.[playerName];
+          const hasChanges = !prevStats || JSON.stringify(prevStats) !== JSON.stringify(updatedStats);
+          
           // Обновляем локальное состояние
           setCharacterStats(prev => ({
             ...prev,
             [playerName]: updatedStats
           }));
 
-          // Обновляем базу данных
-          updateRoomStats(playerName, updatedStats);
+          // Обновляем базу данных только если есть изменения
+          if (hasChanges) {
+            console.log('📊 Stats changed, updating DB');
+            updateRoomStats(playerName, updatedStats);
+          } else {
+            console.log('📊 Stats unchanged, skipping DB update');
+          }
 
           // Сохраняем summary для экономии токенов
           if (updatedStats.story_summary) {
