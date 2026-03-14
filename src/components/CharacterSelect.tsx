@@ -382,6 +382,9 @@ export default function CharacterSelect({
     (currentPage + 1) * charactersPerPage
   );
 
+  const goToPrevPage = () => setCurrentPage(prev => Math.max(0, prev - 1));
+  const goToNextPage = () => setCurrentPage(prev => Math.min(totalPages - 1, prev + 1));
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
@@ -391,9 +394,9 @@ export default function CharacterSelect({
   }
 
   return (
-    <div className="bg-zinc-950 text-zinc-100 min-h-screen">
+    <div className="bg-zinc-950 text-zinc-100 min-h-screen flex flex-col">
       {/* Header - фиксированный */}
-      <div className="sticky top-0 z-10 bg-zinc-950 p-3 md:p-8 pb-4">
+      <div className="shrink-0 sticky top-0 z-10 bg-zinc-950 p-3 md:p-8 pb-4">
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 md:gap-4 flex-1 min-w-0">
@@ -434,160 +437,143 @@ export default function CharacterSelect({
         </div>
       </div>
 
-      {/* Characters Grid - прокручиваемый блок */}
-      <div className="px-3 md:px-8 pb-8">
-        <div className="max-w-6xl mx-auto">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
-          <AnimatePresence mode="popLayout">
-            {paginatedCharacters.map((character) => {
-              const isOccupied = occupiedCharacterIds.has(character.id);
-              const isSelected = selectedCharacterId === character.id;
-
-              return (
-                <motion.div
-                  key={character.id}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  className={`relative bg-zinc-900 border-2 rounded-xl md:rounded-2xl p-3 md:p-6 transition-all ${
-                    isOccupied
-                      ? 'border-zinc-800 opacity-50 cursor-not-allowed'
-                      : isSelected
-                      ? 'border-primary shadow-lg shadow-primary/20'
-                      : 'border-zinc-800 hover:border-zinc-700 cursor-pointer'
-                  }`}
-                  onClick={() => !isOccupied && !isJoining && setSelectedCharacterId(character.id)}
-                >
-                  {isOccupied && (
-                    <div className="absolute top-2 right-2 md:top-4 md:right-4 flex items-center gap-1 md:gap-2 px-2 md:px-3 py-0.5 md:py-1 bg-red-500/20 border border-red-500/30 rounded-full">
-                      <Lock className="w-2.5 h-2.5 md:w-3 md:h-3 text-red-400" />
-                      <span className="text-[10px] md:text-xs font-bold text-red-400">Занят</span>
-                    </div>
-                  )}
-
-                  {!isOccupied && (
-                    <button
-                      onClick={(e) => handleDeleteCharacter(character.id, e)}
-                      disabled={deletingCharacterId === character.id}
-                      className="absolute top-2 right-2 md:top-4 md:right-4 p-1.5 md:p-2 bg-zinc-800/80 hover:bg-red-500/20 border border-zinc-700 hover:border-red-500/30 rounded-lg transition-all group/delete"
-                      title="Удалить персонажа"
-                    >
-                      {deletingCharacterId === character.id ? (
-                        <Loader2 className="w-2.5 h-2.5 md:w-3 md:h-3 text-zinc-500 animate-spin" />
-                      ) : (
-                        <Trash2 className="w-2.5 h-2.5 md:w-3 md:h-3 text-zinc-500 group-hover/delete:text-red-400 transition-colors" />
+      {/* Characters - карточки с навигацией */}
+      <div className="flex-1 flex flex-col justify-center px-3 md:px-8 pb-8">
+        <div className="max-w-4xl mx-auto w-full">
+          {/* Карточка текущего персонажа */}
+          <div className="relative bg-zinc-900 border-2 border-zinc-800 rounded-3xl p-6 md:p-8 mb-6">
+            {paginatedCharacters.length > 0 && paginatedCharacters[currentPage % paginatedCharacters.length] ? (
+              (() => {
+                const character = paginatedCharacters[currentPage % paginatedCharacters.length];
+                const isOccupied = occupiedCharacterIds.has(character.id);
+                
+                return (
+                  <div className="space-y-4">
+                    {/* Header карточки */}
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-20 h-20 bg-zinc-800 rounded-full flex items-center justify-center text-4xl">
+                          {getAvatarEmoji(character.avatar_icon)}
+                        </div>
+                        <div>
+                          <h3 className="text-2xl font-bold text-white">{character.name}</h3>
+                          <p className="text-sm text-zinc-500">
+                            {character.race} • {character.class} • Ур. {character.level}
+                          </p>
+                          {isOccupied && (
+                            <div className="flex items-center gap-2 mt-2 px-3 py-1 bg-red-500/20 border border-red-500/30 rounded-full w-fit">
+                              <Lock className="w-3 h-3 text-red-400" />
+                              <span className="text-xs font-bold text-red-400">Занят</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {!isOccupied && (
+                        <button
+                          onClick={(e) => handleDeleteCharacter(character.id, e)}
+                          disabled={deletingCharacterId === character.id}
+                          className="p-2 bg-zinc-800 hover:bg-red-500/20 border border-zinc-700 hover:border-red-500/30 rounded-lg transition-all"
+                          title="Удалить персонажа"
+                        >
+                          <Trash2 className="w-5 h-5 text-zinc-500 hover:text-red-400" />
+                        </button>
                       )}
-                    </button>
-                  )}
-
-                  <div className="space-y-3 md:space-y-4">
-                    <div className="w-12 h-12 md:w-16 md:h-16 bg-zinc-800 rounded-full flex items-center justify-center text-2xl md:text-3xl">
-                      {getAvatarEmoji(character.avatar_icon)}
                     </div>
 
-                    <div>
-                      <h3 className="text-base md:text-xl font-bold text-white truncate">{character.name}</h3>
-                      <p className="text-xs md:text-sm text-zinc-500 truncate">
-                        {character.race} • {character.class} • Ур. {character.level}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 md:gap-2">
-                      <Heart className="w-3.5 h-3.5 md:w-4 md:h-4 text-red-500" />
-                      <div className="flex-1 bg-zinc-800 rounded-full h-1.5 md:h-2 overflow-hidden">
+                    {/* HP Bar */}
+                    <div className="flex items-center gap-3">
+                      <Heart className="w-5 h-5 text-red-500" />
+                      <div className="flex-1 bg-zinc-800 rounded-full h-3 overflow-hidden">
                         <div
                           className="bg-red-500 h-full transition-all"
                           style={{ width: `${(character.hp_current / character.hp_max) * 100}%` }}
                         />
                       </div>
-                      <span className="text-[10px] md:text-xs text-zinc-500 whitespace-nowrap">
+                      <span className="text-sm text-zinc-400">
                         {character.hp_current}/{character.hp_max}
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-1.5 md:gap-2">
+                    {/* Stats Grid */}
+                    <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
                       {['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'].map((stat) => {
                         const Icon = getStatIcon(stat);
                         const value = character[stat as keyof Character] as number;
                         return (
                           <div
                             key={stat}
-                            className="flex flex-col items-center gap-0.5 md:gap-1 p-1.5 md:p-2 bg-zinc-800 rounded-lg"
+                            className="flex flex-col items-center gap-2 p-3 bg-zinc-800 rounded-xl"
                           >
-                            <Icon className="w-2.5 h-2.5 md:w-3 md:h-3 text-zinc-500" />
-                            <span className="text-xs md:text-sm font-bold text-white">{value}</span>
-                            <span className="text-[9px] md:text-[10px] text-zinc-600">{getStatModifier(value)}</span>
+                            <Icon className="w-5 h-5 text-zinc-500" />
+                            <div className="text-center">
+                              <span className="text-lg font-bold text-white block">{value}</span>
+                              <span className="text-xs text-zinc-500">{getStatModifier(value)}</span>
+                            </div>
                           </div>
                         );
                       })}
                     </div>
 
+                    {/* Background */}
                     {character.background && (
-                      <p className="text-[10px] md:text-xs text-zinc-500 italic line-clamp-2">
+                      <p className="text-sm text-zinc-500 italic border-l-2 border-zinc-800 pl-4">
                         {character.background}
                       </p>
                     )}
 
+                    {/* Select Button */}
                     {!isOccupied && (
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSelectCharacter(character);
-                        }}
+                        onClick={() => handleSelectCharacter(character)}
                         disabled={isJoining}
-                        className="w-full py-2 md:py-3 bg-primary-hover hover:bg-primary text-white rounded-lg md:rounded-xl font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 md:gap-2 text-xs md:text-base"
+                        className="w-full py-4 bg-primary-hover hover:bg-primary text-white rounded-xl font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-lg"
                       >
-                        {isJoining && selectedCharacterId === character.id ? (
-                          <Loader2 className="w-3.5 h-3.5 md:w-4 md:h-4 animate-spin" />
+                        {isJoining ? (
+                          <Loader2 className="w-6 h-6 animate-spin" />
                         ) : (
-                          <Check className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                          <Check className="w-6 h-6" />
                         )}
                         Выбрать
                       </button>
                     )}
                   </div>
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
-        </div>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-4 py-4">
-            <button
-              onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
-              disabled={currentPage === 0}
-              className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-
-            <div className="flex items-center gap-2">
-              {Array.from({ length: totalPages }, (_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setCurrentPage(i)}
-                  className={`w-10 h-10 rounded-xl font-bold transition-all ${
-                    currentPage === i
-                      ? 'bg-primary text-white'
-                      : 'bg-zinc-900 border border-zinc-800 text-zinc-500 hover:bg-zinc-800'
-                  }`}
-                >
-                  {i + 1}
-                </button>
-              ))}
-            </div>
-
-            <button
-              onClick={() => setCurrentPage(prev => Math.min(totalPages - 1, prev + 1))}
-              disabled={currentPage === totalPages - 1}
-              className="p-3 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
+                );
+              })()
+            ) : (
+              <div className="text-center py-12 text-zinc-500">
+                <p>Нет персонажей</p>
+              </div>
+            )}
           </div>
-        )}
+
+          {/* Navigation */}
+          {characters.length > 1 && (
+            <div className="flex items-center justify-between gap-4">
+              <button
+                onClick={goToPrevPage}
+                disabled={currentPage === 0}
+                className="flex-1 py-4 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <ChevronLeft className="w-6 h-6" />
+                <span className="font-bold">Назад</span>
+              </button>
+              
+              <div className="text-center">
+                <span className="text-lg font-bold text-white">{currentPage + 1}</span>
+                <span className="text-zinc-500 text-sm"> / {characters.length}</span>
+              </div>
+              
+              <button
+                onClick={goToNextPage}
+                disabled={currentPage >= characters.length - 1}
+                className="flex-1 py-4 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <span className="font-bold">Вперёд</span>
+                <ChevronRight className="w-6 h-6" />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -608,7 +594,7 @@ export default function CharacterSelect({
               className="max-w-2xl w-full bg-zinc-900 border border-zinc-800 p-8 rounded-3xl shadow-2xl my-8 max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
-                <div className="space-y-6">
+              <div className="space-y-6">
                   <div className="text-center sticky top-0 bg-zinc-900 pb-4 z-10">
                     <div className="inline-flex p-3 bg-primary-bg rounded-2xl mb-4">
                       <Sparkles className="w-6 h-6 text-primary" />
@@ -793,6 +779,7 @@ export default function CharacterSelect({
             </motion.div>
           )}
         </AnimatePresence>
+      </div>
     </div>
   );
 }
