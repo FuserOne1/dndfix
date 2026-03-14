@@ -910,8 +910,7 @@ XP: ${stats.xp}
             }
           }
 
-          // Проверяем есть ли изменения
-          const prevStats = characterStats?.[playerName];
+          // Проверяем есть ли изменения (используем prevStats из строки 881)
           const hasChanges = !prevStats || JSON.stringify(prevStats) !== JSON.stringify(updatedStats);
           
           // Обновляем локальное состояние
