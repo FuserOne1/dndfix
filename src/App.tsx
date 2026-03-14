@@ -45,15 +45,19 @@ export default function App() {
   }, []);
 
   const handleInstallApp = () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    deferredPrompt.userChoice.then((choiceResult: any) => {
-      if (choiceResult.outcome === 'accepted') {
-        console.log('User accepted the install prompt');
-      }
-      setDeferredPrompt(null);
-      setShowInstallPrompt(false);
-    });
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then((choiceResult: any) => {
+        if (choiceResult.outcome === 'accepted') {
+          console.log('User accepted the install prompt');
+        }
+        setDeferredPrompt(null);
+        setShowInstallPrompt(false);
+      });
+    } else {
+      // Если нет prompt - показываем инструкцию
+      alert('Чтобы установить приложение:\n\n📱 Android: Меню → "Добавить на главный экран"\n\n🍎 iOS: Кнопка "Поделиться" → "На экран «Домой»"');
+    }
   };
 
   useEffect(() => {
@@ -321,21 +325,16 @@ export default function App() {
         <div className="absolute -top-24 -left-24 w-64 h-64 bg-primary-bg rounded-full blur-[100px] pointer-events-none" />
         <div className="absolute -bottom-24 -right-24 w-64 h-64 bg-zinc-900/40 rounded-full blur-[100px] pointer-events-none" />
 
-        {/* Install PWA Button - Top Right */}
-        <AnimatePresence>
-          {showInstallPrompt && (
-            <motion.button
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0, opacity: 0 }}
-              onClick={handleInstallApp}
-              className="fixed top-4 right-4 z-50 p-2 bg-primary-hover hover:bg-primary text-white rounded-xl shadow-lg shadow-primary-glow"
-              title="Установить приложение"
-            >
-              <Download className="w-5 h-5" />
-            </motion.button>
-          )}
-        </AnimatePresence>
+        {/* Install PWA Button - Top Right - Always Visible */}
+        <motion.button
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          onClick={handleInstallApp}
+          className="fixed top-4 right-4 z-50 p-2 bg-primary-hover hover:bg-primary text-white rounded-xl shadow-lg shadow-primary-glow"
+          title="Установить приложение"
+        >
+          <Download className="w-5 h-5" />
+        </motion.button>
 
         <div className="text-center space-y-2 md:space-y-4 relative">
           <motion.div
