@@ -307,26 +307,26 @@ export default function App() {
 
   // Главное меню
   return (
-    <div className={`min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-4 font-sans selection:bg-primary/30 ${theme}`}>
-      <div className="max-w-md w-full space-y-8 relative">
+    <div className={`min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-3 md:p-4 font-sans selection:bg-primary/30 ${theme}`}>
+      <div className="max-w-md w-full space-y-4 md:space-y-8 relative">
         {/* Background Glow */}
         <div className="absolute -top-24 -left-24 w-64 h-64 bg-primary-bg rounded-full blur-[100px] pointer-events-none" />
         <div className="absolute -bottom-24 -right-24 w-64 h-64 bg-zinc-900/40 rounded-full blur-[100px] pointer-events-none" />
 
-        <div className="text-center space-y-4 relative">
+        <div className="text-center space-y-2 md:space-y-4 relative">
           <motion.div
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ duration: 0.5, ease: "easeOut" }}
-            className="inline-flex p-4 bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl mb-4"
+            className="inline-flex p-3 md:p-4 bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl mb-2 md:mb-4"
           >
-            <Swords className="w-12 h-12 text-primary" />
+            <Swords className="w-8 h-8 md:w-12 md:h-12 text-primary" />
           </motion.div>
           <motion.h1
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.2, duration: 0.5 }}
-            className="text-5xl font-black tracking-tighter text-white"
+            className="text-3xl md:text-5xl font-black tracking-tighter text-white"
           >
             D&D <span className="text-primary">DARK</span> FANTASY
           </motion.h1>
@@ -334,7 +334,7 @@ export default function App() {
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.3, duration: 0.5 }}
-            className="text-zinc-500 text-sm font-medium uppercase tracking-[0.2em]"
+            className="text-[10px] md:text-sm text-zinc-500 font-medium uppercase tracking-[0.2em]"
           >
             Кооперативный ИИ Мастер Подземелий
           </motion.p>
@@ -344,9 +344,9 @@ export default function App() {
           initial={{ y: 40, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.4, duration: 0.6 }}
-          className="bg-zinc-900/50 backdrop-blur-xl border border-zinc-800 p-8 rounded-[2rem] shadow-2xl space-y-6 relative overflow-hidden"
+          className="bg-zinc-900/50 backdrop-blur-xl border border-zinc-800 p-4 md:p-8 rounded-[2rem] shadow-2xl space-y-3 md:space-y-6 relative overflow-hidden"
         >
-          <div className="space-y-4">
+          <div className="space-y-3 md:space-y-4">
             {/* Theme Selector */}
             <div className="flex justify-center gap-3 pb-2">
               {[
@@ -365,24 +365,24 @@ export default function App() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Код комнаты</label>
+              <label className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Код комнаты</label>
               <form onSubmit={joinRoom} className="space-y-2">
                 <div className="relative">
-                  <ScrollText className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-600" />
+                  <ScrollText className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 md:w-4 md:h-4 text-zinc-600" />
                   <input
                     type="text"
                     value={roomInput}
                     onChange={(e) => setRoomInput(e.target.value)}
                     placeholder="Введите код..."
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-2xl pl-12 pr-4 py-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-zinc-700 uppercase tracking-widest"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-2xl pl-10 md:pl-12 pr-4 py-2.5 md:py-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-zinc-700 uppercase tracking-widest"
                   />
                 </div>
                 <button
                   type="submit"
                   disabled={isJoining}
-                  className="w-full flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-2xl text-xs font-bold uppercase tracking-widest py-4 transition-all disabled:opacity-50"
+                  className="w-full flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-2xl text-[10px] md:text-xs font-bold uppercase tracking-widest py-2.5 md:py-4 transition-all disabled:opacity-50"
                 >
-                  {isJoining ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
+                  {isJoining ? <Loader2 className="w-3.5 h-3.5 md:w-4 md:h-4 animate-spin" /> : <LogIn className="w-3.5 h-3.5 md:w-4 md:h-4" />}
                   Войти
                 </button>
               </form>
@@ -394,17 +394,17 @@ export default function App() {
                 setCurrentScreen('character-select');
               }}
               disabled={isJoining}
-              className="w-full group flex flex-col items-center justify-center gap-3 p-6 bg-zinc-950 border border-zinc-800 rounded-3xl hover:border-primary/50 hover:bg-zinc-900 transition-all duration-300 shadow-lg disabled:opacity-50"
+              className="w-full group flex flex-col items-center justify-center gap-2 md:gap-3 p-4 md:p-6 bg-zinc-950 border border-zinc-800 rounded-3xl hover:border-primary/50 hover:bg-zinc-900 transition-all duration-300 shadow-lg disabled:opacity-50"
             >
-              <div className="p-3 bg-primary-bg rounded-2xl group-hover:scale-110 transition-transform">
-                <Plus className="w-6 h-6 text-primary" />
+              <div className="p-2 md:p-3 bg-primary-bg rounded-2xl group-hover:scale-110 transition-transform">
+                <Plus className="w-5 h-5 md:w-6 md:h-6 text-primary" />
               </div>
-              <span className="text-xs font-bold uppercase tracking-widest text-zinc-400">Создать новую игру</span>
+              <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-zinc-400">Создать новую игру</span>
             </button>
 
             {recentRooms.length > 0 && (
-              <div className="space-y-3 pt-2">
-                <h3 className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Сохраненные путешествия</h3>
+              <div className="space-y-2 md:space-y-3 pt-2">
+                <h3 className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Сохраненные путешествия</h3>
                 <div className="grid grid-cols-1 gap-2">
                   {recentRooms.map((room) => {
                     const lastPlayedDate = room.lastPlayed ? new Date(room.lastPlayed) : null;
@@ -420,33 +420,33 @@ export default function App() {
                             btn?.click();
                           }, 10);
                         }}
-                        className="flex items-center justify-between p-4 bg-zinc-950/50 border border-zinc-800 rounded-2xl hover:border-primary/30 hover:bg-zinc-900 transition-all group relative cursor-pointer"
+                        className="flex items-center justify-between p-3 md:p-4 bg-zinc-950/50 border border-zinc-800 rounded-2xl hover:border-primary/30 hover:bg-zinc-900 transition-all group relative cursor-pointer"
                       >
-                        <div className="flex items-center gap-3 flex-1">
-                          <div className="p-2 bg-zinc-900 rounded-lg">
-                            <ScrollText className="w-4 h-4 text-zinc-600 group-hover:text-primary transition-colors" />
+                        <div className="flex items-center gap-2 md:gap-3 flex-1">
+                          <div className="p-1.5 md:p-2 bg-zinc-900 rounded-lg">
+                            <ScrollText className="w-3.5 h-3.5 md:w-4 md:h-4 text-zinc-600 group-hover:text-primary transition-colors" />
                           </div>
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-sm font-medium text-zinc-300">{room.id}</span>
+                          <div className="flex flex-col gap-0.5 min-w-0">
+                            <span className="text-xs md:text-sm font-medium text-zinc-300 truncate">{room.id}</span>
                             {room.characterName && (
-                              <span className="text-[10px] text-zinc-600">
-                                <UserIcon className="w-3 h-3 inline mr-1" />
+                              <span className="text-[9px] md:text-[10px] text-zinc-600 truncate">
+                                <UserIcon className="w-2.5 h-2.5 md:w-3 md:h-3 inline mr-1" />
                                 {room.characterName}
                               </span>
                             )}
                             {timeAgo && (
-                              <span className="text-[9px] text-zinc-700 font-mono">{timeAgo}</span>
+                              <span className="text-[8px] md:text-[9px] text-zinc-700 font-mono">{timeAgo}</span>
                             )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-mono text-zinc-600 uppercase group-hover:text-primary transition-colors">Продолжить</span>
+                        <div className="flex items-center gap-1.5 md:gap-2">
+                          <span className="text-[8px] md:text-[10px] font-mono text-zinc-600 uppercase group-hover:text-primary transition-colors hidden sm:inline">Продолжить</span>
                           <button
                             onClick={(e) => deleteRoomFromRecent(e, room.id)}
-                            className="p-2 hover:bg-red-500/10 rounded-lg transition-colors text-zinc-700 hover:text-red-500"
+                            className="p-1.5 md:p-2 hover:bg-red-500/10 rounded-lg transition-colors text-zinc-700 hover:text-red-500"
                             title="Удалить из истории"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3 h-3 md:w-3.5 md:h-3.5" />
                           </button>
                         </div>
                       </div>
