@@ -48,6 +48,13 @@ export default function LobbyRoom({
     console.log('Character:', character);
     console.log('User Session ID:', userSessionId);
 
+    // ПРОВЕРКА: Если лобби уже стартовало - сразу переходим в игру
+    if (lobby.started_at) {
+      console.log('LOBBY ALREADY STARTED! Calling onStartGame immediately');
+      onStartGame();
+      return;
+    }
+
     // Небольшая задержка перед первой загрузкой
     setTimeout(() => {
       fetchParticipants();
@@ -125,6 +132,9 @@ export default function LobbyRoom({
   };
 
   const subscribeToParticipants = () => {
+    console.log('=== SUBSCRIBING TO LOBBY UPDATES ===');
+    console.log('Lobby ID:', lobby.id);
+    
     const channel = supabase
       .channel(`lobby:${lobby.id}:updates`)
       .on(
@@ -135,7 +145,10 @@ export default function LobbyRoom({
           table: 'lobby_participants',
           filter: `lobby_id=eq.${lobby.id}`,
         },
-        () => {
+        (payload) => {
+          console.log('=== PARTICIPANT CHANGE ===');
+          console.log('Event:', payload.eventType);
+          console.log('Payload:', payload);
           fetchParticipants();
         }
       )
@@ -151,6 +164,8 @@ export default function LobbyRoom({
           console.log('=== LOBBY UPDATE RECEIVED ===');
           console.log('Old started_at:', payload.old.started_at);
           console.log('New started_at:', payload.new.started_at);
+          console.log('Old is_active:', payload.old.is_active);
+          console.log('New is_active:', payload.new.is_active);
           // Если лобби стартовало
           if (payload.new.started_at && !payload.old.started_at) {
             console.log('Game started! Calling onStartGame()');
@@ -159,7 +174,8 @@ export default function LobbyRoom({
         }
       )
       .subscribe((status) => {
-        console.log('Subscription status:', status);
+        console.log('=== SUBSCRIPTION STATUS ===');
+        console.log('Status:', status);
       });
 
     return () => {
