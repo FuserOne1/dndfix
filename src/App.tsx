@@ -294,8 +294,6 @@ export default function App() {
           onLeave={handleLeaveGame}
           theme={theme}
           setTheme={handleThemeChange}
-          showInstallPrompt={showInstallPrompt}
-          handleInstallApp={handleInstallApp}
         />
       </div>
     );

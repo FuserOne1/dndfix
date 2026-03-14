@@ -28,8 +28,6 @@ interface ChatProps {
   onCharacterNeeded?: () => void;
   theme: string;
   setTheme: (theme: string) => void;
-  showInstallPrompt?: boolean;
-  handleInstallApp?: () => void;
 }
 
 const SYSTEM_PROMPT = `SYSTEM ROLE: ты - Архитектор Темного Фэнтези / Game Master
@@ -918,19 +916,6 @@ XP: ${character.xp}
 
   return (
     <div className={cn("flex flex-col h-screen w-full bg-zinc-950 text-zinc-100 font-sans overflow-hidden relative", theme)}>
-      {/* Install PWA Button - Top Right */}
-      {showInstallPrompt && handleInstallApp && (
-        <motion.button
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="fixed top-4 right-4 z-50 p-2 bg-primary-hover hover:bg-primary text-white rounded-xl shadow-lg shadow-primary-glow md:hidden"
-          onClick={handleInstallApp}
-          title="Установить приложение"
-        >
-          <Download className="w-5 h-5" />
-        </motion.button>
-      )}
-
       {/* Header */}
       <div className="shrink-0 p-2 md:p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50 backdrop-blur-md z-30 pt-[calc(0.75rem+env(safe-area-inset-top))] md:pt-[calc(1rem+env(safe-area-inset-top))]">
         <div className="flex items-center gap-1 md:gap-4 min-w-0">
