@@ -273,7 +273,7 @@ export default function CharacterSelect({
       </div>
 
       {/* Cards Container */}
-      <div className="flex-1 flex flex-col justify-center px-3 md:px-8 pb-8 overflow-y-auto">
+      <div className="flex-1 flex flex-col justify-center px-2 md:px-8 pb-8 overflow-y-auto">
         <div className="max-w-4xl mx-auto w-full">
           {characters.length > 0 ? (
             (() => {
@@ -282,27 +282,27 @@ export default function CharacterSelect({
               const hpPercent = (character.hp_current / character.hp_max) * 100;
 
               return (
-                <div className="bg-zinc-900 border-2 border-zinc-800 rounded-2xl p-4 md:p-6 mb-4">
-                  <div className="space-y-4">
+                <div className="bg-zinc-900 border-2 border-zinc-800 rounded-2xl p-3 md:p-6 mb-4 w-full">
+                  <div className="space-y-3 md:space-y-4">
                     {/* Header */}
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-14 h-14 md:w-16 md:h-16 bg-zinc-800 rounded-full flex items-center justify-center text-3xl">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 md:gap-3 min-w-0">
+                        <div className="w-12 h-12 md:w-16 md:h-16 bg-zinc-800 rounded-full flex items-center justify-center text-2xl md:text-3xl shrink-0">
                           {getAvatarEmoji(character.avatar_icon)}
                         </div>
-                        <div>
-                          <h3 className="text-lg md:text-xl font-bold text-white truncate">{character.name}</h3>
-                          <p className="text-xs md:text-sm text-zinc-500">{character.race} • {character.class} • Ур. {character.level}</p>
+                        <div className="min-w-0">
+                          <h3 className="text-base md:text-xl font-bold text-white truncate">{character.name}</h3>
+                          <p className="text-[10px] md:text-sm text-zinc-500 truncate">{character.race} • {character.class} • Ур. {character.level}</p>
                           {isOccupied && (
-                            <div className="flex items-center gap-2 mt-1 px-2 py-0.5 bg-red-500/20 border border-red-500/30 rounded-full w-fit">
-                              <Lock className="w-2.5 h-2.5 md:w-3 md:h-3 text-red-400" />
-                              <span className="text-[10px] md:text-xs font-bold text-red-400">Занят</span>
+                            <div className="flex items-center gap-1 mt-1 px-2 py-0.5 bg-red-500/20 border border-red-500/30 rounded-full w-fit">
+                              <Lock className="w-2 h-2 md:w-3 md:h-3 text-red-400" />
+                              <span className="text-[9px] md:text-xs font-bold text-red-400">Занят</span>
                             </div>
                           )}
                         </div>
                       </div>
                       {!isOccupied && (
-                        <button onClick={(e) => handleDeleteCharacter(character.id, e)} disabled={deletingCharacterId === character.id} className="p-1.5 md:p-2 bg-zinc-800 hover:bg-red-500/20 border border-zinc-700 hover:border-red-500/30 rounded-lg transition-all">
+                        <button onClick={(e) => handleDeleteCharacter(character.id, e)} disabled={deletingCharacterId === character.id} className="p-1.5 md:p-2 bg-zinc-800 hover:bg-red-500/20 border border-zinc-700 hover:border-red-500/30 rounded-lg transition-all shrink-0">
                           <Trash2 className="w-4 h-4 md:w-5 md:h-5 text-zinc-500 hover:text-red-400" />
                         </button>
                       )}
@@ -310,24 +310,24 @@ export default function CharacterSelect({
 
                     {/* HP Bar */}
                     <div className="flex items-center gap-2">
-                      <Heart className="w-4 h-4 md:w-5 md:h-5 text-red-500" />
+                      <Heart className="w-3.5 h-3.5 md:w-5 md:h-5 text-red-500 shrink-0" />
                       <div className="flex-1 bg-zinc-800 rounded-full h-2 overflow-hidden">
                         <div className="bg-red-500 h-full transition-all" style={{ width: hpPercent + '%' }} />
                       </div>
-                      <span className="text-xs md:text-sm text-zinc-400 whitespace-nowrap">{character.hp_current} - {character.hp_max}</span>
+                      <span className="text-[10px] md:text-sm text-zinc-400 whitespace-nowrap">{character.hp_current}/{character.hp_max}</span>
                     </div>
 
                     {/* Stats */}
-                    <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                    <div className="grid grid-cols-3 md:grid-cols-6 gap-1.5 md:gap-2">
                       {['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'].map((stat) => {
                         const Icon = getStatIcon(stat);
                         const value = character[stat as keyof Character] as number;
                         return (
-                          <div key={stat} className="flex flex-col items-center gap-1 p-2 bg-zinc-800 rounded-lg">
-                            <Icon className="w-3.5 h-3.5 md:w-4 md:h-4 text-zinc-500" />
+                          <div key={stat} className="flex flex-col items-center gap-0.5 md:gap-1 p-1.5 md:p-2 bg-zinc-800 rounded-lg">
+                            <Icon className="w-3 h-3 md:w-4 md:h-4 text-zinc-500" />
                             <div className="text-center">
-                              <span className="text-base md:text-lg font-bold text-white block">{value}</span>
-                              <span className="text-[10px] md:text-xs text-zinc-500">{getStatModifier(value)}</span>
+                              <span className="text-sm md:text-lg font-bold text-white block">{value}</span>
+                              <span className="text-[9px] md:text-xs text-zinc-500">{getStatModifier(value)}</span>
                             </div>
                           </div>
                         );
@@ -336,13 +336,13 @@ export default function CharacterSelect({
 
                     {/* Background */}
                     {character.background && (
-                      <p className="text-xs md:text-sm text-zinc-500 italic border-l-2 border-zinc-800 pl-3 line-clamp-2">{character.background}</p>
+                      <p className="text-[10px] md:text-sm text-zinc-500 italic border-l-2 border-zinc-800 pl-2 md:pl-3 line-clamp-2">{character.background}</p>
                     )}
 
                     {/* Select Button */}
                     {!isOccupied && (
-                      <button onClick={() => handleSelectCharacter(character)} disabled={isJoining} className="w-full py-3 md:py-4 bg-primary-hover hover:bg-primary text-white rounded-xl font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-base md:text-lg">
-                        {isJoining ? <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin" /> : <Check className="w-5 h-5 md:w-6 md:h-6" />}
+                      <button onClick={() => handleSelectCharacter(character)} disabled={isJoining} className="w-full py-2.5 md:py-4 bg-primary-hover hover:bg-primary text-white rounded-xl font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 md:gap-2 text-sm md:text-lg">
+                        {isJoining ? <Loader2 className="w-4 h-4 md:w-6 md:h-6 animate-spin" /> : <Check className="w-4 h-4 md:w-6 md:h-6" />}
                         Выбрать
                       </button>
                     )}
@@ -356,18 +356,18 @@ export default function CharacterSelect({
 
           {/* Navigation */}
           {characters.length > 1 && (
-            <div className="flex items-center justify-between gap-4">
-              <button onClick={goToPrev} disabled={currentIndex === 0} className="flex-1 py-3 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                <ChevronLeft className="w-5 h-5" />
-                <span className="font-bold text-sm md:text-base">Назад</span>
+            <div className="flex items-center justify-between gap-2 md:gap-4">
+              <button onClick={goToPrev} disabled={currentIndex === 0} className="flex-1 py-2.5 md:py-4 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 md:gap-2">
+                <ChevronLeft className="w-4 h-4 md:w-6 md:h-6" />
+                <span className="font-bold text-xs md:text-base">Назад</span>
               </button>
-              <div className="text-center">
+              <div className="text-center shrink-0">
                 <span className="text-base md:text-lg font-bold text-white">{currentIndex + 1}</span>
-                <span className="text-zinc-500 text-xs md:text-sm"> из {characters.length}</span>
+                <span className="text-zinc-500 text-xs md:text-sm">/{characters.length}</span>
               </div>
-              <button onClick={goToNext} disabled={currentIndex >= characters.length - 1} className="flex-1 py-3 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2">
-                <span className="font-bold text-sm md:text-base">Вперёд</span>
-                <ChevronRight className="w-5 h-5" />
+              <button onClick={goToNext} disabled={currentIndex >= characters.length - 1} className="flex-1 py-2.5 md:py-4 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 md:gap-2">
+                <span className="font-bold text-xs md:text-base">Вперёд</span>
+                <ChevronRight className="w-4 h-4 md:w-6 md:h-6" />
               </button>
             </div>
           )}
