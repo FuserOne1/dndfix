@@ -590,10 +590,9 @@ export default function CharacterSelect({
         )}
         </div>
       </div>
-    </div>
 
-    {/* Create Character Modal */}
-    <AnimatePresence>
+      {/* Create Character Modal */}
+      <AnimatePresence>
           {showCreateForm && (
             <motion.div
               initial={{ opacity: 0 }}
@@ -794,5 +793,7 @@ export default function CharacterSelect({
             </motion.div>
           )}
         </AnimatePresence>
+      </div>
+    </div>
   );
 }
