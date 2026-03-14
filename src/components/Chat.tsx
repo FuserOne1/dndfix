@@ -1704,6 +1704,17 @@ XP: ${character.xp}
           </div>
         </div>
       )}
+      </div>
+      </div>
+      </div>
+      </div>
+      </div>
+      </div>
+      </div>
+      </div>
+      </div>
+      </div>
+      </div>
     </div>
   );
 }
