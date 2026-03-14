@@ -171,7 +171,7 @@ ${historyText}
           }
         ],
         temperature: 0.3, // Низкая температура для точности
-        max_tokens: 1024,
+        max_tokens: 2048,  // Увеличено с 1024 для более подробных сводок
       })
     });
 
@@ -431,7 +431,7 @@ export async function generateResponse(
           messages,
           temperature: 0.8,
           top_p: 0.9,
-          max_tokens: 1024,
+          max_tokens: 2048,  // Увеличено с 1024 для более полных ответов
         })
       });
 
