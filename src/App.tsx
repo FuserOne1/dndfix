@@ -346,8 +346,10 @@ export default function App() {
       }
 
       console.log('Lobby created:', data);
+      
+      // Сохраняем лобби и переходим к выбору персонажа
       setCurrentLobby(data[0] as Lobby);
-      setCurrentScreen('lobby');
+      setCurrentScreen('character-select');
     } catch (err: any) {
       console.error('Create lobby error:', err);
       setError(`Ошибка создания лобби: ${err.message}`);
