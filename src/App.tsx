@@ -36,7 +36,8 @@ export default function App() {
       e.preventDefault();
       const beforeInstallPromptEvent = e as any;
       setDeferredPrompt(beforeInstallPromptEvent);
-      setTimeout(() => setShowInstallPrompt(true), 5000);
+      // Показываем кнопку установки сразу
+      setShowInstallPrompt(true);
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -323,7 +324,7 @@ export default function App() {
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0, opacity: 0 }}
               onClick={handleInstallApp}
-              className="fixed top-4 right-4 z-50 p-2 bg-primary-hover hover:bg-primary text-white rounded-xl shadow-lg shadow-primary-glow md:hidden"
+              className="fixed top-4 right-4 z-50 p-2 bg-primary-hover hover:bg-primary text-white rounded-xl shadow-lg shadow-primary-glow"
               title="Установить приложение"
             >
               <Download className="w-5 h-5" />
@@ -419,61 +420,60 @@ export default function App() {
               </div>
               <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-zinc-400">Создать новую игру</span>
             </button>
+          </div>
 
-            {recentRooms.length > 0 && (
-              <div className="space-y-2 md:space-y-3 pt-2">
-                <h3 className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Сохраненные путешествия</h3>
-                <div className="grid grid-cols-1 gap-2">
-                  {recentRooms.map((room) => {
-                    const lastPlayedDate = room.lastPlayed ? new Date(room.lastPlayed) : null;
-                    const timeAgo = lastPlayedDate ? getTimeAgo(lastPlayedDate) : '';
+          {/* Сохранения - снизу */}
+          {recentRooms.length > 0 && (
+            <div className="space-y-2 pt-2 border-t border-zinc-800/50">
+              <h3 className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Сохраненные путешествия</h3>
+              <div className="grid grid-cols-1 gap-2">
+                {recentRooms.map((room) => {
+                  const lastPlayedDate = room.lastPlayed ? new Date(room.lastPlayed) : null;
+                  const timeAgo = lastPlayedDate ? getTimeAgo(lastPlayedDate) : '';
 
-                    return (
-                      <div
-                        key={room.id}
-                        onClick={() => {
-                          setRoomInput(room.id);
-                          setTimeout(() => {
-                            const btn = document.querySelector('button[type="submit"]') as HTMLButtonElement;
-                            btn?.click();
-                          }, 10);
-                        }}
-                        className="flex items-center justify-between p-3 md:p-4 bg-zinc-950/50 border border-zinc-800 rounded-2xl hover:border-primary/30 hover:bg-zinc-900 transition-all group relative cursor-pointer"
-                      >
-                        <div className="flex items-center gap-2 md:gap-3 flex-1">
-                          <div className="p-1.5 md:p-2 bg-zinc-900 rounded-lg">
-                            <ScrollText className="w-3.5 h-3.5 md:w-4 md:h-4 text-zinc-600 group-hover:text-primary transition-colors" />
-                          </div>
-                          <div className="flex flex-col gap-0.5 min-w-0">
-                            <span className="text-xs md:text-sm font-medium text-zinc-300 truncate">{room.id}</span>
-                            {room.characterName && (
-                              <span className="text-[9px] md:text-[10px] text-zinc-600 truncate">
-                                <UserIcon className="w-2.5 h-2.5 md:w-3 md:h-3 inline mr-1" />
-                                {room.characterName}
-                              </span>
-                            )}
-                            {timeAgo && (
-                              <span className="text-[8px] md:text-[9px] text-zinc-700 font-mono">{timeAgo}</span>
-                            )}
-                          </div>
+                  return (
+                    <div
+                      key={room.id}
+                      onClick={() => {
+                        setRoomInput(room.id);
+                        setTimeout(() => {
+                          const btn = document.querySelector('button[type="submit"]') as HTMLButtonElement;
+                          btn?.click();
+                        }, 10);
+                      }}
+                      className="flex items-center justify-between p-2 md:p-3 bg-zinc-950/50 border border-zinc-800 rounded-xl hover:border-primary/30 hover:bg-zinc-900 transition-all group relative cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <div className="p-1.5 bg-zinc-900 rounded-lg">
+                          <ScrollText className="w-3.5 h-3.5 text-zinc-600 group-hover:text-primary transition-colors" />
                         </div>
-                        <div className="flex items-center gap-1.5 md:gap-2">
-                          <span className="text-[8px] md:text-[10px] font-mono text-zinc-600 uppercase group-hover:text-primary transition-colors hidden sm:inline">Продолжить</span>
-                          <button
-                            onClick={(e) => deleteRoomFromRecent(e, room.id)}
-                            className="p-1.5 md:p-2 hover:bg-red-500/10 rounded-lg transition-colors text-zinc-700 hover:text-red-500"
-                            title="Удалить из истории"
-                          >
-                            <Trash2 className="w-3 h-3 md:w-3.5 md:h-3.5" />
-                          </button>
+                        <div className="flex flex-col gap-0.5 min-w-0">
+                          <span className="text-xs font-medium text-zinc-300 truncate">{room.id}</span>
+                          {room.characterName && (
+                            <span className="text-[9px] text-zinc-600 truncate">
+                              <UserIcon className="w-2.5 h-2.5 inline mr-1" />
+                              {room.characterName}
+                            </span>
+                          )}
+                          {timeAgo && (
+                            <span className="text-[8px] text-zinc-700 font-mono">{timeAgo}</span>
+                          )}
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
+                      <button
+                        onClick={(e) => deleteRoomFromRecent(e, room.id)}
+                        className="p-1.5 hover:bg-red-500/10 rounded-lg transition-colors text-zinc-700 hover:text-red-500 shrink-0"
+                        title="Удалить из истории"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
-            )}
-          </div>
+            </div>
+          )}
+        </div>
 
           <AnimatePresence>
             {error && (
