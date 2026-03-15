@@ -50,19 +50,53 @@ export default function CharacterSelect({ userSessionId, onCharacterSelected, on
     setError(null);
     try {
       if (roomId) {
+        console.log('🔍 handleSelectCharacter: roomId =', roomId);
+        console.log('🔍 handleSelectCharacter: character =', character.name);
+        
         // Загружаем актуальные статы из game_sessions
-        const { data: session } = await supabase.from('game_sessions').select('character_stats').eq('id', roomId).single();
+        const { data: session, error: sessionError } = await supabase
+          .from('game_sessions')
+          .select('character_stats')
+          .eq('id', roomId)
+          .single();
+        
+        console.log('📥 Session character_stats:', session?.character_stats);
+        console.log('📥 Session error:', sessionError);
+        
         let characterWithStats = character;
+        
         if (session?.character_stats?.[character.name]) {
           const sessionStats = session.character_stats[character.name];
-          characterWithStats = {...character,hp_current: sessionStats.hp?.current || character.hp_current,hp_max: sessionStats.hp?.max || character.hp_max,level: sessionStats.level || character.level,xp: sessionStats.xp || character.xp,strength: sessionStats.stats?.strength || character.strength,dexterity: sessionStats.stats?.dexterity || character.dexterity,constitution: sessionStats.stats?.constitution || character.constitution,intelligence: sessionStats.stats?.intelligence || character.intelligence,wisdom: sessionStats.stats?.wisdom || character.wisdom,charisma: sessionStats.stats?.charisma || character.charisma,equipment: sessionStats.equipment || character.equipment,story_summary: sessionStats.story_summary || character.story_summary,};
-          console.log('✅ Loaded character stats from session:', character.name);
+          characterWithStats = {
+            ...character,
+            hp_current: sessionStats.hp?.current || character.hp_current,
+            hp_max: sessionStats.hp?.max || character.hp_max,
+            level: sessionStats.level || character.level,
+            xp: sessionStats.xp || character.xp,
+            strength: sessionStats.stats?.strength || character.strength,
+            dexterity: sessionStats.stats?.dexterity || character.dexterity,
+            constitution: sessionStats.stats?.constitution || character.constitution,
+            intelligence: sessionStats.stats?.intelligence || character.intelligence,
+            wisdom: sessionStats.stats?.wisdom || character.wisdom,
+            charisma: sessionStats.stats?.charisma || character.charisma,
+            equipment: sessionStats.equipment || character.equipment,
+            story_summary: sessionStats.story_summary || character.story_summary,
+          };
+          console.log('✅ Loaded character stats from session:', characterWithStats);
+        } else {
+          console.log('⚠️ No stats found for', character.name, 'in session');
         }
+        
         onCharacterSelected(characterWithStats, roomId);
       } else {
         onCharacterSelected(character);
       }
-    } catch (err: any) { console.error('Error joining with character:', err); setError(err.message); } finally { setIsJoining(false); }
+    } catch (err: any) {
+      console.error('Error joining with character:', err);
+      setError(err.message);
+    } finally {
+      setIsJoining(false);
+    }
   };
 
   const handleCreateCharacter = async (e: React.FormEvent) => {

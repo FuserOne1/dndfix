@@ -56,10 +56,10 @@ export default function App() {
             setSessionId(sessionFromUrl);
             if (session.character_stats) {
               const characterNames = Object.keys(session.character_stats);
-              if (characterNames.length > 0) {
-                const firstCharName = characterNames[0];
-                const sessionStats = session.character_stats[firstCharName];
-                const { data: charData } = await supabase.from('characters').select('*').eq('name', firstCharName).single();
+              console.log('📦 Character names from URL:', characterNames);
+              for (const charName of characterNames) {
+                const sessionStats = session.character_stats[charName];
+                const { data: charData } = await supabase.from('characters').select('*').eq('name', charName).single();
                 if (charData) {
                   const characterWithStats: Character = {
                     ...charData,
@@ -78,6 +78,7 @@ export default function App() {
                   };
                   setSelectedCharacter(characterWithStats);
                   console.log('✅ Loaded character with stats from URL:', characterWithStats.name);
+                  break;
                 }
               }
             }
@@ -168,19 +169,39 @@ export default function App() {
       if (sessionError || !session) { console.error('❌ Session not found:', sessionError); setError('Сессия не найдена.'); setIsJoining(false); return; }
       console.log('✅ Session found:', session.id);
       console.log('📦 session.character_stats =', session.character_stats);
+      
       if (session.character_stats) {
         const characterNames = Object.keys(session.character_stats);
-        if (characterNames.length > 0) {
-          const firstCharName = characterNames[0];
-          const sessionStats = session.character_stats[firstCharName];
-          const { data: charData } = await supabase.from('characters').select('*').eq('name', firstCharName).single();
+        console.log('📦 Character names in session:', characterNames);
+        
+        // Ищем персонажа по имени в character_stats
+        for (const charName of characterNames) {
+          const sessionStats = session.character_stats[charName];
+          const { data: charData } = await supabase.from('characters').select('*').eq('name', charName).single();
+          
           if (charData) {
-            const characterWithStats: Character = {...charData,hp_current: sessionStats.hp?.current || charData.hp_current,hp_max: sessionStats.hp?.max || charData.hp_max,level: sessionStats.level || charData.level,xp: sessionStats.xp || charData.xp,strength: sessionStats.stats?.strength || charData.strength,dexterity: sessionStats.stats?.dexterity || charData.dexterity,constitution: sessionStats.stats?.constitution || charData.constitution,intelligence: sessionStats.stats?.intelligence || charData.intelligence,wisdom: sessionStats.stats?.wisdom || charData.wisdom,charisma: sessionStats.stats?.charisma || charData.charisma,equipment: sessionStats.equipment || charData.equipment,story_summary: sessionStats.story_summary || charData.story_summary,};
+            const characterWithStats: Character = {
+              ...charData,
+              hp_current: sessionStats.hp?.current || charData.hp_current,
+              hp_max: sessionStats.hp?.max || charData.hp_max,
+              level: sessionStats.level || charData.level,
+              xp: sessionStats.xp || charData.xp,
+              strength: sessionStats.stats?.strength || charData.strength,
+              dexterity: sessionStats.stats?.dexterity || charData.dexterity,
+              constitution: sessionStats.stats?.constitution || charData.constitution,
+              intelligence: sessionStats.stats?.intelligence || charData.intelligence,
+              wisdom: sessionStats.stats?.wisdom || charData.wisdom,
+              charisma: sessionStats.stats?.charisma || charData.charisma,
+              equipment: sessionStats.equipment || charData.equipment,
+              story_summary: sessionStats.story_summary || charData.story_summary,
+            };
             console.log('✅ Loaded character with stats:', characterWithStats);
             setSelectedCharacter(characterWithStats);
+            break; // Берём первого найденного
           }
         }
       }
+      
       saveSessionToRecent(session.id);
       setSessionId(session.id);
       setCurrentScreen('game');

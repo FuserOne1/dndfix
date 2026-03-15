@@ -315,31 +315,21 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
         return;
       }
 
-      if (data?.character_stats && Object.keys(data.character_stats).length > 0) {
-        const statsKeys = Object.keys(data.character_stats);
-        console.log('📥 Fetched room stats:', statsKeys);
-        console.log('Current userName:', userName);
-        console.log('Current character:', character?.name);
+      console.log('📥 Fetched room stats:', data?.character_stats);
 
+      if (data?.character_stats && Object.keys(data.character_stats).length > 0) {
+        // Загружаем статы из БД
         setCharacterStats(data.character_stats as Record<string, CharacterStats>);
 
-        // Проверяем, есть ли наш персонаж в статах
-        const myStats = data.character_stats[userName];
-        if (!myStats && character) {
-          console.warn('⚠️ WARNING: No stats for userName "' + userName + '" in room stats!');
-          console.warn('Available stats:', statsKeys);
-          console.warn('My character:', character.name);
-        }
-
-        // Устанавливаем текущего игрока если ещё не выбран
-        if (character && !selectedPlayerForStats) {
-          setSelectedPlayerForStats(character.name);
-        } else if (!character && userName && !selectedPlayerForStats) {
-          // Если нет character, ищем по userName
-          const currentPlayer = statsKeys.find(name =>
-            name === userName || data.character_stats[name].name === userName
-          );
-          if (currentPlayer) setSelectedPlayerForStats(currentPlayer);
+        // Находим текущего игрока
+        const statsKeys = Object.keys(data.character_stats);
+        const currentPlayer = statsKeys.find(name =>
+          name === userName || data.character_stats[name]?.name === userName
+        );
+        
+        if (currentPlayer) {
+          setSelectedPlayerForStats(currentPlayer);
+          console.log('✅ Loaded character stats for:', currentPlayer);
         }
       } else {
         console.log('🆕 No character stats in room yet, initializing from character props');
@@ -368,7 +358,7 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
           // Обновляем локальное состояние
           setCharacterStats({ [character.name]: initialStats });
           setSelectedPlayerForStats(character.name);
-          
+
           // Обновляем БД
           await updateRoomStats(character.name, initialStats);
           console.log('✅ Character stats initialized:', character.name);
