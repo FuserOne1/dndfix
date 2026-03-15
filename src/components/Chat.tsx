@@ -237,7 +237,7 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
           });
         }
       )
-      // Подписка на изменения характеристик персонажей и флага генерации
+      // Подписка на изменения флага генерации AI
       .on(
         'postgres_changes',
         {
@@ -252,23 +252,7 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
           const oldIsGenerating = payload.old.is_ai_generating;
           if (newIsGenerating !== oldIsGenerating) {
             setIsAIGenerating(!!newIsGenerating);
-            console.log('AI generating status changed:', newIsGenerating);
-          }
-
-          // Проверяем, изменились ли характеристики персонажей
-          const newStats = payload.new.character_stats;
-          const oldStats = payload.old.character_stats;
-          if (newStats && newStats !== oldStats) {
-            console.log('📊 Character stats changed via postgres_changes');
-            setCharacterStats(newStats as Record<string, CharacterStats>);
-
-            // Обновляем story_summary если изменилось
-            const currentPlayer = Object.keys(newStats).find(name =>
-              name === userName || newStats[name]?.name === userName
-            );
-            if (currentPlayer && newStats[currentPlayer]?.story_summary) {
-              setStorySummary(newStats[currentPlayer].story_summary);
-            }
+            console.log('🔄 AI generating status changed:', newIsGenerating);
           }
         }
       )
@@ -1441,13 +1425,16 @@ XP: ${stats.xp}
             })()}
           </div>
         )}
+
+        {/* Индикатор "Мастер плетет историю..." - под последним сообщением */}
         {isAIGenerating && (
-          <div className="p-12 flex flex-col items-center justify-center gap-4 text-primary/50 animate-pulse">
+          <div className="w-full max-w-4xl mx-auto px-4 py-8 flex flex-col items-center justify-center gap-4 text-primary/50 animate-pulse shrink-0">
             <Loader2 className="w-8 h-8 animate-spin" />
             <span className="text-xs font-mono uppercase tracking-[0.3em]">Мастер плетет историю...</span>
           </div>
         )}
-        <div ref={messagesEndRef} className="h-24" />
+
+        <div ref={messagesEndRef} className="h-16 shrink-0" />
       </div>
 
       {/* Input */}
