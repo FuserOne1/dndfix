@@ -383,12 +383,26 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
     try {
       console.log('💾 Updating room stats for:', playerName);
 
-      // Используем RPC для атомарного обновления (решает проблему race condition)
-      const { error } = await supabase.rpc('update_character_stats_atomic', {
-        p_session_id: sessionId,
-        p_player_name: playerName,
-        p_stats: stats as any,
-      });
+      // Получаем текущие character_stats
+      const { data: sessionData } = await supabase
+        .from('game_sessions')
+        .select('character_stats')
+        .eq('id', sessionId)
+        .single();
+
+      const currentStats = sessionData?.character_stats || {};
+      
+      // Обновляем статы конкретного персонажа
+      const updatedStats = {
+        ...currentStats,
+        [playerName]: stats
+      };
+
+      // Обновляем game_sessions
+      const { error } = await supabase
+        .from('game_sessions')
+        .update({ character_stats: updatedStats })
+        .eq('id', sessionId);
 
       if (error) {
         console.error('Error updating room stats:', error);

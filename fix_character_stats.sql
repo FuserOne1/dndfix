@@ -4,6 +4,20 @@
 -- ═══════════════════════════════════════════════════════════════
 
 -- ═══════════════════════════════════════════════════════════════
+-- 0. Добавляем поле character_stats если нет
+-- ═══════════════════════════════════════════════════════════════
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'game_sessions' AND column_name = 'character_stats'
+  ) THEN
+    ALTER TABLE game_sessions ADD COLUMN character_stats JSONB DEFAULT '{}'::jsonb;
+  END IF;
+END $$;
+
+-- ═══════════════════════════════════════════════════════════════
 -- 1. RPC функция для атомарного обновления character_stats
 -- ═══════════════════════════════════════════════════════════════
 

@@ -17,7 +17,7 @@
 
 ### 3. Обновление статов
 - AI отправляет `[STATS_UPDATE: {...}]` блок
-- Система парсит изменения и обновляет `game_sessions.character_stats` через RPC функцию
+- Система парсит изменения и обновляет `game_sessions.character_stats` напрямую
 - Realtime-подписка синхронизирует статы между всеми игроками
 
 ---
@@ -29,10 +29,10 @@
 В **Supabase SQL Editor** выполнить:
 
 ```sql
--- Файл: fix_character_stats.sql
+-- Скопируй содержимое файла fix_character_stats.sql
 ```
 
-Скопируйте содержимое файла `fix_character_stats.sql` и выполните в Supabase.
+**Важно:** Миграция добавит поле `character_stats` если его нет.
 
 ### Шаг 2: Проверить структуру таблицы
 
@@ -81,6 +81,7 @@ WHERE routine_name = 'update_character_stats_atomic';
 - `fetchRoomStats()` теперь сразу загружает данные из БД
 - Если `character_stats` пуст — инициализируется из `character` props
 - Удалено кэширование в `localStorage`
+- `updateRoomStats()` обновляет `game_sessions.character_stats` напрямую (без RPC)
 
 **Структура `CharacterStats`:**
 ```typescript
