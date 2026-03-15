@@ -23,5 +23,13 @@ Thumbs.db
 
 # Временные файлы
 *.sql
+!*.sql
 metadata.json
 test-ai.html
+
+# Миграции БД (исключение)
+!fix_*.sql
+!migration_*.sql
+!add_*.sql
+!check_*.sql
+!fix_*.sql
