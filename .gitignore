@@ -32,4 +32,3 @@ test-ai.html
 !migration_*.sql
 !add_*.sql
 !check_*.sql
-!fix_*.sql

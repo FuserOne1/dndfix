@@ -333,6 +333,10 @@ export default function App() {
       console.log('👥 Participants:', participants);
       console.log('👥 Participants error:', participantsError);
 
+      if (participantsError) {
+        console.error('❌ Error loading participants:', participantsError);
+      }
+
       if (participants && participants.length > 0 && participants[0].character_id) {
         // Загружаем данные персонажа отдельно
         const { data: characterData } = await supabase
@@ -371,7 +375,7 @@ export default function App() {
           }
         }
       } else {
-        console.log('⚠️ No participants found for this user');
+        console.log('⚠️ No participants found for this user, using character from props');
       }
 
       saveSessionToRecent(session.id);
