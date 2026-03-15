@@ -856,19 +856,25 @@ XP: ${stats.xp}
       );
       
       console.log('✅ AI Response received, length:', aiText.length);
+      console.log('🔍 AI Response preview:', aiText.substring(0, 500));
 
       // Parse for stats update - поддерживаем оба формата
       // Ищем все [STATS_UPDATE:...] блоки (может быть несколько для разных персонажей)
       const allStatsUpdates = aiText.matchAll(/\[STATS_UPDATE:\s*({[\s\S]*?})\s*\]/g);
       const jsonMatch = aiText.match(/```json\n([\s\S]*?)\n```/);
 
+      console.log('📊 STATS_UPDATE blocks found:', Array.from(allStatsUpdates).length);
+      // Пересоздаём итератор для последующего использования
+      const allStatsUpdates2 = aiText.matchAll(/\[STATS_UPDATE:\s*({[\s\S]*?})\s*\]/g);
+
       let notificationText = '';
       let statsFound = false;
       const allChanges: string[] = [];
 
       // Обрабатываем ВСЕ найденные блоки [STATS_UPDATE:{...}]
-      for (const match of allStatsUpdates) {
+      for (const match of allStatsUpdates2) {
         console.log('📊 Found STATS_UPDATE block in new format');
+        console.log('📊 Raw match:', match[0].substring(0, 200));
         statsFound = true;
         try {
           const jsonData = JSON.parse(match[1]);
