@@ -1423,14 +1423,14 @@ XP: ${stats.xp}
                 );
               });
             })()}
-          </div>
-        )}
-
-        {/* Индикатор "Мастер плетет историю..." - под последним сообщением */}
-        {isAIGenerating && (
-          <div className="w-full max-w-4xl mx-auto px-4 py-8 flex flex-col items-center justify-center gap-4 text-primary/50 animate-pulse shrink-0">
-            <Loader2 className="w-8 h-8 animate-spin" />
-            <span className="text-xs font-mono uppercase tracking-[0.3em]">Мастер плетет историю...</span>
+            
+            {/* Индикатор "Мастер плетет историю..." - сразу после последнего сообщения */}
+            {isAIGenerating && (
+              <div className="w-full max-w-4xl mx-auto px-4 py-6 flex flex-col items-center justify-center gap-3 text-primary/50 animate-pulse">
+                <Loader2 className="w-6 h-6 animate-spin" />
+                <span className="text-[10px] font-mono uppercase tracking-[0.3em]">Мастер плетет историю...</span>
+              </div>
+            )}
           </div>
         )}
 
