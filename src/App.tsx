@@ -56,48 +56,13 @@ export default function App() {
     try {
       const { data: session, error } = await supabase
         .from('game_sessions')
-        .select('*')
+        .select('id')
         .eq('id', sessionId)
         .single();
       
       if (!error && session) {
         setSessionId(sessionId);
-        
-        if (session.character_stats) {
-          const characterNames = Object.keys(session.character_stats);
-          console.log('📦 Character names:', characterNames);
-          
-          for (const charName of characterNames) {
-            const sessionStats = session.character_stats[charName];
-            const { data: charData } = await supabase
-              .from('characters')
-              .select('*')
-              .eq('name', charName)
-              .single();
-            
-            if (charData) {
-              const characterWithStats: Character = {
-                ...charData,
-                hp_current: sessionStats.hp?.current || charData.hp_current,
-                hp_max: sessionStats.hp?.max || charData.hp_max,
-                level: sessionStats.level || charData.level,
-                xp: sessionStats.xp || charData.xp,
-                strength: sessionStats.stats?.strength || charData.strength,
-                dexterity: sessionStats.stats?.dexterity || charData.dexterity,
-                constitution: sessionStats.stats?.constitution || charData.constitution,
-                intelligence: sessionStats.stats?.intelligence || charData.intelligence,
-                wisdom: sessionStats.stats?.wisdom || charData.wisdom,
-                charisma: sessionStats.stats?.charisma || charData.charisma,
-                equipment: sessionStats.equipment || charData.equipment,
-                story_summary: sessionStats.story_summary || charData.story_summary,
-              };
-              setSelectedCharacter(characterWithStats);
-              console.log('✅ Loaded character with stats:', characterWithStats.name);
-              break;
-            }
-          }
-        }
-        
+        // character_stats больше не используем - статы загружаются из characters напрямую
         setCurrentScreen('game');
       }
     } catch (err) {
@@ -171,8 +136,10 @@ export default function App() {
     console.log('Session ID:', newSessionId);
     console.log('Character:', character.name);
     try {
-      const characterStatsData = {[character.name]: {name: character.name,race: character.race,class: character.class,level: character.level,hp: { current: character.hp_current, max: character.hp_max },xp: character.xp,stats: {strength: character.strength,dexterity: character.dexterity,constitution: character.constitution,intelligence: character.intelligence,wisdom: character.wisdom,charisma: character.charisma,},background: character.background,equipment: character.equipment,story_summary: character.story_summary,}};
-      const { data, error: sessionError } = await supabase.from('game_sessions').insert({id: newSessionId,created_by: character.name,character_stats: characterStatsData,}).select();
+      const { data, error: sessionError } = await supabase.from('game_sessions').insert({
+        id: newSessionId,
+        created_by: character.name,
+      }).select();
       if (sessionError) throw sessionError;
       console.log('Session created:', data);
       saveSessionToRecent(newSessionId, character.name);
@@ -208,43 +175,6 @@ export default function App() {
     
     if (sessionId) {
       console.log('Joining session with character:', character.name);
-      
-      // Загружаем текущие character_stats
-      const { data: session } = await supabase
-        .from('game_sessions')
-        .select('character_stats')
-        .eq('id', sessionId)
-        .single();
-      
-      // МЕРДЖИМ: сохраняем существующие статы других персонажей
-      const existingStats = session?.character_stats || {};
-      const newCharacterStats = {
-        ...existingStats,
-        [character.name]: {
-          name: character.name,
-          race: character.race,
-          class: character.class,
-          level: character.level,
-          hp: { current: character.hp_current, max: character.hp_max },
-          xp: character.xp,
-          stats: {
-            strength: character.strength,
-            dexterity: character.dexterity,
-            constitution: character.constitution,
-            intelligence: character.intelligence,
-            wisdom: character.wisdom,
-            charisma: character.charisma,
-          },
-          background: character.background,
-          equipment: character.equipment,
-          story_summary: character.story_summary,
-        }
-      };
-      
-      await supabase.from('game_sessions')
-        .update({ character_stats: newCharacterStats })
-        .eq('id', sessionId);
-      
       setSessionId(sessionId);
       setCurrentScreen('game');
     }
@@ -259,7 +189,10 @@ export default function App() {
     try {
       const sessionCode = Math.random().toString(36).substring(2, 8).toUpperCase();
       console.log('Generated session code:', sessionCode);
-      const { data, error } = await supabase.from('game_sessions').insert({id: sessionCode,created_by: userSessionId,character_stats: {},is_ai_generating: false,}).select();
+      const { data, error } = await supabase.from('game_sessions').insert({
+        id: sessionCode,
+        created_by: userSessionId,
+      }).select();
       if (error) { console.error('Session creation error:', error); throw error; }
       console.log('Session created:', data);
       setSessionId(sessionCode);

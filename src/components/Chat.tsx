@@ -303,106 +303,77 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
   };
 
   const fetchRoomStats = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('game_sessions')
-        .select('character_stats')
-        .eq('id', sessionId)
-        .single();
-
-      if (error) {
-        console.error('Error fetching room stats:', error);
-        return;
-      }
-
-      console.log('📥 Fetched room stats:', data?.character_stats);
-
-      if (data?.character_stats && Object.keys(data.character_stats).length > 0) {
-        // Загружаем статы из БД
-        setCharacterStats(data.character_stats as Record<string, CharacterStats>);
-
-        // Находим текущего игрока
-        const statsKeys = Object.keys(data.character_stats);
-        const currentPlayer = statsKeys.find(name =>
-          name === userName || data.character_stats[name]?.name === userName
-        );
-
-        if (currentPlayer) {
-          setSelectedPlayerForStats(currentPlayer);
-          console.log('✅ Loaded character stats for:', currentPlayer);
-        }
-      } else if (character) {
-        // Инициализируем из character props если БД пуста
-        console.log('🆕 No character stats in room yet, initializing from character props');
-        const initialStats: CharacterStats = {
-          name: character.name,
-          race: character.race || '',
-          class: character.class || '',
-          level: character.level || 1,
-          hp: { current: character.hp_current, max: character.hp_max },
-          xp: character.xp || 0,
-          stats: {
-            strength: character.strength,
-            dexterity: character.dexterity,
-            constitution: character.constitution,
-            intelligence: character.intelligence,
-            wisdom: character.wisdom,
-            charisma: character.charisma,
-          },
-          background: character.background || '',
-          equipment: character.equipment || [],
-          story_summary: character.story_summary || '',
-        };
-
-        setCharacterStats({ [character.name]: initialStats });
-        setSelectedPlayerForStats(character.name);
-        await updateRoomStats(character.name, initialStats);
-        console.log('✅ Character stats initialized:', character.name);
-      }
-    } catch (err) {
-      console.error('Failed to fetch room stats:', err);
+    // character_stats больше не используем - статы хранятся напрямую в characters
+    // При монтировании character props уже содержит актуальные данные
+    if (character) {
+      const initialStats: CharacterStats = {
+        name: character.name,
+        race: character.race || '',
+        class: character.class || '',
+        level: character.level || 1,
+        hp: { current: character.hp_current, max: character.hp_max },
+        xp: character.xp || 0,
+        stats: {
+          strength: character.strength,
+          dexterity: character.dexterity,
+          constitution: character.constitution,
+          intelligence: character.intelligence,
+          wisdom: character.wisdom,
+          charisma: character.charisma,
+        },
+        background: character.background || '',
+        equipment: character.equipment || [],
+        story_summary: character.story_summary || '',
+      };
+      setCharacterStats({ [character.name]: initialStats });
+      setSelectedPlayerForStats(character.name);
+      console.log('✅ Character stats initialized from props:', character.name);
     }
   };
 
   const updateRoomStats = async (playerName: string, stats: CharacterStats) => {
     try {
-      console.log('💾 Updating room stats for:', playerName);
+      console.log('💾 Updating character stats for:', playerName);
       console.log('Stats to save:', JSON.stringify(stats, null, 2));
 
-      // Получаем текущие character_stats
-      const { data: sessionData, error: fetchError } = await supabase
-        .from('game_sessions')
-        .select('character_stats')
-        .eq('id', sessionId)
+      // Находим character_id по имени персонажа
+      const { data: charData } = await supabase
+        .from('characters')
+        .select('id')
+        .eq('name', playerName)
         .single();
 
-      if (fetchError) {
-        console.error('Error fetching current stats:', fetchError);
+      if (!charData?.id) {
+        console.error('Character not found:', playerName);
+        return;
       }
 
-      const currentStats = sessionData?.character_stats || {};
-      console.log('Current character_stats:', currentStats);
-      
-      // Обновляем статы конкретного персонажа
-      const updatedStats = {
-        ...currentStats,
-        [playerName]: stats
-      };
-      console.log('Updated character_stats:', updatedStats);
-
-      // Обновляем game_sessions
+      // Обновляем напрямую таблицу characters
       const { error } = await supabase
-        .from('game_sessions')
-        .update({ character_stats: updatedStats })
-        .eq('id', sessionId);
+        .from('characters')
+        .update({
+          hp_current: stats.hp.current,
+          hp_max: stats.hp.max,
+          level: stats.level,
+          xp: stats.xp,
+          strength: stats.stats.strength,
+          dexterity: stats.stats.dexterity,
+          constitution: stats.stats.constitution,
+          intelligence: stats.stats.intelligence,
+          wisdom: stats.stats.wisdom,
+          charisma: stats.stats.charisma,
+          equipment: stats.equipment,
+          story_summary: stats.story_summary,
+        })
+        .eq('id', charData.id);
 
       if (error) {
-        console.error('❌ Error updating room stats:', error);
+        console.error('❌ Error updating character:', error);
       } else {
-        console.log('✅ Room stats updated successfully');
+        console.log('✅ Character updated successfully');
       }
     } catch (err) {
-      console.error('Failed to update room stats:', err);
+      console.error('Failed to update character stats:', err);
     }
   };
 
