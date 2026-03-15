@@ -117,10 +117,10 @@ export default function CharacterSelect({
       const { data: chars, error: charsError } = await supabase.from('characters').select('*').order('created_at', { ascending: false });
       if (charsError) throw charsError;
       if (roomId) {
-        const { data: participants } = await supabase.from('lobby_participants').select('character_id, user_session_id').eq('lobby_id', roomId);
+        const { data: participants } = await supabase.from('game_session_participants').select('character_id, user_session_id').eq('session_id', roomId);
         const occupiedIds = new Set(participants?.map(p => p.character_id) || []);
         setOccupiedCharacterIds(occupiedIds);
-        // Находим мой персонаж в лобби
+        // Находим мой персонаж в сессии
         const myParticipant = participants?.find(p => p.user_session_id === userSessionId);
         setMyCharacterId(myParticipant?.character_id || null);
         console.log('=== FETCH CHARACTERS ===');
@@ -148,32 +148,32 @@ export default function CharacterSelect({
     setError(null);
     try {
       if (roomId) {
-        // Проверяем, есть ли уже запись для меня в лобби
-        const { data: existing } = await supabase.from('lobby_participants').select('id').eq('lobby_id', roomId).eq('user_session_id', userSessionId).single();
+        // Проверяем, есть ли уже запись для меня в сессии
+        const { data: existing } = await supabase.from('game_session_participants').select('id').eq('session_id', roomId).eq('user_session_id', userSessionId).single();
 
         if (existing) {
-          // Я уже в лобби - обновляем персонажа если нужно
+          // Я уже в сессии - обновляем персонажа если нужно
           if (existing.character_id !== character.id) {
             // Проверяем, не занят ли новый персонаж
-            const { data: alreadyTaken } = await supabase.from('lobby_participants').select('id').eq('lobby_id', roomId).eq('character_id', character.id).neq('user_session_id', userSessionId).single();
+            const { data: alreadyTaken } = await supabase.from('game_session_participants').select('id').eq('session_id', roomId).eq('character_id', character.id).neq('user_session_id', userSessionId).single();
             if (alreadyTaken) {
               setError('Этот персонаж уже занят!');
               setIsJoining(false);
               return;
             }
             // Обновляем персонажа
-            await supabase.from('lobby_participants').update({ character_id: character.id }).eq('id', existing.id);
+            await supabase.from('game_session_participants').update({ character_id: character.id }).eq('id', existing.id);
           }
         } else {
-          // Я новый в лобби - проверяем что персонаж свободен
-          const { data: alreadyTaken } = await supabase.from('lobby_participants').select('id').eq('lobby_id', roomId).eq('character_id', character.id).single();
+          // Я новый в сессии - проверяем что персонаж свободен
+          const { data: alreadyTaken } = await supabase.from('game_session_participants').select('id').eq('session_id', roomId).eq('character_id', character.id).single();
           if (alreadyTaken) {
             setError('Этот персонаж уже занят!');
             setIsJoining(false);
             return;
           }
           // Создаём новую запись
-          await supabase.from('lobby_participants').insert({ lobby_id: roomId, character_id: character.id, user_session_id: userSessionId });
+          await supabase.from('game_session_participants').insert({ session_id: roomId, character_id: character.id, user_session_id: userSessionId });
         }
 
         // Загружаем актуальные статы из game_sessions если сессия уже создана
@@ -278,7 +278,7 @@ export default function CharacterSelect({
     setDeletingCharacterId(characterId);
     setError(null);
     try {
-      await supabase.from('lobby_participants').delete().eq('character_id', characterId);
+      await supabase.from('game_session_participants').delete().eq('character_id', characterId);
       await supabase.from('characters').delete().eq('id', characterId);
       setCharacters(prev => prev.filter(c => c.id !== characterId));
       if (currentIndex >= characters.length - 1 && currentIndex > 0) setCurrentIndex(currentIndex - 1);
