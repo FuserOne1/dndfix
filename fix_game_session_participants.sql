@@ -76,11 +76,15 @@ DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'lobby_participants') THEN
     INSERT INTO game_session_participants (session_id, character_id, user_session_id, joined_at)
-    SELECT lobby_id, character_id, user_session_id, joined_at
+    SELECT 
+      lobby_id::TEXT, -- Приводим UUID к TEXT
+      character_id, 
+      user_session_id, 
+      joined_at
     FROM lobby_participants
     WHERE NOT EXISTS (
       SELECT 1 FROM game_session_participants gsp
-      WHERE gsp.session_id = lobby_participants.lobby_id
+      WHERE gsp.session_id = lobby_participants.lobby_id::TEXT
       AND gsp.user_session_id = lobby_participants.user_session_id
     );
   END IF;
