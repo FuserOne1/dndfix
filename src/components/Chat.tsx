@@ -1426,9 +1426,9 @@ XP: ${stats.xp}
             
             {/* Индикатор "Мастер плетет историю..." - сразу после последнего сообщения */}
             {isAIGenerating && (
-              <div className="w-full max-w-4xl mx-auto px-4 py-6 flex flex-col items-center justify-center gap-3 text-primary/50 animate-pulse">
-                <Loader2 className="w-6 h-6 animate-spin" />
-                <span className="text-[10px] font-mono uppercase tracking-[0.3em]">Мастер плетет историю...</span>
+              <div className="w-full max-w-4xl mx-auto px-4 py-8 flex flex-col items-center justify-center gap-4 text-primary/60 animate-pulse">
+                <Loader2 className="w-12 h-12 animate-spin" />
+                <span className="text-lg font-mono uppercase tracking-[0.3em]">Мастер плетет историю...</span>
               </div>
             )}
           </div>
