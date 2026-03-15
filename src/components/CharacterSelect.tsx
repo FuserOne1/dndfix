@@ -107,7 +107,7 @@ export default function CharacterSelect({ userSessionId, onCharacterSelected, on
   const selectedCharacter = characters.find(c => c.id === selectedCharId);
 
   return (
-    <div className={`min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans ${theme}`}>
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans">
       {/* Header */}
       <div className="border-b border-zinc-800 bg-zinc-900/50 backdrop-blur-xl sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
