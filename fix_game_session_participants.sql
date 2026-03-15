@@ -78,6 +78,10 @@ BEGIN
     INSERT INTO game_session_participants (session_id, character_id, user_session_id, joined_at)
     SELECT lobby_id, character_id, user_session_id, joined_at
     FROM lobby_participants
-    ON CONFLICT (session_id, user_session_id) DO NOTHING;
+    WHERE NOT EXISTS (
+      SELECT 1 FROM game_session_participants gsp
+      WHERE gsp.session_id = lobby_participants.lobby_id
+      AND gsp.user_session_id = lobby_participants.user_session_id
+    );
   END IF;
 END $$;
