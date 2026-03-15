@@ -332,37 +332,8 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
           console.log('✅ Loaded character stats for:', currentPlayer);
         }
       } else {
-        console.log('🆕 No character stats in room yet, initializing from character props');
-        // Инициализируем из character props если БД пуста
-        if (character) {
-          const initialStats: CharacterStats = {
-            name: character.name,
-            race: character.race || '',
-            class: character.class || '',
-            level: character.level || 1,
-            hp: { current: character.hp_current, max: character.hp_max },
-            xp: character.xp || 0,
-            stats: {
-              strength: character.strength,
-              dexterity: character.dexterity,
-              constitution: character.constitution,
-              intelligence: character.intelligence,
-              wisdom: character.wisdom,
-              charisma: character.charisma,
-            },
-            background: character.background || '',
-            equipment: character.equipment || [],
-            story_summary: character.story_summary || '',
-          };
-
-          // Обновляем локальное состояние
-          setCharacterStats({ [character.name]: initialStats });
-          setSelectedPlayerForStats(character.name);
-
-          // Обновляем БД
-          await updateRoomStats(character.name, initialStats);
-          console.log('✅ Character stats initialized:', character.name);
-        }
+        console.log('🆕 No character stats in room yet');
+        // НЕ инициализируем здесь - это делает App.tsx при выборе персонажа
       }
     } catch (err) {
       console.error('Failed to fetch room stats:', err);

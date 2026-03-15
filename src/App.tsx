@@ -46,48 +46,63 @@ export default function App() {
     if (sessionFromUrl) {
       console.log('=== SESSION FROM URL ===');
       console.log('Session ID:', sessionFromUrl);
-      supabase
-        .from('game_sessions')
-        .select('*')
-        .eq('id', sessionFromUrl)
-        .single()
-        .then(async ({ data: session, error }) => {
-          if (!error && session) {
-            setSessionId(sessionFromUrl);
-            if (session.character_stats) {
-              const characterNames = Object.keys(session.character_stats);
-              console.log('📦 Character names from URL:', characterNames);
-              for (const charName of characterNames) {
-                const sessionStats = session.character_stats[charName];
-                const { data: charData } = await supabase.from('characters').select('*').eq('name', charName).single();
-                if (charData) {
-                  const characterWithStats: Character = {
-                    ...charData,
-                    hp_current: sessionStats.hp?.current || charData.hp_current,
-                    hp_max: sessionStats.hp?.max || charData.hp_max,
-                    level: sessionStats.level || charData.level,
-                    xp: sessionStats.xp || charData.xp,
-                    strength: sessionStats.stats?.strength || charData.strength,
-                    dexterity: sessionStats.stats?.dexterity || charData.dexterity,
-                    constitution: sessionStats.stats?.constitution || charData.constitution,
-                    intelligence: sessionStats.stats?.intelligence || charData.intelligence,
-                    wisdom: sessionStats.stats?.wisdom || charData.wisdom,
-                    charisma: sessionStats.stats?.charisma || charData.charisma,
-                    equipment: sessionStats.equipment || charData.equipment,
-                    story_summary: sessionStats.story_summary || charData.story_summary,
-                  };
-                  setSelectedCharacter(characterWithStats);
-                  console.log('✅ Loaded character with stats from URL:', characterWithStats.name);
-                  break;
-                }
-              }
-            }
-            setCurrentScreen('game');
-            window.history.replaceState({}, '', window.location.pathname);
-          }
-        });
+      loadSessionWithStats(sessionFromUrl);
+      window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
+
+  const loadSessionWithStats = async (sessionId: string) => {
+    try {
+      const { data: session, error } = await supabase
+        .from('game_sessions')
+        .select('*')
+        .eq('id', sessionId)
+        .single();
+      
+      if (!error && session) {
+        setSessionId(sessionId);
+        
+        if (session.character_stats) {
+          const characterNames = Object.keys(session.character_stats);
+          console.log('📦 Character names:', characterNames);
+          
+          for (const charName of characterNames) {
+            const sessionStats = session.character_stats[charName];
+            const { data: charData } = await supabase
+              .from('characters')
+              .select('*')
+              .eq('name', charName)
+              .single();
+            
+            if (charData) {
+              const characterWithStats: Character = {
+                ...charData,
+                hp_current: sessionStats.hp?.current || charData.hp_current,
+                hp_max: sessionStats.hp?.max || charData.hp_max,
+                level: sessionStats.level || charData.level,
+                xp: sessionStats.xp || charData.xp,
+                strength: sessionStats.stats?.strength || charData.strength,
+                dexterity: sessionStats.stats?.dexterity || charData.dexterity,
+                constitution: sessionStats.stats?.constitution || charData.constitution,
+                intelligence: sessionStats.stats?.intelligence || charData.intelligence,
+                wisdom: sessionStats.stats?.wisdom || charData.wisdom,
+                charisma: sessionStats.stats?.charisma || charData.charisma,
+                equipment: sessionStats.equipment || charData.equipment,
+                story_summary: sessionStats.story_summary || charData.story_summary,
+              };
+              setSelectedCharacter(characterWithStats);
+              console.log('✅ Loaded character with stats:', characterWithStats.name);
+              break;
+            }
+          }
+        }
+        
+        setCurrentScreen('game');
+      }
+    } catch (err) {
+      console.error('Error loading session:', err);
+    }
+  };
 
   useEffect(() => {
     const saved = localStorage.getItem('recent_sessions');
@@ -121,6 +136,8 @@ export default function App() {
 
   const confirmFullDelete = async () => {
     if (!sessionToDelete) return;
+    if (!confirm(`Удалить сессию "${sessionToDelete}" навсегда? Это действие нельзя отменить.`)) return;
+    
     setIsDeleting(true);
     try {
       await supabase.from('messages').delete().eq('session_id', sessionToDelete);
@@ -129,8 +146,11 @@ export default function App() {
       setRecentSessions(newRecent);
       localStorage.setItem('recent_sessions', JSON.stringify(newRecent));
       setSessionToDelete(null);
-    } catch (err: any) { setError(`Failed to delete session: ${err.message}`); }
-    finally { setIsDeleting(false); }
+    } catch (err: any) {
+      setError(`Failed to delete session: ${err.message}`);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const isPlaceholder = supabaseUrl.includes('your-project-id') || supabaseAnonKey === 'your-anon-key';
@@ -165,48 +185,14 @@ export default function App() {
     setError(null);
     try {
       console.log('🔍 joinSession: input =', sessionInput.toUpperCase());
-      const { data: session, error: sessionError } = await supabase.from('game_sessions').select('*').eq('id', sessionInput.toUpperCase()).single();
-      if (sessionError || !session) { console.error('❌ Session not found:', sessionError); setError('Сессия не найдена.'); setIsJoining(false); return; }
-      console.log('✅ Session found:', session.id);
-      console.log('📦 session.character_stats =', session.character_stats);
-      
-      if (session.character_stats) {
-        const characterNames = Object.keys(session.character_stats);
-        console.log('📦 Character names in session:', characterNames);
-        
-        // Ищем персонажа по имени в character_stats
-        for (const charName of characterNames) {
-          const sessionStats = session.character_stats[charName];
-          const { data: charData } = await supabase.from('characters').select('*').eq('name', charName).single();
-          
-          if (charData) {
-            const characterWithStats: Character = {
-              ...charData,
-              hp_current: sessionStats.hp?.current || charData.hp_current,
-              hp_max: sessionStats.hp?.max || charData.hp_max,
-              level: sessionStats.level || charData.level,
-              xp: sessionStats.xp || charData.xp,
-              strength: sessionStats.stats?.strength || charData.strength,
-              dexterity: sessionStats.stats?.dexterity || charData.dexterity,
-              constitution: sessionStats.stats?.constitution || charData.constitution,
-              intelligence: sessionStats.stats?.intelligence || charData.intelligence,
-              wisdom: sessionStats.stats?.wisdom || charData.wisdom,
-              charisma: sessionStats.stats?.charisma || charData.charisma,
-              equipment: sessionStats.equipment || charData.equipment,
-              story_summary: sessionStats.story_summary || charData.story_summary,
-            };
-            console.log('✅ Loaded character with stats:', characterWithStats);
-            setSelectedCharacter(characterWithStats);
-            break; // Берём первого найденного
-          }
-        }
-      }
-      
-      saveSessionToRecent(session.id);
-      setSessionId(session.id);
-      setCurrentScreen('game');
-    } catch (err: any) { console.error('❌ joinSession error:', err); setError(`Ошибка входа: ${err.message}`); }
-    finally { setIsJoining(false); }
+      await loadSessionWithStats(sessionInput.toUpperCase());
+      saveSessionToRecent(sessionInput.toUpperCase());
+    } catch (err: any) {
+      console.error('❌ joinSession error:', err);
+      setError(`Ошибка входа: ${err.message}`);
+    } finally {
+      setIsJoining(false);
+    }
   };
 
   const handleCharacterSelected = async (character: Character, sessionId?: string) => {
@@ -214,10 +200,46 @@ export default function App() {
     console.log('Character:', character);
     console.log('SessionId:', sessionId);
     setSelectedCharacter(character);
+    
     if (sessionId) {
       console.log('Joining session with character:', character.name);
-      const characterStatsData = {[character.name]: {name: character.name,race: character.race,class: character.class,level: character.level,hp: { current: character.hp_current, max: character.hp_max },xp: character.xp,stats: {strength: character.strength,dexterity: character.dexterity,constitution: character.constitution,intelligence: character.intelligence,wisdom: character.wisdom,charisma: character.charisma,},background: character.background,equipment: character.equipment,story_summary: character.story_summary,}};
-      await supabase.from('game_sessions').update({character_stats: characterStatsData}).eq('id', sessionId);
+      
+      // Загружаем текущие character_stats
+      const { data: session } = await supabase
+        .from('game_sessions')
+        .select('character_stats')
+        .eq('id', sessionId)
+        .single();
+      
+      // МЕРДЖИМ: сохраняем существующие статы других персонажей
+      const existingStats = session?.character_stats || {};
+      const newCharacterStats = {
+        ...existingStats,
+        [character.name]: {
+          name: character.name,
+          race: character.race,
+          class: character.class,
+          level: character.level,
+          hp: { current: character.hp_current, max: character.hp_max },
+          xp: character.xp,
+          stats: {
+            strength: character.strength,
+            dexterity: character.dexterity,
+            constitution: character.constitution,
+            intelligence: character.intelligence,
+            wisdom: character.wisdom,
+            charisma: character.charisma,
+          },
+          background: character.background,
+          equipment: character.equipment,
+          story_summary: character.story_summary,
+        }
+      };
+      
+      await supabase.from('game_sessions')
+        .update({ character_stats: newCharacterStats })
+        .eq('id', sessionId);
+      
       setSessionId(sessionId);
       setCurrentScreen('game');
     }
@@ -278,7 +300,7 @@ export default function App() {
             <button onClick={handleCreateLobby} disabled={isJoining} className="w-full group flex flex-col items-center justify-center gap-2 md:gap-3 p-4 md:p-6 bg-zinc-950 border border-zinc-800 rounded-3xl hover:border-primary/50 hover:bg-zinc-900 transition-all duration-300 shadow-lg disabled:opacity-50"><div className="p-2 md:p-3 bg-primary-bg rounded-2xl group-hover:scale-110 transition-transform"><Users className="w-5 h-5 md:w-6 md:h-6 text-primary" /></div><span className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-zinc-400">Создать сессию</span></button>
             <button onClick={() => { setCurrentScreen('character-select'); }} disabled={isJoining} className="w-full group flex flex-col items-center justify-center gap-2 md:gap-3 p-4 md:p-6 bg-zinc-950 border border-zinc-800 rounded-3xl hover:border-primary/50 hover:bg-zinc-900 transition-all duration-300 shadow-lg disabled:opacity-50"><div className="p-2 md:p-3 bg-primary-bg rounded-2xl group-hover:scale-110 transition-transform"><Plus className="w-5 h-5 md:w-6 md:h-6 text-primary" /></div><span className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-zinc-400">Создать новую игру</span></button>
           </div>
-          {recentSessions.length > 0 && (<div className="space-y-2 pt-2 border-t border-zinc-800/50"><h3 className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Сохраненные путешествия</h3><div className="grid grid-cols-1 gap-2">{recentSessions.map((session) => { const lastPlayedDate = session.lastPlayed ? new Date(session.lastPlayed) : null; const timeAgo = lastPlayedDate ? getTimeAgo(lastPlayedDate) : ''; return (<div key={session.id} onClick={() => { setSessionInput(session.id); setTimeout(() => { const btn = document.querySelector('button[type="submit"]') as HTMLButtonElement; btn?.click(); }, 10); }} className="flex items-center justify-between p-2 md:p-3 bg-zinc-950/50 border border-zinc-800 rounded-xl hover:border-primary/30 hover:bg-zinc-900 transition-all group relative cursor-pointer"><div className="flex items-center gap-2 flex-1 min-w-0"><div className="p-1.5 bg-zinc-900 rounded-lg"><ScrollText className="w-3.5 h-3.5 text-zinc-600 group-hover:text-primary transition-colors" /></div><div className="flex flex-col gap-0.5 min-w-0"><span className="text-xs font-medium text-zinc-300 truncate">{session.id}</span>{session.characterName && (<span className="text-[9px] text-zinc-600 truncate"><UserIcon className="w-2.5 h-2.5 inline mr-1" />{session.characterName}</span>)}{timeAgo && (<span className="text-[8px] text-zinc-700 font-mono">{timeAgo}</span>)}</div></div><button onClick={(e) => { e.stopPropagation(); setSessionToDelete(session.id); }} className="p-1.5 hover:bg-red-500/10 rounded-lg transition-colors text-zinc-700 hover:text-red-500 shrink-0" title="Удалить из историю"><Trash2 className="w-3 h-3" /></button></div>); })}</div></div>)}
+          {recentSessions.length > 0 && (<div className="space-y-2 pt-2 border-t border-zinc-800/50"><h3 className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Сохраненные путешествия</h3><div className="grid grid-cols-1 gap-2">{recentSessions.map((session) => { const lastPlayedDate = session.lastPlayed ? new Date(session.lastPlayed) : null; const timeAgo = lastPlayedDate ? getTimeAgo(lastPlayedDate) : ''; return (<div key={session.id} onClick={() => { setSessionInput(session.id); setTimeout(() => { const btn = document.querySelector('button[type="submit"]') as HTMLButtonElement; btn?.click(); }, 10); }} className="flex items-center justify-between p-2 md:p-3 bg-zinc-950/50 border border-zinc-800 rounded-xl hover:border-primary/30 hover:bg-zinc-900 transition-all group relative cursor-pointer"><div className="flex items-center gap-2 flex-1 min-w-0"><div className="p-1.5 bg-zinc-900 rounded-lg"><ScrollText className="w-3.5 h-3.5 text-zinc-600 group-hover:text-primary transition-colors" /></div><div className="flex flex-col gap-0.5 min-w-0"><span className="text-xs font-medium text-zinc-300 truncate">{session.id}</span>{session.characterName && (<span className="text-[9px] text-zinc-600 truncate"><UserIcon className="w-2.5 h-2.5 inline mr-1" />{session.characterName}</span>)}{timeAgo && (<span className="text-[8px] text-zinc-700 font-mono">{timeAgo}</span>)}</div></div><button onClick={(e) => { e.stopPropagation(); setSessionToDelete(session.id); confirmFullDelete(); }} className="p-1.5 hover:bg-red-500/10 rounded-lg transition-colors text-zinc-700 hover:text-red-500 shrink-0" title="Удалить сессию"><Trash2 className="w-3 h-3" /></button></div>); })}</div></div>)}
           <AnimatePresence>{error && (<motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl space-y-2"><p className="text-xs text-red-400 font-medium text-center">{error}</p></motion.div>)}</AnimatePresence>
         </motion.div>
         <div className="text-center space-y-2 relative"><p className="text-[10px] text-zinc-600">D&D Dark Fantasy © {new Date().getFullYear()}</p></div>
