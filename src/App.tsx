@@ -47,20 +47,56 @@ export default function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const sessionFromUrl = params.get('session');
-    
+
     if (sessionFromUrl) {
       console.log('=== SESSION FROM URL ===');
       console.log('Session ID:', sessionFromUrl);
-      
-      // Проверяем сессию в БД
+
+      // Проверяем сессию в БД и загружаем персонажа
       supabase
         .from('game_sessions')
         .select('*')
         .eq('id', sessionFromUrl)
         .single()
-        .then(({ data, error }) => {
-          if (!error && data) {
+        .then(async ({ data: session, error }) => {
+          if (!error && session) {
             setSessionId(sessionFromUrl);
+            
+            // Загружаем моего персонажа из участников
+            const { data: participants } = await supabase
+              .from('game_session_participants')
+              .select('character_id, character(*)')
+              .eq('session_id', sessionFromUrl)
+              .eq('user_session_id', userSessionId);
+            
+            if (participants && participants.length > 0 && participants[0].character) {
+              const myCharacter = participants[0].character as Character;
+              
+              // Если в сессии есть character_stats - используем их
+              if (session.character_stats?.[myCharacter.name]) {
+                const sessionStats = session.character_stats[myCharacter.name];
+                const characterWithStats: Character = {
+                  ...myCharacter,
+                  hp_current: sessionStats.hp?.current || myCharacter.hp_current,
+                  hp_max: sessionStats.hp?.max || myCharacter.hp_max,
+                  level: sessionStats.level || myCharacter.level,
+                  xp: sessionStats.xp || myCharacter.xp,
+                  strength: sessionStats.stats?.strength || myCharacter.strength,
+                  dexterity: sessionStats.stats?.dexterity || myCharacter.dexterity,
+                  constitution: sessionStats.stats?.constitution || myCharacter.constitution,
+                  intelligence: sessionStats.stats?.intelligence || myCharacter.intelligence,
+                  wisdom: sessionStats.stats?.wisdom || myCharacter.wisdom,
+                  charisma: sessionStats.stats?.charisma || myCharacter.charisma,
+                  equipment: sessionStats.equipment || myCharacter.equipment,
+                  story_summary: sessionStats.story_summary || myCharacter.story_summary,
+                };
+                setSelectedCharacter(characterWithStats);
+                console.log('✅ Loaded character with stats from URL session:', myCharacter.name);
+              } else {
+                setSelectedCharacter(myCharacter);
+              }
+            }
+            
             setCurrentScreen('game');
             // Очищаем URL
             window.history.replaceState({}, '', window.location.pathname);
@@ -269,6 +305,42 @@ export default function App() {
         setError('Сессия не найдена.');
         setIsJoining(false);
         return;
+      }
+
+      // Загружаем участников сессии и находим моего персонажа
+      const { data: participants } = await supabase
+        .from('game_session_participants')
+        .select('character_id, character(*)')
+        .eq('session_id', session.id)
+        .eq('user_session_id', userSessionId);
+
+      if (participants && participants.length > 0 && participants[0].character) {
+        // Нашли моего персонажа - загружаем актуальные статы из сессии
+        const myCharacter = participants[0].character as Character;
+        
+        // Если в сессии есть character_stats - используем их
+        if (session.character_stats?.[myCharacter.name]) {
+          const sessionStats = session.character_stats[myCharacter.name];
+          const characterWithStats: Character = {
+            ...myCharacter,
+            hp_current: sessionStats.hp?.current || myCharacter.hp_current,
+            hp_max: sessionStats.hp?.max || myCharacter.hp_max,
+            level: sessionStats.level || myCharacter.level,
+            xp: sessionStats.xp || myCharacter.xp,
+            strength: sessionStats.stats?.strength || myCharacter.strength,
+            dexterity: sessionStats.stats?.dexterity || myCharacter.dexterity,
+            constitution: sessionStats.stats?.constitution || myCharacter.constitution,
+            intelligence: sessionStats.stats?.intelligence || myCharacter.intelligence,
+            wisdom: sessionStats.stats?.wisdom || myCharacter.wisdom,
+            charisma: sessionStats.stats?.charisma || myCharacter.charisma,
+            equipment: sessionStats.equipment || myCharacter.equipment,
+            story_summary: sessionStats.story_summary || myCharacter.story_summary,
+          };
+          setSelectedCharacter(characterWithStats);
+          console.log('✅ Loaded character with stats from session:', myCharacter.name);
+        } else {
+          setSelectedCharacter(myCharacter);
+        }
       }
 
       saveSessionToRecent(session.id);

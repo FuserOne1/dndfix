@@ -137,7 +137,7 @@ export default function CharacterSelect({
     }
   };
 
-  const handleSelectCharacter = async (character: Character) => {
+  const handleSelectCharacter = async (character: Character, skipFetch = false) => {
     // Проверяем, занят ли персонаж ДРУГИМ игроком
     const isOccupiedByOther = occupiedCharacterIds.has(character.id) && character.id !== myCharacterId;
     if (isOccupiedByOther) {
@@ -150,7 +150,7 @@ export default function CharacterSelect({
       if (roomId) {
         // Проверяем, есть ли уже запись для меня в лобби
         const { data: existing } = await supabase.from('lobby_participants').select('id').eq('lobby_id', roomId).eq('user_session_id', userSessionId).single();
-        
+
         if (existing) {
           // Я уже в лобби - обновляем персонажа если нужно
           if (existing.character_id !== character.id) {
@@ -175,8 +175,34 @@ export default function CharacterSelect({
           // Создаём новую запись
           await supabase.from('lobby_participants').insert({ lobby_id: roomId, character_id: character.id, user_session_id: userSessionId });
         }
+
+        // Загружаем актуальные статы из game_sessions если сессия уже создана
+        let characterWithStats = character;
+        const { data: session } = await supabase.from('game_sessions').select('character_stats').eq('id', roomId).single();
+        if (session?.character_stats?.[character.name]) {
+          const sessionStats = session.character_stats[character.name];
+          characterWithStats = {
+            ...character,
+            hp_current: sessionStats.hp?.current || character.hp_current,
+            hp_max: sessionStats.hp?.max || character.hp_max,
+            level: sessionStats.level || character.level,
+            xp: sessionStats.xp || character.xp,
+            strength: sessionStats.stats?.strength || character.strength,
+            dexterity: sessionStats.stats?.dexterity || character.dexterity,
+            constitution: sessionStats.stats?.constitution || character.constitution,
+            intelligence: sessionStats.stats?.intelligence || character.intelligence,
+            wisdom: sessionStats.stats?.wisdom || character.wisdom,
+            charisma: sessionStats.stats?.charisma || character.charisma,
+            equipment: sessionStats.equipment || character.equipment,
+            story_summary: sessionStats.story_summary || character.story_summary,
+          };
+          console.log('✅ Loaded character stats from session:', character.name);
+        }
+
+        onCharacterSelected(characterWithStats, roomId);
+      } else {
+        onCharacterSelected(character, roomId);
       }
-      onCharacterSelected(character, roomId);
     } catch (err: any) {
       console.error('Error joining with character:', err);
       setError(err.message);
