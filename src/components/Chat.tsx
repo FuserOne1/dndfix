@@ -382,21 +382,28 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
   const updateRoomStats = async (playerName: string, stats: CharacterStats) => {
     try {
       console.log('💾 Updating room stats for:', playerName);
+      console.log('Stats to save:', JSON.stringify(stats, null, 2));
 
       // Получаем текущие character_stats
-      const { data: sessionData } = await supabase
+      const { data: sessionData, error: fetchError } = await supabase
         .from('game_sessions')
         .select('character_stats')
         .eq('id', sessionId)
         .single();
 
+      if (fetchError) {
+        console.error('Error fetching current stats:', fetchError);
+      }
+
       const currentStats = sessionData?.character_stats || {};
+      console.log('Current character_stats:', currentStats);
       
       // Обновляем статы конкретного персонажа
       const updatedStats = {
         ...currentStats,
         [playerName]: stats
       };
+      console.log('Updated character_stats:', updatedStats);
 
       // Обновляем game_sessions
       const { error } = await supabase
@@ -405,7 +412,7 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
         .eq('id', sessionId);
 
       if (error) {
-        console.error('Error updating room stats:', error);
+        console.error('❌ Error updating room stats:', error);
       } else {
         console.log('✅ Room stats updated successfully');
       }

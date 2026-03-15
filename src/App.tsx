@@ -295,6 +295,9 @@ export default function App() {
     setError(null);
 
     try {
+      console.log('🔍 joinSession: input =', sessionInput.toUpperCase());
+      console.log('🔍 userSessionId =', userSessionId);
+
       const { data: session, error: sessionError } = await supabase
         .from('game_sessions')
         .select('*')
@@ -302,21 +305,29 @@ export default function App() {
         .single();
 
       if (sessionError || !session) {
+        console.error('❌ Session not found:', sessionError);
         setError('Сессия не найдена.');
         setIsJoining(false);
         return;
       }
 
+      console.log('✅ Session found:', session.id);
+      console.log('📦 session.character_stats =', session.character_stats);
+
       // Загружаем участников сессии и находим моего персонажа
-      const { data: participants } = await supabase
+      const { data: participants, error: participantsError } = await supabase
         .from('game_session_participants')
         .select('character_id, character(*)')
         .eq('session_id', session.id)
         .eq('user_session_id', userSessionId);
 
+      console.log('👥 Participants:', participants);
+      console.log('👥 Participants error:', participantsError);
+
       if (participants && participants.length > 0 && participants[0].character) {
         // Нашли моего персонажа - загружаем актуальные статы из сессии
         const myCharacter = participants[0].character as Character;
+        console.log('🎭 My character:', myCharacter.name);
         
         // Если в сессии есть character_stats - используем их
         if (session.character_stats?.[myCharacter.name]) {
@@ -336,17 +347,21 @@ export default function App() {
             equipment: sessionStats.equipment || myCharacter.equipment,
             story_summary: sessionStats.story_summary || myCharacter.story_summary,
           };
+          console.log('✅ Loaded character with stats:', characterWithStats);
           setSelectedCharacter(characterWithStats);
-          console.log('✅ Loaded character with stats from session:', myCharacter.name);
         } else {
+          console.log('⚠️ No character_stats for', myCharacter.name);
           setSelectedCharacter(myCharacter);
         }
+      } else {
+        console.log('⚠️ No participants found for this user');
       }
 
       saveSessionToRecent(session.id);
       setSessionId(session.id);
       setCurrentScreen('game');
     } catch (err: any) {
+      console.error('❌ joinSession error:', err);
       setError(`Ошибка входа: ${err.message}`);
     } finally {
       setIsJoining(false);
