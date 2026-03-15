@@ -119,8 +119,6 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
   const [characterStats, setCharacterStats] = useState<Record<string, CharacterStats> | null>(null);
   const [currentPrompt, setCurrentPrompt] = useState('');
   const [copied, setCopied] = useState(false);
-  const [dailyPromptCount, setDailyPromptCount] = useState(0);
-  const DAILY_LIMIT = 1500;
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -201,23 +199,8 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
     setTheme(themes[nextIndex].id);
   };
 
-  const fetchDailyUsage = async () => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const { count, error } = await supabase
-      .from('messages')
-      .select('*', { count: 'exact', head: true })
-      .eq('is_ai', true)
-      .gte('created_at', today.toISOString());
-      
-    if (!error && count !== null) {
-      setDailyPromptCount(count);
-    }
-  };
-
   useEffect(() => {
     fetchMessages();
-    fetchDailyUsage();
 
     console.log('=== CHAT MOUNTED ===');
     console.log('Session ID:', sessionId);
@@ -291,10 +274,6 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
           const newMessage = payload.new as Message;
           if (newMessage.sender_id === 'system' && newMessage.content.startsWith('PAUSE:')) {
             setIsPaused(newMessage.content === 'PAUSE:TRUE');
-          }
-          if (newMessage.is_ai) {
-            setDailyPromptCount(prev => prev + 1);
-            // НЕ сбрасываем здесь - флаг будет сброшен в triggerAIResponse
           }
           setMessages((prev) => {
             if (prev.some(m => m.id === newMessage.id)) return prev;
@@ -1156,13 +1135,6 @@ XP: ${stats.xp}
               >
                 {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
               </button>
-              <span className="text-zinc-700 mx-0.5 hidden md:inline">•</span>
-              <p className={cn(
-                "text-[9px] md:text-xs font-mono uppercase tracking-widest shrink-0",
-                dailyPromptCount >= DAILY_LIMIT ? "text-red-500" : "text-zinc-500"
-              )} title="Ответов ИИ за сегодня">
-                <span className="hidden md:inline">Запросы: </span>{dailyPromptCount}/{DAILY_LIMIT}
-              </p>
             </div>
           </div>
         </div>
@@ -1209,11 +1181,18 @@ XP: ${stats.xp}
 
           {/* User Badge & Player List */}
           <div className="hidden sm:flex items-center gap-3">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-xl" title="Лимит запросов на сегодня">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">
-                Запросов: <span className={dailyPromptCount >= DAILY_LIMIT ? "text-red-400" : "text-primary"}>{dailyPromptCount}</span> / {DAILY_LIMIT}
-              </span>
-            </div>
+            {/* HP и Уровень персонажа */}
+            {getCurrentPlayerStats() && (
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-xl" title="Здоровье и уровень">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-red-400">
+                  ❤️ {getCurrentPlayerStats()!.hp.current}/{getCurrentPlayerStats()!.hp.max}
+                </span>
+                <span className="w-px h-3 bg-zinc-700" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400">
+                  ⭐ Ур. {getCurrentPlayerStats()!.level}
+                </span>
+              </div>
+            )}
             <div className="flex -space-x-2 overflow-hidden">
               {players.slice(0, 3).map((p, i) => (
                 <div 
@@ -1310,13 +1289,6 @@ XP: ${stats.xp}
                       </div>
                     ))}
                   </div>
-                </div>
-                <div className="h-px bg-zinc-800 my-1 mx-2" />
-                <div className="px-4 py-2">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 block mb-1">Лимит на сегодня</span>
-                  <span className="text-xs font-mono text-zinc-300">
-                    <span className={dailyPromptCount >= DAILY_LIMIT ? "text-red-400" : "text-primary"}>{dailyPromptCount}</span> / {DAILY_LIMIT}
-                  </span>
                 </div>
                 <div className="h-px bg-zinc-800 my-1 mx-2" />
                 <div className="px-4 py-2 flex items-center gap-2">
