@@ -95,11 +95,25 @@ export default function CharacterSelect({ userSessionId, onCharacterSelected, on
   
   useEffect(() => { const cost = calculatePointBuyCost(pointBuy); setPointsRemaining(27 - cost); }, [pointBuy]);
 
-  const calculatePointBuyCost = (stats: typeof pointBuy) => { const costTable: Record<number, number> = { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 }; return Object.values(stats).reduce((total, value) => total + (costTable[value] || 0), 0); };
+  const calculatePointBuyCost = (stats: typeof pointBuy) => {
+    const selectedRace = races.find(r => r.name === newCharacter.race);
+    const costTable: Record<number, number> = { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 };
+    
+    // Считаем стоимость только для очков, распределённых игроком (не бонусы расы)
+    let totalCost = 0;
+    Object.entries(stats).forEach(([stat, value]) => {
+      const raceBonus = selectedRace?.bonuses[stat] || 0;
+      const baseWithoutBonus = value - raceBonus;
+      totalCost += costTable[baseWithoutBonus] || 0;
+    });
+    
+    return totalCost;
+  };
   
   const adjustStat = (stat: keyof typeof pointBuy, delta: number) => {
     const selectedRace = races.find(r => r.name === newCharacter.race);
-    const baseValue = selectedRace?.bonuses[stat] ? 8 + selectedRace.bonuses[stat] : 8;
+    const raceBonus = selectedRace?.bonuses[stat] || 0;
+    const baseValue = 8 + raceBonus;
     const newValue = pointBuy[stat] + delta;
     
     // Минимум - базовое значение расы (8 + бонус)
