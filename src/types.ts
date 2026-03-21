@@ -24,6 +24,9 @@ export interface Character {
   charisma: number;
   background: string;
   feat?: string;
+  special_item?: string;
+  special_item_description?: string;
+  gold?: number;
   equipment: string[];
   story_summary?: string;
   avatar_icon?: string;
