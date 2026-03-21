@@ -26,7 +26,23 @@ export default function CharacterSelect({ userSessionId, onCharacterSelected, on
 
   const avatarOptions = [{ id: 'warrior', emoji: '⚔️', label: 'Воин' },{ id: 'mage', emoji: '🧙', label: 'Маг' },{ id: 'rogue', emoji: '🗡️', label: 'Плут' },{ id: 'cleric', emoji: '✨', label: 'Клерик' },{ id: 'ranger', emoji: '🏹', label: 'Следопыт' }];
 
-  const races = [{ name: 'Человек', bonuses: { strength: 1, dexterity: 1, constitution: 1, intelligence: 1, wisdom: 1, charisma: 1 } },{ name: 'Эльф', bonuses: { dexterity: 2, intelligence: 1 } },{ name: 'Дварф', bonuses: { constitution: 2, wisdom: 1 } },{ name: 'Полурослик', bonuses: { dexterity: 2, charisma: 1 } },{ name: 'Полуорк', bonuses: { strength: 2, constitution: 1 } },{ name: 'Тифлинг', bonuses: { intelligence: 1, charisma: 2 } },{ name: 'Драконорожденный', bonuses: { strength: 2, charisma: 1 } }];
+  const races = [
+    { name: 'Дворф горный', bonuses: { strength: 2, constitution: 2 } },
+    { name: 'Дворф холмовой', bonuses: { constitution: 2, wisdom: 1 } },
+    { name: 'Высший эльф', bonuses: { dexterity: 2, intelligence: 1 } },
+    { name: 'Лесной эльф', bonuses: { dexterity: 2, wisdom: 1 } },
+    { name: 'Дроу', bonuses: { dexterity: 2, charisma: 1 } },
+    { name: 'Полурослик легконогий', bonuses: { dexterity: 2, charisma: 1 } },
+    { name: 'Полурослик крепкий', bonuses: { constitution: 2, dexterity: 1 } },
+    { name: 'Человек', bonuses: { strength: 1, dexterity: 1, constitution: 1, intelligence: 1, wisdom: 1, charisma: 1 } },
+    { name: 'Человек вариативный', bonuses: { strength: 1, dexterity: 1, constitution: 1, intelligence: 1, wisdom: 1, charisma: 1 } },
+    { name: 'Драконорожденный', bonuses: { strength: 2, charisma: 1 } },
+    { name: 'Гном скальный', bonuses: { intelligence: 2, constitution: 1 } },
+    { name: 'Гном лесной', bonuses: { intelligence: 2, dexterity: 1 } },
+    { name: 'Полуэльф', bonuses: { charisma: 2, dexterity: 1, constitution: 1 } },
+    { name: 'Полуорк', bonuses: { strength: 2, constitution: 1 } },
+    { name: 'Тифлинг', bonuses: { intelligence: 1, charisma: 2 } },
+  ];
   const classes = [{ name: 'Воин', hitDie: 10, equipment: ['Длинный меч','Щит','Кольчужная рубаха','Рюкзак','Верёвка (15м)','Факел (10шт)','Сухой паёк (10 дней)','Фляга'] },{ name: 'Маг', hitDie: 6, equipment: ['Посох','Книга заклинаний','Мантия','Рюкзак','Компоненты для заклинаний','Чернила и перо','Сухой паёк (10 дней)','Фляга'] },{ name: 'Плут', hitDie: 8, equipment: ['Короткий меч','Короткий лук (20 стрел)','Кожаная броня','Воровские инструменты','Рюкзак','Верёвка (15м)','Сухой паёк (10 дней)','Фляга'] },{ name: 'Клерик', hitDie: 8, equipment: ['Булава','Щит','Кольчужная рубаха','Святой символ','Молитвенник','Рюкзак','Сухой паёк (10 дней)','Фляга'] },{ name: 'Следопыт', hitDie: 10, equipment: ['Длинный лук (20 стрел)','Короткий меч','Кожаная броня','Рюкзак','Верёвка (15м)','Капкан','Сухой паёк (10 дней)','Фляга'] },{ name: 'Паладин', hitDie: 10, equipment: ['Длинный меч','Щит','Латная броня','Святой символ','Рюкзак','Сухой паёк (10 дней)','Фляга'] },{ name: 'Варвар', hitDie: 12, equipment: ['Секира','Метательные топоры (4шт)','Кожаная броня','Рюкзак','Верёвка (15м)','Сухой паёк (10 дней)','Фляга'] },{ name: 'Бард', hitDie: 8, equipment: ['Рапира','Лютня','Кожаная броня','Рюкзак','Набор для маскировки','Сухой паёк (10 дней)','Фляга'] }];
 
   useEffect(() => { fetchCharacters(); }, []);
