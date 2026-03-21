@@ -26,6 +26,7 @@ export interface Character {
   feat?: string;
   special_item?: string;
   special_item_description?: string;
+  abilities?: string;
   gold?: number;
   equipment: string[];
   story_summary?: string;
