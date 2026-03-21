@@ -39,21 +39,21 @@ export default function CharacterSelect({ userSessionId, onCharacterSelected, on
   const avatarOptions = [{ id: 'warrior', emoji: '⚔️', label: 'Воин' },{ id: 'mage', emoji: '🧙', label: 'Маг' },{ id: 'rogue', emoji: '🗡️', label: 'Плут' },{ id: 'cleric', emoji: '✨', label: 'Клерик' },{ id: 'ranger', emoji: '🏹', label: 'Следопыт' }];
 
   const races = [
-    { name: 'Дворф горный', bonuses: { strength: 2, constitution: 2 } },
-    { name: 'Дворф холмовой', bonuses: { constitution: 2, wisdom: 1 } },
-    { name: 'Высший эльф', bonuses: { dexterity: 2, intelligence: 1 } },
-    { name: 'Лесной эльф', bonuses: { dexterity: 2, wisdom: 1 } },
-    { name: 'Дроу', bonuses: { dexterity: 2, charisma: 1 } },
-    { name: 'Полурослик легконогий', bonuses: { dexterity: 2, charisma: 1 } },
-    { name: 'Полурослик крепкий', bonuses: { constitution: 2, dexterity: 1 } },
-    { name: 'Человек', bonuses: { strength: 1, dexterity: 1, constitution: 1, intelligence: 1, wisdom: 1, charisma: 1 } },
-    { name: 'Человек вариативный', bonuses: { strength: 1, dexterity: 1, constitution: 1, intelligence: 1, wisdom: 1, charisma: 1 } },
-    { name: 'Драконорожденный', bonuses: { strength: 2, charisma: 1 } },
-    { name: 'Гном скальный', bonuses: { intelligence: 2, constitution: 1 } },
-    { name: 'Гном лесной', bonuses: { intelligence: 2, dexterity: 1 } },
-    { name: 'Полуэльф', bonuses: { charisma: 2, dexterity: 1, constitution: 1 } },
-    { name: 'Полуорк', bonuses: { strength: 2, constitution: 1 } },
-    { name: 'Тифлинг', bonuses: { intelligence: 1, charisma: 2 } },
+    { name: 'Дворф горный', bonuses: { strength: 2, constitution: 2 }, description: '+2 Телосложение, +2 Сила' },
+    { name: 'Дворф холмовой', bonuses: { constitution: 2, wisdom: 1 }, description: '+2 Телосложение, +1 Мудрость' },
+    { name: 'Высший эльф', bonuses: { dexterity: 2, intelligence: 1 }, description: '+2 Ловкость, +1 Интеллект' },
+    { name: 'Лесной эльф', bonuses: { dexterity: 2, wisdom: 1 }, description: '+2 Ловкость, +1 Мудрость' },
+    { name: 'Дроу', bonuses: { dexterity: 2, charisma: 1 }, description: '+2 Ловкость, +1 Харизма' },
+    { name: 'Полурослик легконогий', bonuses: { dexterity: 2, charisma: 1 }, description: '+2 Ловкость, +1 Харизма' },
+    { name: 'Полурослик крепкий', bonuses: { dexterity: 2, constitution: 1 }, description: '+2 Ловкость, +1 Телосложение' },
+    { name: 'Человек', bonuses: { strength: 1, dexterity: 1, constitution: 1, intelligence: 1, wisdom: 1, charisma: 1 }, description: '+1 ко всем характеристикам' },
+    { name: 'Человек вариативный', bonuses: { strength: 1, dexterity: 1, constitution: 1, intelligence: 1, wisdom: 1, charisma: 1 }, extraPoints: 2, description: '+1 к двум характеристикам на выбор (+2 очка)' },
+    { name: 'Драконорожденный', bonuses: { strength: 2, charisma: 1 }, description: '+2 Сила, +1 Харизма' },
+    { name: 'Гном скальный', bonuses: { intelligence: 2, constitution: 1 }, description: '+2 Интеллект, +1 Телосложение' },
+    { name: 'Гном лесной', bonuses: { intelligence: 2, dexterity: 1 }, description: '+2 Интеллект, +1 Ловкость' },
+    { name: 'Полуэльф', bonuses: { charisma: 2, strength: 1, dexterity: 1, constitution: 1, intelligence: 1, wisdom: 1 }, extraPoints: 1, description: '+2 Харизма, +1 к двум характеристикам на выбор (+1 очко)' },
+    { name: 'Полуорк', bonuses: { strength: 2, constitution: 1 }, description: '+2 Сила, +1 Телосложение' },
+    { name: 'Тифлинг', bonuses: { intelligence: 1, charisma: 2 }, description: '+1 Интеллект, +2 Харизма' },
   ];
 
   const classes = [
@@ -73,11 +73,62 @@ export default function CharacterSelect({ userSessionId, onCharacterSelected, on
   ];
 
   useEffect(() => { fetchCharacters(); }, []);
+  
+  // Автоматически применяем бонусы расы при изменении
+  useEffect(() => {
+    const selectedRace = races.find(r => r.name === newCharacter.race);
+    if (!selectedRace) return;
+    
+    // Базовые статы (8 без бонусов)
+    const baseStats = { strength: 8, dexterity: 8, constitution: 8, intelligence: 8, wisdom: 8, charisma: 8 };
+    
+    // Применяем бонусы расы
+    const finalStats = { ...baseStats };
+    let extraPoints = selectedRace.extraPoints || 0;
+    
+    Object.entries(selectedRace.bonuses).forEach(([stat, bonus]) => {
+      finalStats[stat] = (finalStats[stat] || 0) + bonus;
+    });
+    
+    // Для рас с выбором (+1 к двум характеристикам) - добавляем дополнительные очки
+    if (extraPoints > 0) {
+      setPointBuy(baseStats); // Базовые 8 во все статы
+      setPointsRemaining(27 + extraPoints); // 27 базовых + дополнительные от расы
+    } else {
+      setPointBuy(finalStats); // Применяем рассчитанные статы
+      const cost = calculatePointBuyCost(finalStats);
+      setPointsRemaining(27 - cost);
+    }
+  }, [newCharacter.race]);
+  
   useEffect(() => { const cost = calculatePointBuyCost(pointBuy); setPointsRemaining(27 - cost); }, [pointBuy]);
 
   const calculatePointBuyCost = (stats: typeof pointBuy) => { const costTable: Record<number, number> = { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 }; return Object.values(stats).reduce((total, value) => total + (costTable[value] || 0), 0); };
-  const adjustStat = (stat: keyof typeof pointBuy, delta: number) => { const newValue = pointBuy[stat] + delta; if (newValue < 8 || newValue > 15) return; const newStats = { ...pointBuy, [stat]: newValue }; const newCost = calculatePointBuyCost(newStats); if (newCost <= 27) setPointBuy(newStats); };
-  const getFinalStats = () => { const selectedRace = races.find(r => r.name === newCharacter.race); if (!selectedRace) return pointBuy; const final: any = { ...pointBuy }; Object.entries(selectedRace.bonuses).forEach(([stat, bonus]) => { final[stat] = (final[stat] || 0) + bonus; }); return final; };
+  
+  const adjustStat = (stat: keyof typeof pointBuy, delta: number) => {
+    const newValue = pointBuy[stat] + delta;
+    if (newValue < 8 || newValue > 15) return;
+    
+    const selectedRace = races.find(r => r.name === newCharacter.race);
+    const maxPoints = selectedRace?.extraPoints ? 27 + selectedRace.extraPoints : 27;
+    
+    const newStats = { ...pointBuy, [stat]: newValue };
+    const newCost = calculatePointBuyCost(newStats);
+    if (newCost <= maxPoints) setPointBuy(newStats);
+  };
+  
+  const getFinalStats = () => {
+    const selectedRace = races.find(r => r.name === newCharacter.race);
+    if (!selectedRace) return pointBuy;
+    
+    // Если раса с дополнительными очками, просто возвращаем текущие статы
+    if (selectedRace.extraPoints) {
+      return pointBuy;
+    }
+    
+    // Для остальных рас возвращаем pointBuy (уже с применёнными бонусами)
+    return pointBuy;
+  };
 
   const fetchCharacters = async () => {
     try {
@@ -292,7 +343,7 @@ export default function CharacterSelect({ userSessionId, onCharacterSelected, on
                 <div className="space-y-4">
                   <div><label className="block text-xs font-bold uppercase tracking-widest text-zinc-500 mb-2">Имя</label><input value={newCharacter.name} onChange={(e) => setNewCharacter({ ...newCharacter, name: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary/50" placeholder="Арагорн" required /></div>
                   <div className="grid grid-cols-2 gap-4">
-                    <div><label className="block text-xs font-bold uppercase tracking-widest text-zinc-500 mb-2">Раса</label><select value={newCharacter.race} onChange={(e) => setNewCharacter({ ...newCharacter, race: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary/50">{races.map((r) => (<option key={r.name} value={r.name}>{r.name}</option>))}</select></div>
+                    <div><label className="block text-xs font-bold uppercase tracking-widest text-zinc-500 mb-2">Раса</label><select value={newCharacter.race} onChange={(e) => setNewCharacter({ ...newCharacter, race: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary/50">{races.map((r) => (<option key={r.name} value={r.name}>{r.name} - {r.description}</option>))}</select></div>
                     <div><label className="block text-xs font-bold uppercase tracking-widest text-zinc-500 mb-2">Класс</label><select value={newCharacter.class} onChange={(e) => setNewCharacter({ ...newCharacter, class: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary/50">{classes.map((c) => (<option key={c.name} value={c.name}>{c.name}</option>))}</select></div>
                   </div>
                   <div><label className="block text-xs font-bold uppercase tracking-widest text-zinc-500 mb-2">Предыстория</label><textarea value={newCharacter.background} onChange={(e) => setNewCharacter({ ...newCharacter, background: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary/50" rows={2} placeholder="Искатель приключений..." /></div>
@@ -306,6 +357,11 @@ export default function CharacterSelect({ userSessionId, onCharacterSelected, on
                   <div>
                     <div className="flex items-center justify-between mb-3"><label className="text-xs font-bold uppercase tracking-widest text-zinc-500">Характеристики (Point Buy)</label><span className={`text-xs font-bold ${pointsRemaining === 0 ? 'text-green-500' : 'text-amber-500'}`}>Осталось очков: {pointsRemaining}</span></div>
                     <div className="grid grid-cols-3 gap-3">{Object.entries(pointBuy).map(([stat, value]) => (<div key={stat} className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl"><div className="flex items-center justify-between mb-2"><span className="text-xs text-zinc-500 uppercase">{stat === 'strength' ? 'Сила' : stat === 'dexterity' ? 'Ловкость' : stat === 'constitution' ? 'Телосложение' : stat === 'intelligence' ? 'Интеллект' : stat === 'wisdom' ? 'Мудрость' : 'Харизма'}</span><span className="text-sm font-bold text-white">{value}</span></div><div className="flex items-center gap-2"><button type="button" onClick={() => adjustStat(stat as keyof typeof pointBuy, -1)} disabled={value <= 8} className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white font-bold">-</button><div className="flex-1" /><button type="button" onClick={() => adjustStat(stat as keyof typeof pointBuy, 1)} disabled={value >= 15 || pointsRemaining <= 0} className="w-8 h-8 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white font-bold">+</button></div></div>))}</div>
+                    {/* Бонусы расы */}
+                    <div className="mt-3 p-3 bg-primary/10 border border-primary/20 rounded-xl">
+                      <p className="text-xs text-primary font-bold uppercase tracking-widest mb-1">Бонусы расы:</p>
+                      <p className="text-sm text-zinc-300">{races.find(r => r.name === newCharacter.race)?.description || ''}</p>
+                    </div>
                   </div>
                 </div>
                 <button type="submit" disabled={isJoining || pointsRemaining !== 0} className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary/80 text-white rounded-2xl py-4 font-bold uppercase tracking-widest transition-all disabled:opacity-50">{isJoining ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5" />}{pointsRemaining !== 0 ? `Распределите все очки (осталось: ${pointsRemaining})` : 'Создать персонажа'}</button>
