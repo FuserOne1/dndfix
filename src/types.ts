@@ -23,6 +23,7 @@ export interface Character {
   wisdom: number;
   charisma: number;
   background: string;
+  feat?: string;
   equipment: string[];
   story_summary?: string;
   avatar_icon?: string;

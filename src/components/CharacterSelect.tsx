@@ -19,7 +19,15 @@ export default function CharacterSelect({ userSessionId, onCharacterSelected, on
   const [error, setError] = useState<string | null>(null);
   const [deletingCharacterId, setDeletingCharacterId] = useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [newCharacter, setNewCharacter] = useState({ name: '', race: 'Человек', class: 'Воин', background: '', specialItem: '', specialItemDescription: '', avatar_icon: 'warrior' });
+  const [newCharacter, setNewCharacter] = useState({
+    name: '',
+    race: 'Человек',
+    class: 'Воин',
+    background: '',
+    feat: '',
+    customEquipment: '',
+    avatar_icon: 'warrior'
+  });
   const [pointBuy, setPointBuy] = useState({ strength: 8, dexterity: 8, constitution: 8, intelligence: 8, wisdom: 8, charisma: 8 });
   const [pointsRemaining, setPointsRemaining] = useState(27);
   const [selectedCharId, setSelectedCharId] = useState<string | null>(null);
@@ -141,15 +149,59 @@ export default function CharacterSelect({ userSessionId, onCharacterSelected, on
       const finalStats = getFinalStats();
       const conModifier = Math.floor((finalStats.constitution - 10) / 2);
       const hp_max = (selectedClass?.hitDie || 10) + conModifier;
-      const equipment = [...(selectedClass?.equipment || [])];
-      if (newCharacter.specialItem.trim()) equipment.push(newCharacter.specialItem.trim());
-      const { data: character, error: createError } = await supabase.from('characters').insert({name: newCharacter.name.trim(),race: newCharacter.race,class: newCharacter.class,background: newCharacter.background.trim() || 'Искатель приключений',hp_current: hp_max,hp_max: hp_max,strength: finalStats.strength,dexterity: finalStats.dexterity,constitution: finalStats.constitution,intelligence: finalStats.intelligence,wisdom: finalStats.wisdom,charisma: finalStats.charisma,equipment: equipment,avatar_icon: newCharacter.avatar_icon,story_summary: newCharacter.specialItemDescription.trim() ? 'Особый предмет: ' + newCharacter.specialItem + '. ' + newCharacter.specialItemDescription : undefined,}).select().single();
-      if (createError) { if (createError.code === '23505') setError('Персонаж с таким именем уже существует'); else throw createError; setIsJoining(false); return; }
+      
+      // Базовое снаряжение класса + пользовательское
+      let equipment = [...(selectedClass?.equipment || [])];
+      if (newCharacter.customEquipment.trim()) {
+        // Разделяем запятыми или новыми строками
+        const customItems = newCharacter.customEquipment.trim().split(/[,\n]+/).map((item: string) => item.trim()).filter((item: string) => item.length > 0);
+        equipment = [...equipment, ...customItems];
+      }
+      
+      // Формируем story_summary с чертой
+      let storySummary = '';
+      if (newCharacter.feat.trim()) {
+        storySummary = 'Черта: ' + newCharacter.feat.trim();
+      }
+      if (newCharacter.background.trim()) {
+        storySummary += (storySummary ? '. ' : '') + newCharacter.background.trim();
+      }
+      
+      const { data: character, error: createError } = await supabase.from('characters').insert({
+        name: newCharacter.name.trim(),
+        race: newCharacter.race,
+        class: newCharacter.class,
+        background: newCharacter.background.trim() || 'Искатель приключений',
+        feat: newCharacter.feat.trim() || null,
+        hp_current: hp_max,
+        hp_max: hp_max,
+        strength: finalStats.strength,
+        dexterity: finalStats.dexterity,
+        constitution: finalStats.constitution,
+        intelligence: finalStats.intelligence,
+        wisdom: finalStats.wisdom,
+        charisma: finalStats.charisma,
+        equipment: equipment,
+        avatar_icon: newCharacter.avatar_icon,
+        story_summary: storySummary || undefined,
+      }).select().single();
+      
+      if (createError) {
+        if (createError.code === '23505') setError('Персонаж с таким именем уже существует');
+        else throw createError;
+        setIsJoining(false);
+        return;
+      }
+      
       await handleSelectCharacter(character);
       setShowCreateForm(false);
-      setNewCharacter({ name: '', race: 'Человек', class: 'Воин', background: '', specialItem: '', specialItemDescription: '' });
+      setNewCharacter({ name: '', race: 'Человек', class: 'Воин', background: '', feat: '', customEquipment: '', avatar_icon: 'warrior' });
       setPointBuy({ strength: 8, dexterity: 8, constitution: 8, intelligence: 8, wisdom: 8, charisma: 8 });
-    } catch (err: any) { console.error('Error creating character:', err); setError(err.message); setIsJoining(false); }
+    } catch (err: any) {
+      console.error('Error creating character:', err);
+      setError(err.message);
+      setIsJoining(false);
+    }
   };
 
   const handleDeleteCharacter = async (characterId: string, e: React.MouseEvent) => {
@@ -204,7 +256,7 @@ export default function CharacterSelect({ userSessionId, onCharacterSelected, on
 
           {/* Детали персонажа */}
           <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 space-y-4">
-            {selectedCharacter && (<><div className="flex items-center gap-3"><span className="text-4xl">{selectedCharacter.avatar_icon === 'warrior' ? '⚔️' : selectedCharacter.avatar_icon === 'mage' ? '🧙' : selectedCharacter.avatar_icon === 'rogue' ? '🗡️' : selectedCharacter.avatar_icon === 'cleric' ? '✨' : '🏹'}</span><div><h3 className="text-xl font-bold text-white">{selectedCharacter.name}</h3><p className="text-sm text-zinc-500">{selectedCharacter.race} {selectedCharacter.class}</p></div></div><div className="grid grid-cols-2 gap-3">{[{ icon: Heart, label: 'HP', value: `${selectedCharacter.hp_current}/${selectedCharacter.hp_max}` },{ icon: Zap, label: 'XP', value: selectedCharacter.xp.toString() },{ icon: Swords, label: 'Уровень', value: selectedCharacter.level.toString() },].map((stat) => (<div key={stat.label} className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl"><div className="flex items-center gap-2 text-zinc-500 mb-1"><stat.icon className="w-4 h-4" /><span className="text-xs uppercase tracking-widest">{stat.label}</span></div><p className="text-lg font-bold text-white">{stat.value}</p></div>))}</div><div className="grid grid-cols-3 gap-2">{[{ key: 'strength', label: 'Сила' },{ key: 'dexterity', label: 'Ловкость' },{ key: 'constitution', label: 'Телосложение' },{ key: 'intelligence', label: 'Интеллект' },{ key: 'wisdom', label: 'Мудрость' },{ key: 'charisma', label: 'Харизма' },].map((s) => (<div key={s.key} className="p-2 bg-zinc-950 border border-zinc-800 rounded-lg text-center"><p className="text-xs text-zinc-500 uppercase tracking-widest mb-1">{s.label}</p><p className="text-sm font-bold text-white">{(selectedCharacter as any)[s.key]}</p></div>))}</div><div className="pt-3 border-t border-zinc-800"><p className="text-xs text-zinc-500 uppercase tracking-widest mb-2">Предыстория</p><p className="text-sm text-zinc-300">{selectedCharacter.background || 'Не указана'}</p></div></>)}
+            {selectedCharacter && (<><div className="flex items-center gap-3"><span className="text-4xl">{selectedCharacter.avatar_icon === 'warrior' ? '⚔️' : selectedCharacter.avatar_icon === 'mage' ? '🧙' : selectedCharacter.avatar_icon === 'rogue' ? '🗡️' : selectedCharacter.avatar_icon === 'cleric' ? '✨' : '🏹'}</span><div><h3 className="text-xl font-bold text-white">{selectedCharacter.name}</h3><p className="text-sm text-zinc-500">{selectedCharacter.race} {selectedCharacter.class}</p></div></div><div className="grid grid-cols-2 gap-3">{[{ icon: Heart, label: 'HP', value: `${selectedCharacter.hp_current}/${selectedCharacter.hp_max}` },{ icon: Zap, label: 'XP', value: selectedCharacter.xp.toString() },{ icon: Swords, label: 'Уровень', value: selectedCharacter.level.toString() },].map((stat) => (<div key={stat.label} className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl"><div className="flex items-center gap-2 text-zinc-500 mb-1"><stat.icon className="w-4 h-4" /><span className="text-xs uppercase tracking-widest">{stat.label}</span></div><p className="text-lg font-bold text-white">{stat.value}</p></div>))}</div><div className="grid grid-cols-3 gap-2">{[{ key: 'strength', label: 'Сила' },{ key: 'dexterity', label: 'Ловкость' },{ key: 'constitution', label: 'Телосложение' },{ key: 'intelligence', label: 'Интеллект' },{ key: 'wisdom', label: 'Мудрость' },{ key: 'charisma', label: 'Харизма' },].map((s) => (<div key={s.key} className="p-2 bg-zinc-950 border border-zinc-800 rounded-lg text-center"><p className="text-xs text-zinc-500 uppercase tracking-widest mb-1">{s.label}</p><p className="text-sm font-bold text-white">{(selectedCharacter as any)[s.key]}</p></div>))}</div><div className="pt-3 border-t border-zinc-800 space-y-3"><div><p className="text-xs text-zinc-500 uppercase tracking-widest mb-2">Предыстория</p><p className="text-sm text-zinc-300">{selectedCharacter.background || 'Не указана'}</p></div>{selectedCharacter.feat && (<div><p className="text-xs text-zinc-500 uppercase tracking-widest mb-2">Черта</p><p className="text-sm text-zinc-300">{selectedCharacter.feat}</p></div>)}<div><p className="text-xs text-zinc-500 uppercase tracking-widest mb-2">Снаряжение</p><div className="flex flex-wrap gap-2">{selectedCharacter.equipment && selectedCharacter.equipment.length > 0 ? selectedCharacter.equipment.map((item, idx) => (<span key={idx} className="px-2 py-1 bg-zinc-950 border border-zinc-800 rounded-lg text-xs text-zinc-400">{item}</span>)) : (<span className="text-sm text-zinc-600">Нет снаряжения</span>)}</div></div></div></>)}
             {!selectedCharacter && (<div className="text-center text-zinc-500 py-12"><p>Выберите персонажа</p></div>)}
           </div>
         </div>
@@ -220,7 +272,7 @@ export default function CharacterSelect({ userSessionId, onCharacterSelected, on
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="sticky top-0 bg-zinc-900 border-b border-zinc-800 px-6 py-4 flex items-center justify-between">
                 <h2 className="text-lg font-bold text-white">Создание персонажа</h2>
-                <button onClick={() => { setShowCreateForm(false); setNewCharacter({ name: '', race: 'Человек', class: 'Воин', background: '', specialItem: '', specialItemDescription: '' }); setPointBuy({ strength: 8, dexterity: 8, constitution: 8, intelligence: 8, wisdom: 8, charisma: 8 }); }} className="text-zinc-400 hover:text-white"><span className="text-2xl">×</span></button>
+                <button onClick={() => { setShowCreateForm(false); setNewCharacter({ name: '', race: 'Человек', class: 'Воин', background: '', feat: '', customEquipment: '', avatar_icon: 'warrior' }); setPointBuy({ strength: 8, dexterity: 8, constitution: 8, intelligence: 8, wisdom: 8, charisma: 8 }); }} className="text-zinc-400 hover:text-white"><span className="text-2xl">×</span></button>
               </div>
               <form onSubmit={handleCreateCharacter} className="p-6 space-y-6">
                 <div className="space-y-4">
@@ -229,9 +281,9 @@ export default function CharacterSelect({ userSessionId, onCharacterSelected, on
                     <div><label className="block text-xs font-bold uppercase tracking-widest text-zinc-500 mb-2">Раса</label><select value={newCharacter.race} onChange={(e) => setNewCharacter({ ...newCharacter, race: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary/50">{races.map((r) => (<option key={r.name} value={r.name}>{r.name}</option>))}</select></div>
                     <div><label className="block text-xs font-bold uppercase tracking-widest text-zinc-500 mb-2">Класс</label><select value={newCharacter.class} onChange={(e) => setNewCharacter({ ...newCharacter, class: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary/50">{classes.map((c) => (<option key={c.name} value={c.name}>{c.name}</option>))}</select></div>
                   </div>
-                  <div><label className="block text-xs font-bold uppercase tracking-widest text-zinc-500 mb-2">Предыстория</label><textarea value={newCharacter.background} onChange={(e) => setNewCharacter({ ...newCharacter, background: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary/50" rows={3} placeholder="Искатель приключений..." /></div>
-                  <div><label className="block text-xs font-bold uppercase tracking-widest text-zinc-500 mb-2">Особый предмет</label><input value={newCharacter.specialItem} onChange={(e) => setNewCharacter({ ...newCharacter, specialItem: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary/50" placeholder="Меч предков" /></div>
-                  <div><label className="block text-xs font-bold uppercase tracking-widest text-zinc-500 mb-2">Описание особого предмета</label><textarea value={newCharacter.specialItemDescription} onChange={(e) => setNewCharacter({ ...newCharacter, specialItemDescription: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary/50" rows={2} placeholder="Древний меч, передаваемый в семье..." /></div>
+                  <div><label className="block text-xs font-bold uppercase tracking-widest text-zinc-500 mb-2">Предыстория</label><textarea value={newCharacter.background} onChange={(e) => setNewCharacter({ ...newCharacter, background: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary/50" rows={2} placeholder="Искатель приключений..." /></div>
+                  <div><label className="block text-xs font-bold uppercase tracking-widest text-zinc-500 mb-2">Черта</label><input value={newCharacter.feat} onChange={(e) => setNewCharacter({ ...newCharacter, feat: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary/50" placeholder="Удачливый, Боевой заклинатель..." /></div>
+                  <div><label className="block text-xs font-bold uppercase tracking-widest text-zinc-500 mb-2">Дополнительное снаряжение</label><textarea value={newCharacter.customEquipment} onChange={(e) => setNewCharacter({ ...newCharacter, customEquipment: e.target.value })} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-primary/50" rows={2} placeholder="Зелье лечения, Верёвка, Факел (через запятую)" /></div>
                   <div><label className="block text-xs font-bold uppercase tracking-widest text-zinc-500 mb-3">Аватар</label><div className="flex gap-3">{avatarOptions.map((avatar) => (<button key={avatar.id} type="button" onClick={() => setNewCharacter({ ...newCharacter, avatar_icon: avatar.id })} className={`p-4 rounded-xl border-2 transition-all ${newCharacter.avatar_icon === avatar.id ? 'border-primary bg-primary/10' : 'border-zinc-800 bg-zinc-950 hover:border-zinc-700'}`} title={avatar.label}><span className="text-3xl block">{avatar.emoji}</span></button>))}</div></div>
                   <div>
                     <div className="flex items-center justify-between mb-3"><label className="text-xs font-bold uppercase tracking-widest text-zinc-500">Характеристики (Point Buy)</label><span className={`text-xs font-bold ${pointsRemaining === 0 ? 'text-green-500' : 'text-amber-500'}`}>Осталось очков: {pointsRemaining}</span></div>
