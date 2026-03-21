@@ -74,12 +74,23 @@ export default function CharacterSelect({ userSessionId, onCharacterSelected, on
 
   useEffect(() => { fetchCharacters(); }, []);
   
-  // При изменении расы - показываем бонусы, но НЕ применяем их к статам
-  // Бонусы применяются только при сохранении персонажа
+  // При изменении расы - автоматически применяем бонусы и даём 27 очков сверху
   useEffect(() => {
-    // Просто сбрасываем на базовые 8 во все статы
-    setPointBuy({ strength: 8, dexterity: 8, constitution: 8, intelligence: 8, wisdom: 8, charisma: 8 });
-    setPointsRemaining(27); // Всегда 27 очков для распределения
+    const selectedRace = races.find(r => r.name === newCharacter.race);
+    if (!selectedRace) return;
+    
+    // Базовые статы (8 без бонусов)
+    const baseStats = { strength: 8, dexterity: 8, constitution: 8, intelligence: 8, wisdom: 8, charisma: 8 };
+    
+    // Применяем бонусы расы
+    const finalStats = { ...baseStats };
+    Object.entries(selectedRace.bonuses).forEach(([stat, bonus]) => {
+      finalStats[stat] = (finalStats[stat] || 0) + bonus;
+    });
+    
+    // Устанавливаем статы с бонусами расы + 27 очков для распределения
+    setPointBuy(finalStats);
+    setPointsRemaining(27); // Всегда 27 очков для игрока
   }, [newCharacter.race]);
   
   useEffect(() => { const cost = calculatePointBuyCost(pointBuy); setPointsRemaining(27 - cost); }, [pointBuy]);
@@ -87,26 +98,22 @@ export default function CharacterSelect({ userSessionId, onCharacterSelected, on
   const calculatePointBuyCost = (stats: typeof pointBuy) => { const costTable: Record<number, number> = { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 }; return Object.values(stats).reduce((total, value) => total + (costTable[value] || 0), 0); };
   
   const adjustStat = (stat: keyof typeof pointBuy, delta: number) => {
+    const selectedRace = races.find(r => r.name === newCharacter.race);
+    const baseValue = selectedRace?.bonuses[stat] ? 8 + selectedRace.bonuses[stat] : 8;
     const newValue = pointBuy[stat] + delta;
-    if (newValue < 8 || newValue > 15) return;
+    
+    // Минимум - базовое значение расы (8 + бонус)
+    if (newValue < baseValue) return;
+    if (newValue > 15) return;
+    
     const newStats = { ...pointBuy, [stat]: newValue };
     const newCost = calculatePointBuyCost(newStats);
     if (newCost <= 27) setPointBuy(newStats);
   };
   
   const getFinalStats = () => {
-    const selectedRace = races.find(r => r.name === newCharacter.race);
-    if (!selectedRace) return pointBuy;
-    
-    // Начинаем с распределённых игроком статов
-    const finalStats = { ...pointBuy };
-    
-    // Применяем бонусы расы
-    Object.entries(selectedRace.bonuses).forEach(([stat, bonus]) => {
-      finalStats[stat] = (finalStats[stat] || 0) + bonus;
-    });
-    
-    return finalStats;
+    // pointBuy уже содержит бонусы расы + распределённые очки
+    return pointBuy;
   };
 
   const fetchCharacters = async () => {
