@@ -140,6 +140,14 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
   const [selectedSpell, setSelectedSpell] = useState(false);
   const [selectedItem, setSelectedItem] = useState(false);
 
+  // Dice popup
+  const [showDicePopup, setShowDicePopup] = useState(false);
+
+  // Pending battle detection
+  const [pendingBattle, setPendingBattle] = useState(false);
+  const [battleReady, setBattleReady] = useState(false);
+  const [readyPlayers, setReadyPlayers] = useState<Set<string>>(new Set());
+
   // Синхронизируем ref с battleActive
   useEffect(() => { battleActiveRef.current = battleActive; }, [battleActive]);
 
@@ -168,6 +176,18 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
     console.log('Room ID:', sessionId);
     console.log('User Name:', userName);
   }, [character, sessionId, userName]);
+
+  // Детектор начала боя: сканим последние AI-сообщения на врагов
+  useEffect(() => {
+    if (battleActive) return;
+    const combatKeywords = ['гоблин', 'орк', 'бандит', 'разбойник', 'волк', 'паук', 'скелет', 'зомби', 'враг', 'монстр', 'противник', 'атакует', 'нападает', 'бросается', 'замахивается', 'обнажает оружие', ' combat ', 'enemy', 'monster', 'attack', 'goblin', 'orc', 'bandit'];
+    const lastAiMessages = messages.filter(m => m.is_ai && m.content).slice(-3);
+    const hasCombat = lastAiMessages.some(msg => {
+      const text = (msg.content || '').toLowerCase();
+      return combatKeywords.some(kw => text.includes(kw));
+    });
+    setPendingBattle(hasCombat);
+  }, [messages, battleActive]);
 
   // Инициализируем оркестратор при загрузке
   useEffect(() => {
@@ -635,43 +655,20 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
     }
   };
 
-  const rollDice = () => {
+  const DICE_TYPES = [4, 6, 8, 10, 12, 20, 100] as const;
+
+  const rollDice = (diceType: number = 20, bonus: number = 0) => {
     setIsRolling(true);
-    
-    // Smart Roll: Parse last DM message for dice notation
-    const lastDM = [...messages].reverse().find(m => m && m.is_ai && m.content);
-    let diceType = 20;
-    let count = 1;
-    let bonus = 0;
-    
-    if (lastDM && typeof lastDM.content === 'string') {
-      const diceMatch = lastDM.content.match(/(\d+)?d(\d+)([\+\-]\d+)?/i);
-      if (diceMatch) {
-        count = parseInt(diceMatch[1]) || 1;
-        diceType = parseInt(diceMatch[2]) || 20;
-        bonus = parseInt(diceMatch[3]) || 0;
-      }
-    }
+    setShowDicePopup(false);
 
     setTimeout(() => {
-      let total = 0;
-      const rolls = [];
-      for (let i = 0; i < count; i++) {
-        const r = Math.floor(Math.random() * diceType) + 1;
-        rolls.push(r);
-        total += r;
-      }
-      total += bonus;
-
-      const rollStr = rolls.length > 1 ? `(${rolls.join(' + ')})` : rolls[0];
+      const roll = Math.floor(Math.random() * diceType) + 1;
+      const total = roll + bonus;
       const bonusStr = bonus !== 0 ? ` ${bonus > 0 ? '+' : ''}${bonus}` : '';
-      
-      // Формат с LaTeX для красивой формулы
-      const message = `🎲 **${count}d${diceType}${bonusStr} = ${total}**\n${rolls.length > 1 || bonus !== 0 ? `\n_Детали: ${rollStr}${bonusStr}_` : ''}`;
-
+      const message = `🎲 **1d${diceType}${bonusStr} = ${total}**${bonus !== 0 ? ` (${roll}${bonusStr})` : ''}`;
       sendMessage(message, true);
       setIsRolling(false);
-    }, 800);
+    }, 600);
   };
 
   // ═══════════════════════════════════════════════════════════════
@@ -1802,6 +1799,30 @@ XP: ${stats.xp}
         <div ref={messagesEndRef} className="h-16 shrink-0" />
       </div>
 
+      {/* Кнопка "Вступить в бой" — плавающая */}
+      {pendingBattle && !battleActive && (
+        <div className="shrink-0 px-3 md:px-4 pb-2">
+          <div className="max-w-4xl mx-auto">
+            <motion.button
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              onClick={() => {
+                setBattleActive(true);
+                setPendingBattle(false);
+                setBattleRound(1);
+                const msg = `⚔️ **Вступаю в бой!**`;
+                sendMessage(msg);
+                setTimeout(() => triggerAIResponse([...messages]), 500);
+              }}
+              className="w-full flex items-center justify-center gap-3 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-red-600/30"
+            >
+              <Swords className="w-5 h-5" />
+              ⚔️ Вступить в бой
+            </motion.button>
+          </div>
+        </div>
+      )}
+
       {/* Input — обычный режим или боевой */}
       <div className="shrink-0 p-3 md:p-4 bg-zinc-900/80 backdrop-blur-md border-t border-zinc-800 z-50 relative">
         <div className="max-w-4xl mx-auto">
@@ -1850,7 +1871,7 @@ XP: ${stats.xp}
                   Предмет
                 </button>
                 <button
-                  onClick={rollDice}
+                  onClick={() => setShowDicePopup(true)}
                   disabled={isRolling}
                   className={cn(
                     "flex items-center justify-center px-4 py-3 rounded-xl font-bold text-sm transition-all shrink-0",
@@ -1862,6 +1883,29 @@ XP: ${stats.xp}
                   {isRolling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Dices className="w-4 h-4" />}
                 </button>
               </div>
+
+              {/* Dice Popup */}
+              {showDicePopup && (
+                <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => setShowDicePopup(false)}>
+                  <div className="bg-zinc-900 border border-zinc-800 rounded-t-2xl p-4 w-full max-w-md shadow-2xl animate-in slide-in-from-bottom-4 duration-200" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-bold uppercase tracking-widest text-zinc-400">Выберите кубик</span>
+                      <button onClick={() => setShowDicePopup(false)} className="text-zinc-500 hover:text-white"><X className="w-4 h-4" /></button>
+                    </div>
+                    <div className="grid grid-cols-4 gap-2">
+                      {DICE_TYPES.map(d => (
+                        <button
+                          key={d}
+                          onClick={() => rollDice(d)}
+                          className="p-3 bg-zinc-950 border border-zinc-800 hover:border-primary rounded-xl text-center transition-all group"
+                        >
+                          <span className="block text-lg font-black text-white group-hover:text-primary">d{d}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Поле ввода для заклинания */}
               {selectedSpell && (
@@ -1993,7 +2037,7 @@ XP: ${stats.xp}
                 </button>
 
                 <button
-                  onClick={rollDice}
+                  onClick={() => setShowDicePopup(true)}
                   disabled={isLoading || isRolling}
                   className={cn(
                     "flex items-center justify-center p-2 md:p-3 rounded-xl transition-all border shrink-0 h-[42px] md:h-[46px] w-[42px] md:w-[46px]",
