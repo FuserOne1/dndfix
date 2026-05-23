@@ -631,10 +631,6 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
 
   const sendBattleAction = (message: string) => {
     sendMessage(message);
-    // Авто-триггер AI после боевого действия
-    setTimeout(() => {
-      triggerAIResponse([...messages]);
-    }, 500);
   };
 
   const handleBattleAttack = () => {
@@ -1723,50 +1719,50 @@ XP: ${stats.xp}
             /* БОЕВОЙ РЕЖИМ — кнопки действий                 */
             /* ════════════════════════════════════════════════ */
             <div className="space-y-2">
-              <div className="flex gap-2 overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-800 pb-1">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-1.5">
                 <button
                   onClick={handleBattleAttack}
                   disabled={isLoading}
-                  className="flex items-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold text-sm transition-all shrink-0 shadow-lg shadow-red-600/20"
+                  className="flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl border border-red-800/40 bg-red-950/20 text-red-400 hover:bg-red-600/20 hover:border-red-500/50 disabled:opacity-30 transition-all text-[11px] font-bold uppercase tracking-wider"
                 >
-                  <Swords className="w-4 h-4" />
-                  Атака
+                  <Swords className="w-3.5 h-3.5 shrink-0" />
+                  <span>Атака</span>
                 </button>
                 <button
                   onClick={handleBattleDefend}
                   disabled={isLoading}
-                  className="flex items-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-sm transition-all shrink-0"
+                  className="flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl border border-blue-800/40 bg-blue-950/20 text-blue-400 hover:bg-blue-600/20 hover:border-blue-500/50 disabled:opacity-30 transition-all text-[11px] font-bold uppercase tracking-wider"
                 >
-                  <Shield className="w-4 h-4" />
-                  Защита
+                  <Shield className="w-3.5 h-3.5 shrink-0" />
+                  <span>Защита</span>
                 </button>
                 <button
                   onClick={() => setSelectedSpell(true)}
                   disabled={isLoading || selectedSpell}
-                  className="flex items-center gap-2 px-4 py-3 bg-violet-600 hover:bg-violet-500 text-white rounded-xl font-bold text-sm transition-all shrink-0"
+                  className="flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl border border-violet-800/40 bg-violet-950/20 text-violet-400 hover:bg-violet-600/20 hover:border-violet-500/50 disabled:opacity-30 transition-all text-[11px] font-bold uppercase tracking-wider"
                 >
-                  <Zap className="w-4 h-4" />
-                  Заклинание
+                  <Zap className="w-3.5 h-3.5 shrink-0" />
+                  <span>Закл.</span>
                 </button>
                 <button
                   onClick={() => setSelectedItem(true)}
                   disabled={isLoading || selectedItem}
-                  className="flex items-center gap-2 px-4 py-3 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-bold text-sm transition-all shrink-0"
+                  className="flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl border border-amber-800/40 bg-amber-950/20 text-amber-400 hover:bg-amber-600/20 hover:border-amber-500/50 disabled:opacity-30 transition-all text-[11px] font-bold uppercase tracking-wider"
                 >
-                  <Briefcase className="w-4 h-4" />
-                  Предмет
+                  <Briefcase className="w-3.5 h-3.5 shrink-0" />
+                  <span>Предмет</span>
                 </button>
                 <button
                   onClick={() => setShowDicePopup(true)}
                   disabled={isRolling}
-                  className={cn(
-                    "flex items-center justify-center px-4 py-3 rounded-xl font-bold text-sm transition-all shrink-0",
+                  className={`flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl border transition-all text-[11px] font-bold uppercase tracking-wider col-span-2 sm:col-span-1 ${
                     isRolling
-                      ? "bg-zinc-800 text-zinc-500"
-                      : "bg-zinc-800 hover:bg-zinc-700 text-white"
-                  )}
+                      ? 'border-zinc-800 bg-zinc-900/30 text-zinc-500'
+                      : 'border-zinc-700/40 bg-zinc-800/30 text-zinc-300 hover:bg-zinc-700/40 hover:border-zinc-500/50'
+                  }`}
                 >
-                  {isRolling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Dices className="w-4 h-4" />}
+                  {isRolling ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" /> : <Dices className="w-3.5 h-3.5 shrink-0" />}
+                  <span>{isRolling ? 'Бросок...' : 'Кубик'}</span>
                 </button>
               </div>
 
@@ -1947,21 +1943,42 @@ XP: ${stats.xp}
       {/* Глобальный popup выбора кубика (доступен всегда) */}
       {showDicePopup && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => setShowDicePopup(false)}>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-t-2xl p-4 w-full max-w-md shadow-2xl animate-in slide-in-from-bottom-4 duration-200" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold uppercase tracking-widest text-zinc-400">Выберите кубик</span>
-              <button onClick={() => setShowDicePopup(false)} className="text-zinc-500 hover:text-white"><X className="w-4 h-4" /></button>
+          <div className="bg-zinc-900/95 backdrop-blur-xl border border-zinc-800 border-b-0 rounded-t-3xl p-5 w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-4 duration-200 max-h-[70vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Dices className="w-4 h-4 text-primary" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-widest text-zinc-300">Бросок кубика</span>
+                  <p className="text-[9px] text-zinc-500 mt-0.5">Нажмите на кубик чтобы бросить</p>
+                </div>
+              </div>
+              <button onClick={() => setShowDicePopup(false)} className="p-2 rounded-xl hover:bg-zinc-800 text-zinc-500 hover:text-white transition-all">
+                <X className="w-4 h-4" />
+              </button>
             </div>
-            <div className="grid grid-cols-4 gap-2">
-              {DICE_TYPES.map(d => (
-                <button
-                  key={d}
-                  onClick={() => rollDice(d)}
-                  className="p-3 bg-zinc-950 border border-zinc-800 hover:border-primary rounded-xl text-center transition-all group"
-                >
-                  <span className="block text-lg font-black text-white group-hover:text-primary">d{d}</span>
-                </button>
-              ))}
+            <div className="grid grid-cols-3 gap-2">
+              {DICE_TYPES.map(d => {
+                let c = '';
+                if (d === 20) c = 'from-red-950/40 to-red-900/20 border-red-800/40 hover:border-red-500/60 text-red-400 ring-1 ring-red-800/20';
+                else if (d === 4) c = 'from-emerald-950/40 to-emerald-900/20 border-emerald-800/40 hover:border-emerald-500/60 text-emerald-400';
+                else if (d === 6) c = 'from-sky-950/40 to-sky-900/20 border-sky-800/40 hover:border-sky-500/60 text-sky-400';
+                else if (d === 8) c = 'from-purple-950/40 to-purple-900/20 border-purple-800/40 hover:border-purple-500/60 text-purple-400';
+                else if (d === 10) c = 'from-orange-950/40 to-orange-900/20 border-orange-800/40 hover:border-orange-500/60 text-orange-400';
+                else if (d === 12) c = 'from-teal-950/40 to-teal-900/20 border-teal-800/40 hover:border-teal-500/60 text-teal-400';
+                else c = 'from-pink-950/40 to-pink-900/20 border-pink-800/40 hover:border-pink-500/60 text-pink-400';
+                return (
+                  <button
+                    key={d}
+                    onClick={() => rollDice(d)}
+                    className={`p-3 bg-gradient-to-br ${c} rounded-xl border transition-all group hover:-translate-y-0.5 active:translate-y-0`}
+                  >
+                    <span className={`block font-black ${d === 20 ? 'text-xl' : 'text-base'} group-hover:brightness-125`}>d{d}</span>
+                    {d === 20 && <span className="block text-[9px] text-red-400/50 uppercase tracking-wider mt-0.5">Осн.</span>}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
