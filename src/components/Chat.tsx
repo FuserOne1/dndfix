@@ -106,7 +106,7 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isRolling, setIsRolling] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
+
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [players, setPlayers] = useState<{user: string, avatar?: string}[]>([]);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
@@ -144,9 +144,6 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
   const [showDicePopup, setShowDicePopup] = useState(false);
 
   // Pending battle detection
-  const [pendingBattle, setPendingBattle] = useState(false);
-  const [battleReady, setBattleReady] = useState(false);
-  const [readyPlayers, setReadyPlayers] = useState<Set<string>>(new Set());
 
   // Синхронизируем ref с battleActive
   useEffect(() => { battleActiveRef.current = battleActive; }, [battleActive]);
@@ -177,17 +174,7 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
     console.log('User Name:', userName);
   }, [character, sessionId, userName]);
 
-  // Детектор начала боя: сканим последние AI-сообщения на врагов
-  useEffect(() => {
-    if (battleActive) return;
-    const combatKeywords = ['гоблин', 'орк', 'бандит', 'разбойник', 'волк', 'паук', 'скелет', 'зомби', 'враг', 'монстр', 'противник', 'атакует', 'нападает', 'бросается', 'замахивается', 'обнажает оружие', ' combat ', 'enemy', 'monster', 'attack', 'goblin', 'orc', 'bandit'];
-    const lastAiMessages = messages.filter(m => m.is_ai && m.content).slice(-3);
-    const hasCombat = lastAiMessages.some(msg => {
-      const text = (msg.content || '').toLowerCase();
-      return combatKeywords.some(kw => text.includes(kw));
-    });
-    setPendingBattle(hasCombat);
-  }, [messages, battleActive]);
+
 
   // Инициализируем оркестратор при загрузке
   useEffect(() => {
@@ -257,10 +244,6 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
         },
         (payload) => {
           const newMessage = payload.new as Message;
-          if (newMessage.sender_id === 'system' && newMessage.content.startsWith('PAUSE:')) {
-            setIsPaused(newMessage.content === 'PAUSE:TRUE');
-          }
-
           // Парсим ENEMY_UPDATE из real-time сообщений
           if (newMessage.content && typeof newMessage.content === 'string') {
             const enemyUpdateMatch = newMessage.content.match(/\[ENEMY_UPDATE:\s*({[\s\S]*?})\s*\]/);
@@ -503,12 +486,6 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
 
         setMessages(data || []);
         
-        // Check for pause state in history
-        const lastPauseMsg = [...(data || [])].reverse().find(m => m.sender_id === 'system' && m.content.startsWith('PAUSE:'));
-        if (lastPauseMsg) {
-          setIsPaused(lastPauseMsg.content === 'PAUSE:TRUE');
-        }
-
         // Restore battle state from history
         const battleStartMsg = [...(data || [])].reverse().find(
           m => m.content && typeof m.content === 'string' && m.content.includes('[BATTLE_START:')
@@ -628,31 +605,6 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
     navigator.clipboard.writeText(sessionId);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  const togglePause = async () => {
-    const nextState = !isPaused;
-    try {
-      const { data } = await supabase.from('messages').insert({
-        session_id: sessionId,
-        sender_id: 'system',
-        sender_name: 'System',
-        content: `PAUSE:${nextState ? 'TRUE' : 'FALSE'}`,
-        is_ai: false,
-      }).select();
-
-      if (!nextState && data && data[0]) {
-        // If unpausing, just update the state - don't trigger AI response
-        // The AI will respond when the user sends the next message
-        const newMessage = data[0] as Message;
-        setMessages(prev => {
-          if (prev.some(m => m.id === newMessage.id)) return prev;
-          return [...prev, newMessage];
-        });
-      }
-    } catch (err) {
-      console.error('Error toggling pause:', err);
-    }
   };
 
   const DICE_TYPES = [4, 6, 8, 10, 12, 20, 100] as const;
@@ -824,15 +776,6 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
       return;
     }
 
-    // Check pause state from history (most reliable for sync)
-    const lastPauseMsg = [...history].reverse().find(m => m.sender_id === 'system' && m.content.startsWith('PAUSE:'));
-    const currentIsPaused = lastPauseMsg ? lastPauseMsg.content === 'PAUSE:TRUE' : false;
-
-    if (currentIsPaused && !force) {
-      console.log("AI is paused. Skipping response.");
-      return;
-    }
-
     isGeneratingAI.current = true;
     
     // Устанавливаем флаг генерации AI в БД — все игроки увидят индикатор
@@ -901,18 +844,7 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
     const wasLoading = isLoading;
     if (!wasLoading) setIsLoading(true);
 
-    // Filter out NON-RP messages and pause toggles
-    let isCurrentlyPaused = false;
-    const rpHistory: Message[] = [];
-    for (const msg of history) {
-      if (msg.sender_id === 'system' && msg.content.startsWith('PAUSE:')) {
-        isCurrentlyPaused = msg.content === 'PAUSE:TRUE';
-        continue;
-      }
-      if (!isCurrentlyPaused) {
-        rpHistory.push(msg);
-      }
-    }
+    const rpHistory = history;
 
     // Бери последние 10 сообщений для лучшего контекста
     const recentHistory = rpHistory.slice(-10);
@@ -1441,15 +1373,15 @@ XP: ${stats.xp}
               <Palette className="w-5 h-5" />
             </button>
             <button
-              onClick={togglePause}
+              onClick={() => setBattleActive(!battleActive)}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all border text-[10px] font-bold uppercase tracking-widest ${
-                isPaused 
-                  ? 'bg-amber-500/10 border-amber-500/50 text-amber-500' 
+                battleActive
+                  ? 'bg-red-500/10 border-red-500/50 text-red-500'
                   : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-white'
               }`}
             >
-              {isPaused ? <Play className="w-3 h-3 fill-current" /> : <Pause className="w-3 h-3 fill-current" />}
-              {isPaused ? 'Продолжить (RP)' : 'Пауза (NON-RP)'}
+              <Swords className="w-3 h-3" />
+              {battleActive ? 'В бою' : 'Битва'}
             </button>
             <button 
               onClick={() => setIsGalleryOpen(true)}
@@ -1535,15 +1467,7 @@ XP: ${stats.xp}
               className="fixed top-16 right-4 w-56 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl z-50 md:hidden overflow-hidden"
             >
               <div className="p-2 space-y-1">
-                <button
-                  onClick={() => { togglePause(); setIsMenuOpen(false); }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${
-                    isPaused ? 'text-amber-500 bg-amber-500/10' : 'text-zinc-300 hover:bg-zinc-800'
-                  }`}
-                >
-                  {isPaused ? <Play className="w-4 h-4 fill-current" /> : <Pause className="w-4 h-4 fill-current" />}
-                  {isPaused ? 'Продолжить (RP)' : 'Пауза (NON-RP)'}
-                </button>
+
                 <button
                   onClick={() => { setIsGalleryOpen(true); setIsMenuOpen(false); }}
                   className="w-full flex items-center gap-3 px-4 py-3 text-zinc-300 hover:bg-zinc-800 rounded-xl text-xs font-bold uppercase tracking-widest transition-all"
@@ -1624,14 +1548,9 @@ XP: ${stats.xp}
         ) : (
           <div className="flex flex-col flex-grow min-h-0">
             {(() => {
-              let currentPauseState = false;
               const renderableMessages = messages
                 .filter(m => m && m.sender_id !== 'gallery-item' && m.sender_id !== 'gallery')
                 .map(msg => {
-                  if (msg.sender_id === 'system' && msg.content.startsWith('PAUSE:')) {
-                    currentPauseState = msg.content === 'PAUSE:TRUE';
-                    return { ...msg, isPauseToggle: true, pauseState: currentPauseState };
-                  }
                   // Очищаем боевые блоки из сообщений для отображения
                   const cleanContent = msg.content && typeof msg.content === 'string'
                     ? msg.content
@@ -1640,23 +1559,11 @@ XP: ${stats.xp}
                         .replace(/\[BATTLE_END\]/g, '')
                         .trim()
                     : msg.content;
-                  return { ...msg, content: cleanContent, isNonRp: currentPauseState };
+                  return { ...msg, content: cleanContent };
                 });
 
               return renderableMessages.map((msg, idx) => {
-                if (msg.isPauseToggle) {
-                  return (
-                    <div key={msg.id} className="flex items-center justify-center my-8 opacity-70">
-                      <div className="border-b border-primary/30 w-full max-w-[100px] md:max-w-[200px]"></div>
-                      <span className="px-4 text-[10px] md:text-xs text-primary font-mono uppercase tracking-widest whitespace-nowrap">
-                        {msg.pauseState ? 'Начало NON-RP чата' : 'Конец NON-RP чата'}
-                      </span>
-                      <div className="border-b border-primary/30 w-full max-w-[100px] md:max-w-[200px]"></div>
-                    </div>
-                  );
-                }
-
-                if (msg.sender_id === 'system' && !msg.isPauseToggle) {
+                if (msg.sender_id === 'system') {
                   return (
                     <div key={msg.id} className="flex items-center justify-center my-6">
                       <span className="px-6 py-2 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400 font-mono text-center max-w-2xl">
@@ -1742,16 +1649,11 @@ XP: ${stats.xp}
                       isMine
                         ? "rounded-[1.25rem] rounded-tr-sm md:rounded-[1.5rem] md:rounded-tr-md"
                         : "rounded-[1.25rem] rounded-tl-sm md:rounded-[1.5rem] md:rounded-tl-md",
-                      msg.isNonRp
-                        ? "bg-zinc-900/80 backdrop-blur-md text-zinc-300 border-primary/20"
-                        : (isMine
-                            ? "bg-primary-hover/90 backdrop-blur-md text-white border-primary-border"
-                            : "bg-zinc-800/90 backdrop-blur-md text-white border-zinc-700")
+                      isMine
+                        ? "bg-primary-hover/90 backdrop-blur-md text-white border-primary-border"
+                        : "bg-zinc-800/90 backdrop-blur-md text-white border-zinc-700"
                     )}>
                       <div className={cn("flex items-center gap-1.5 md:gap-2 mb-1.5 md:mb-2 opacity-60", isMine ? "flex-row" : "flex-row-reverse justify-end")}>
-                        {msg.isNonRp && (
-                          <span className="text-[7px] md:text-[8px] border border-primary/30 px-1 md:px-1.5 py-0.5 rounded text-primary/70">NON-RP</span>
-                        )}
                         <span className="text-[8px] md:text-[10px] font-bold uppercase tracking-widest max-w-[120px] md:max-w-none truncate">
                           {msg.sender_name}
                         </span>
@@ -1759,7 +1661,7 @@ XP: ${stats.xp}
                           <UserIcon className="w-2.5 h-2.5 md:w-3 md:h-3" />
                         </div>
                       </div>
-                      <div className={cn("text-[13px] md:text-base lg:text-lg leading-relaxed break-words", msg.isNonRp ? "font-normal text-zinc-400" : "font-medium")}>
+                      <div className={cn("text-[13px] md:text-base lg:text-lg leading-relaxed break-words", "font-medium")}>
                         <ReactMarkdown
                           remarkPlugins={[remarkGfm, remarkBreaks, remarkMath]}
                           rehypePlugins={[rehypeKatex]}
@@ -1799,39 +1701,11 @@ XP: ${stats.xp}
         <div ref={messagesEndRef} className="h-16 shrink-0" />
       </div>
 
-      {/* Кнопка "Вступить в бой" — плавающая */}
-      {pendingBattle && !battleActive && (
-        <div className="shrink-0 px-3 md:px-4 pb-2">
-          <div className="max-w-4xl mx-auto">
-            <motion.button
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              onClick={() => {
-                setBattleActive(true);
-                setPendingBattle(false);
-                setBattleRound(1);
-                const msg = `⚔️ **Вступаю в бой!**`;
-                sendMessage(msg);
-                setTimeout(() => triggerAIResponse([...messages]), 500);
-              }}
-              className="w-full flex items-center justify-center gap-3 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold text-sm transition-all shadow-lg shadow-red-600/30"
-            >
-              <Swords className="w-5 h-5" />
-              ⚔️ Вступить в бой
-            </motion.button>
-          </div>
-        </div>
-      )}
+
 
       {/* Input — обычный режим или боевой */}
       <div className="shrink-0 p-3 md:p-4 bg-zinc-900/80 backdrop-blur-md border-t border-zinc-800 z-50 relative">
         <div className="max-w-4xl mx-auto">
-          {isPaused && (
-            <div className="flex items-center justify-center gap-2 py-1 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-500 text-[10px] font-bold uppercase tracking-widest mb-2">
-              <span className="animate-pulse">●</span> NON-RP РЕЖИМ АКТИВЕН
-            </div>
-          )}
-
           {battleActive ? (
             /* ════════════════════════════════════════════════ */
             /* БОЕВОЙ РЕЖИМ — кнопки действий                 */
