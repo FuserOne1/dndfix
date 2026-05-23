@@ -253,7 +253,8 @@ export async function generateImagePrompt(
 ): Promise<string> {
   const historyText = recentMessages
     .filter(m => m.content && typeof m.content === 'string')
-    .slice(-5) // Последние 5 сообщений
+    .filter(m => m.sender_id !== 'gallery' && m.sender_id !== 'gallery-item')
+    .slice(-5)
     .map(m => `${m.sender_name}: ${m.content}`)
     .join('\n\n');
 
