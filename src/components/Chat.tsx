@@ -1884,29 +1884,6 @@ XP: ${stats.xp}
                 </button>
               </div>
 
-              {/* Dice Popup */}
-              {showDicePopup && (
-                <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => setShowDicePopup(false)}>
-                  <div className="bg-zinc-900 border border-zinc-800 rounded-t-2xl p-4 w-full max-w-md shadow-2xl animate-in slide-in-from-bottom-4 duration-200" onClick={e => e.stopPropagation()}>
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-xs font-bold uppercase tracking-widest text-zinc-400">Выберите кубик</span>
-                      <button onClick={() => setShowDicePopup(false)} className="text-zinc-500 hover:text-white"><X className="w-4 h-4" /></button>
-                    </div>
-                    <div className="grid grid-cols-4 gap-2">
-                      {DICE_TYPES.map(d => (
-                        <button
-                          key={d}
-                          onClick={() => rollDice(d)}
-                          className="p-3 bg-zinc-950 border border-zinc-800 hover:border-primary rounded-xl text-center transition-all group"
-                        >
-                          <span className="block text-lg font-black text-white group-hover:text-primary">d{d}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* Поле ввода для заклинания */}
               {selectedSpell && (
                 <div className="flex gap-2 animate-in slide-in-from-bottom-2 duration-200">
@@ -1994,6 +1971,14 @@ XP: ${stats.xp}
                 >
                   <Send className="w-4 h-4" />
                 </button>
+                <button
+                  onClick={() => triggerAIResponse(messages)}
+                  disabled={isLoading}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-bold uppercase tracking-widest transition-all shrink-0 disabled:opacity-50"
+                >
+                  <ScrollText className="w-4 h-4" />
+                  DM
+                </button>
               </div>
             </div>
           ) : (
@@ -2072,6 +2057,29 @@ XP: ${stats.xp}
           )}
         </div>
       </div>
+
+      {/* Глобальный popup выбора кубика (доступен всегда) */}
+      {showDicePopup && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => setShowDicePopup(false)}>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-t-2xl p-4 w-full max-w-md shadow-2xl animate-in slide-in-from-bottom-4 duration-200" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold uppercase tracking-widest text-zinc-400">Выберите кубик</span>
+              <button onClick={() => setShowDicePopup(false)} className="text-zinc-500 hover:text-white"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {DICE_TYPES.map(d => (
+                <button
+                  key={d}
+                  onClick={() => rollDice(d)}
+                  className="p-3 bg-zinc-950 border border-zinc-800 hover:border-primary rounded-xl text-center transition-all group"
+                >
+                  <span className="block text-lg font-black text-white group-hover:text-primary">d{d}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Image Preview Modal */}
       {isImageModalOpen && generatedImageUrl && (
