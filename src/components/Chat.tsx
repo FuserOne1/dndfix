@@ -1039,11 +1039,14 @@ XP: ${stats.xp}
           '\n━━━\n\n';
       }
 
-      // Удаляем все блоки [STATS_UPDATE] из текста
-      if (statsFound) {
-        aiText = aiText.replace(/\[STATS_UPDATE:\s*({[\s\S]*?})\s*\]/g, '').trim();
-        aiText = aiText.replace(/\n\s*\n\s*$/, '\n').trim();
-      }
+      // Удаляем все управляющие блоки из текста перед показом
+      aiText = aiText
+        .replace(/\[STATS_UPDATE:\s*({[\s\S]*?})\s*\]/g, '')
+        .replace(/\[BATTLE_START:\s*({[\s\S]*?})\s*\]/g, '')
+        .replace(/\[ENEMY_UPDATE:\s*({[\s\S]*?})\s*\]/g, '')
+        .replace(/\[BATTLE_END\]/g, '')
+        .replace(/\n\s*\n\s*$/, '\n')
+        .trim();
       // Старый формат ```json {...} ``` для обратной совместимости
       else if (jsonMatch) {
         console.log('📊 Found JSON block in old format');

@@ -11,7 +11,7 @@ export const AI_MODELS = {
   WORKHORSE: 'google/gemini-2.5-flash',
   
   // Модель для генерации изображений
-  IMAGE: 'sourceful/riverflow-v2-fast',
+  IMAGE: 'black-forest-labs/flux-1.1-pro',
 
   // Альтернативные модели (для переключения)
   ALTERNATIVES: {

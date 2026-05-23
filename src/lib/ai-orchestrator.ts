@@ -314,15 +314,15 @@ export interface ImageGenerationResult {
 }
 
 /**
- * Генерирует изображение через OpenRouter (riverflow-v2-fast / DALL-E 3)
+ * Генерирует изображение через OpenRouter (black-forest-labs/flux-1.1-pro)
  */
 export async function generateImage(
   prompt: string,
   openRouterApiKey: string,
-  imageModel: string = 'sourceful/riverflow-v2-fast'
+  imageModel: string = 'black-forest-labs/flux-1.1-pro'
 ): Promise<ImageGenerationResult> {
   try {
-    // riverflow-v2-fast использует chat completions API
+    // Flux использует chat completions API
     const res = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -352,7 +352,7 @@ export async function generateImage(
     
     console.log('Image API Response:', JSON.stringify(response, null, 2));
     
-    // riverflow-v2-fast: choices[0].message.images (массив изображений)
+    // Flux: choices[0].message.images (массив изображений)
     const images = response.choices?.[0]?.message?.images;
     if (images && Array.isArray(images) && images.length > 0) {
       const imageUrl = images[0]?.image_url?.url || images[0]?.url;
@@ -361,11 +361,16 @@ export async function generateImage(
       }
     }
     
-    // riverflow-v2-fast: choices[0].message.content (URL изображения)
+    // Flux: choices[0].message.content (markdown или URL)
     const content = response.choices?.[0]?.message?.content;
     if (content) {
       if (typeof content === 'string' && content.startsWith('http')) {
         return { imageUrl: content };
+      }
+      // Парсим markdown-ссылку: ![alt](url)
+      const mdMatch = typeof content === 'string' && content.match(/!\[.*?\]\((.*?)\)/);
+      if (mdMatch) {
+        return { imageUrl: mdMatch[1] };
       }
       // Пробуем распарсить JSON
       try {
