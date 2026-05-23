@@ -10,7 +10,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Send, User as UserIcon, Loader2, Image as ImageIcon, Dices, Copy, Check, ChevronLeft, X, Layers, Maximize2, Download, Play, Pause, MoreVertical, Shield, Swords, Zap, BookOpen, Briefcase, Palette, ScrollText } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { Groq } from 'groq-sdk';
 import TextareaAutosize from 'react-textarea-autosize';
 import { CharacterStats, Message, Room, Character, Enemy } from '../types';
 import { AIOrchestrator } from '../lib/ai-orchestrator';
