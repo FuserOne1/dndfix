@@ -458,7 +458,7 @@ export async function generateResponse(
           messages,
           temperature: 0.8,
           top_p: 0.9,
-          max_tokens: 2048,  // Увеличено с 1024 для более полных ответов
+          max_tokens: 8192,  // Увеличено до 8192 чтобы STATS_UPDATE JSON помещался в ответ
         })
       });
 

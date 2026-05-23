@@ -131,3 +131,24 @@ export interface Room {
   created_by: string;
   lobby_id?: string;
 }
+
+// ═══════════════════════════════════════════════════════════════
+// БОЕВАЯ СИСТЕМА
+// ═══════════════════════════════════════════════════════════════
+
+export interface Enemy {
+  id: string;
+  name: string;
+  hp: number;
+  maxHp: number;
+  ac: number;
+  initiative: number;
+  statusEffects: string[];
+}
+
+export interface BattleState {
+  active: boolean;
+  enemies: Enemy[];
+  currentTurn: string;
+  round: number;
+}

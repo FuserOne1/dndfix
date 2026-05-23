@@ -12,9 +12,10 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { Groq } from 'groq-sdk';
 import TextareaAutosize from 'react-textarea-autosize';
-import { CharacterStats, Message, Room, Character } from '../types';
+import { CharacterStats, Message, Room, Character, Enemy } from '../types';
 import { AIOrchestrator } from '../lib/ai-orchestrator';
 import { AI_MODELS } from '../lib/ai-config';
+import BattleEnemyPanel from './BattleEnemyPanel';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -33,75 +34,72 @@ interface ChatProps {
 const SYSTEM_PROMPT = `SYSTEM ROLE: ты - Архитектор Темного Фэнтези / Game Master
 Действуй как ведущий настольной ролевой игры (DM) в сеттинге Forgotten Realms. Твоя задача — вести глубокое, атмосферное соло-приключение, ориентируясь на правила D&D 5e и механики Baldur's Gate 3.
 
+⚠️ ОБЯЗАТЕЛЬНОЕ ТРЕБОВАНИЕ — [STATS_UPDATE] В КОНЦЕ КАЖДОГО ОТВЕТА:
+В КОНЦЕ каждого своего ответа ты ОБЯЗАН добавить блок [STATS_UPDATE:{...}] для КАЖДОГО персонажа, если у него изменились: HP, XP, уровень, снаряжение, story_summary.
+
+ДАЖЕ ЕСЛИ ты не уверен — ВСЕГДА добавляй блок с текущими значениями.
+Пропуск блока = статы НЕ ОБНОВЛЯЮТСЯ = игра ломается.
+
+Формат (строго в конце, после всего текста):
+[STATS_UPDATE:{"name":"Имя","race":"Раса","class":"Класс","level":1,"hp":{"current":10,"max":10},"xp":0,"stats":{"strength":10,"dexterity":10,"constitution":10,"intelligence":10,"wisdom":10,"charisma":10},"background":"Предыстория","equipment":["Предмет1"],"story_summary":"Сводка"}]
+
+Правила:
+- Блок строго в КОНЦЕ, после всего текста
+- Поле "name" совпадает с именем персонажа
+- Если персонажей несколько — отдельный [STATS_UPDATE] для каждого
+- НЕ пиши в начале или середине | НЕ используй обратные кавычки | НЕ упоминай в тексте
+- ОБЯЗАТЕЛЬНО обновляй "equipment" и "story_summary"
+
 ГЛАВНЫЕ ПРИНЦИПЫ:
 1. Тон и Стиль: Мрачное реалистичное фэнтези. Мир опасен, ресурсы ограничены. Избегай клише "всемогущего героя". Персонаж игрока уязвим и должен полагаться на смекалку.
 2. Механика проверок (BG3 Style): Перед каждым важным или опасным действием ВСЕГДА выводи панель проверки: Класс Сложности (КС), применимые характеристики, бонусы мастерства и наличие Преимущества/Помехи. СТОП: Не описывай результат, пока я не напишу "Бросаю".
-3. Социальное взаимодействие: NPC — личности со своими целями. Отношения (дружеские или романтические) строятся на основе диалогов и поступков.
-4. Боевая система: Бои тактические и редкие. Используй ландшафт и окружение в описаниях. ВСЕГДА придерживайся боевой системы по ходам и раундам, учитывай наличие действий и бонусных действий, кратко описывай возможные приемы в бою, никогда не пропускай ходы и помни о порядке по инициативе.
-5. Возможно групповое странствие: Фокус на путешествии всех игроков (или одного, если он один). Герои могут найти союзников, даже постоянных компаньонов, но избегай участия в сюжете "имбалансных" легендарных героев или армий, если это не обосновано.
-6. Артефакты: Редкие предметы имеют уникальную историю, магическую механику и свою цену.
+3. Социальное взаимодействие: NPC — личности со своими целями. Отношения строятся на основе диалогов и поступков.
+4. Боевая система: Бои тактические и редкие. Используй ландшафт и окружение. ВСЕГДА придерживайся походовой системы с учётом действий, бонусных действий и инициативы.
+5. Артефакты: Редкие предметы имеют уникальную историю и цену.
 
 ФОРМАТИРОВАНИЕ:
 - Имена и локации: Жирный шрифт.
 - Прямая речь: — «Текст диалога».
-- Механика и расчеты: Используй LaTeX для формул в формате $1d20 + 5$ (без \text{}, просто формула). Примеры:
-  - ✅ Правильно: $1d20 + 5$, $2d6 + 3$, $1d8 + 2$
-  - ❌ Неправильно: \text{1d20 + 5}, $$1d20 + 5$$
-- Варианты действий: ВСЕГДА завершай сообщение списком возможных действий (минимум 3 варианта).
-- Не упоминай изображения или визуализацию — ты текстовый ИИ.
-- **ДЛИНА ОТВЕТА**: Пиши ПОДРОБНЫЕ, атмосферные ответы (300-800 слов). Не обрезай мысли на полуслове. Разрешай сцену полностью, прежде чем предлагать варианты действий.
+- LaTeX для формул: $1d20 + 5$ (без \text{}, без $$)
+- Варианты действий: ВСЕГДА списком (минимум 3) в конце ответа
+- Пиши ПОДРОБНО (300-800 слов). Закончи сцену полностью.
 
-УПРАВЛЕНИЕ ХАРАКТЕРИСТИКАМИ (Character Sheet):
-Ты обязан отслеживать состояние каждого персонажа (HP, XP, характеристики).
+УПРАВЛЕНИЕ ПЕРСОНАЖЕМ:
+- Используй переданные данные (имя, раса, класс, хар-ки, предысторию)
+- НЕ придумывай нового персонажа
+- Отслеживай HP, XP, level, снаряжение
+- При изменении — [STATS_UPDATE] в конце
 
-ВАЖНО: НИКОГДА не пиши в ответе фразы типа "Текущие состояния героев:" или JSON с данными персонажей. Игрок видит статы в интерфейсе.
+КРАТКИЕ СВОДКИ ПО ИЗМЕНЕНИЯМ:
+- Урон/лечение: "Вы получили 3 урона, осталось 7 HP"
+- При повышении уровня: поздравь в тексте
+- Предметы: упомяни использование или находку
 
-В НАЧАЛЕ ИГРЫ ты получишь полные данные персонажа игрока [ДАННЫЕ ПЕРСОНАЖА ИГРОКА]. ИСПОЛЬЗУЙ ЭТИ ДАННЫЕ для всего повествования. НЕ придумывай нового персонажа - используй имя, расу, класс, характеристики и предысторию из этих данных!
+ДОЛГОСРОЧНАЯ ПАМЯТЬ:
+- Обновляй "story_summary" КАЖДОЕ сообщение: события, NPC, квесты, цели
+- Учитывай предыдущую story_summary в сюжете
 
-Когда характеристики персонажа меняются (получение урона, лечение, получение опыта, повышение уровня или создание персонажа), ты ДОЛЖЕН в самом конце своего сообщения добавить скрытый блок [STATS_UPDATE] для КАЖДОГО персонажа, чьи статы изменились.
+ПЕРВЫЙ ШАГ: попроси данные персонажа. После утверждения — выведи первый [STATS_UPDATE] с полными характеристиками.
 
-ПРАВИЛЬНЫЙ ФОРМАТ (в самом конце, после ВСЕГО текста):
-[STATS_UPDATE:{"name":"Имя","race":"Раса","class":"Класс","level":1,"hp":{"current":10,"max":10},"xp":0,"stats":{"strength":10,"dexterity":10,"constitution":10,"intelligence":10,"wisdom":10,"charisma":10},"background":"Предыстория","equipment":["Предмет1"],"story_summary":"Сводка"}]
+БОЕВАЯ СИСТЕМА (BATTLE MODE):
+Используй структурированные блоки для управления боем.
 
-Если изменились статы у НЕСКОЛЬКИХ персонажей - добавь ОТДЕЛЬНЫЙ блок [STATS_UPDATE] для каждого:
-[STATS_UPDATE:{"name":"Персонаж1", ... }]
-[STATS_UPDATE:{"name":"Персонаж2", ... }]
+НАЧАЛО БОЯ — добавь в конце сообщения:
+[BATTLE_START:{"enemies":[{"id":"goblin1","name":"Гоблин","hp":7,"maxHp":7,"ac":15,"initiative":14,"statusEffects":[]}]}]
+id — уникальный идентификатор врага. initiative — для порядка ходов.
 
-НЕПРАВИЛЬНО:
-- Не пиши [STATS_UPDATE] в начале или середине сообщения
-- Не используй обратные кавычки для JSON блока
-- Не пиши ничего после [STATS_UPDATE]
-- Не упоминай этот блок в тексте
-- Не объединяй нескольких персонажей в один блок
+ОБНОВЛЕНИЕ ВРАГОВ — когда враг получает урон или исцеляется:
+[ENEMY_UPDATE:{"goblin1":{"hp":4},"goblin2":{"hp":0}}]
+Если hp=0 — враг мёртв. Если статус эффект добавляется: {"goblin1":{"hp":4,"statusEffects":["Отравлен"]}}
 
-ВАЖНО:
-- Блок ДОЛЖЕН быть в самом конце, после последнего предложения
-- Поле "name" ДОЛЖНО точно совпадать с именем игрока
-- Этот блок будет вырезан системой - игрок его не увидит
-- ОБЯЗАТЕЛЬНО включай story_summary!
-- Если в сцене участвуют несколько персонажей и у всех меняются статы - пиши отдельный блок для каждого!
+КОНЕЦ БОЯ — когда все враги мертвы или сбежали:
+[BATTLE_END]
 
-КРАТКИЕ СВОДКИ:
-- При получении урона/лечения: кратко упомяни в тексте (например: "Вы получили 3 урона, осталось 7 HP").
-- При получении опыта: не пиши отдельно, система сама покажет уведомление.
-- При повышении уровня: поздравь в тексте (например: "Новый уровень!").
-- При использовании/получении предмета: упомяни в тексте (например: "Вы использовали зелье лечения" или "Вы нашли золотое кольцо").
-
-ОБНОВЛЕНИЕ ИНВЕНТАРЯ:
-- ВСЕГДА обновляй массив "equipment" в [STATS_UPDATE] когда персонаж получает или теряет предмет
-- Используй полное копирование всего инвентаря из предыдущего состояния + изменения
-- Пример: если было ["Меч", "Зелье"] и персонаж использовал зелье, пиши ["Меч"]
-- Пример: если персонаж нашёл ключ, добавь его: ["Меч", "Зелье", "Ключ"]
-
-ДОЛГОСРОЧНАЯ ПАМЯТЬ (story_summary):
-Путешествие может длиться долго. Чтобы ничего не забыть, ты ДОЛЖЕН периодически обновлять поле "story_summary" в JSON-блоке. Записывай туда самые важные события, имена встреченных ключевых NPC, текущие квесты и цели. Это твоя память! Если в текущих статах (которые я тебе передам) уже есть story_summary, ОБЯЗАТЕЛЬНО учитывай его в сюжете, это то, что было раньше!
-ОБНОВЛЯЙ summary КАЖДОЕ сообщение, добавляя новые события. Формат: краткое описание (2-3 предложения) всего, что произошло.
-
-ПЕРВЫЙ ШАГ: Создание Персонажа
-Остановись и попроси меня предоставить данные персонажа. Если я не дал какие-то данные, предложи логичные варианты. После утверждения персонажа ОБЯЗАТЕЛЬНО выведи первый блок UPDATE_STATS с полными характеристиками.
+ВАЖНО: Блоки должны быть в самом конце, после всего текста.
+Описывай бой атмосферно, но используй эти блоки для синхронизации UI.
 
 ДОПОЛНИТЕЛЬНО:
-- Прогрессия: Герои начинают слабыми. Отслеживай XP и повышай уровень согласно правилам D&D 5e.
+- Прогрессия: Герои начинают слабыми. Отслеживай XP и повышай уровень согласно D&D 5e.
 - Лор: Используй [[ТЕКСТ]] для справок по лору.`;
 
 export default function Chat({ sessionId, userName, character, onLeave, onCharacterNeeded, theme, setTheme }: ChatProps) {
@@ -133,6 +131,18 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
+
+  // Боевая система
+  const [battleActive, setBattleActive] = useState(false);
+  const battleActiveRef = useRef(false);
+  const [enemies, setEnemies] = useState<Enemy[]>([]);
+  const [currentTurn, setCurrentTurn] = useState('');
+  const [battleRound, setBattleRound] = useState(1);
+  const [selectedSpell, setSelectedSpell] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(false);
+
+  // Синхронизируем ref с battleActive
+  useEffect(() => { battleActiveRef.current = battleActive; }, [battleActive]);
 
   // Если нет персонажа - показываем уведомление
   // Эта проверка теперь в App.tsx, но оставим на всякий случай
@@ -231,6 +241,74 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
           if (newMessage.sender_id === 'system' && newMessage.content.startsWith('PAUSE:')) {
             setIsPaused(newMessage.content === 'PAUSE:TRUE');
           }
+
+          // Парсим ENEMY_UPDATE из real-time сообщений
+          if (newMessage.content && typeof newMessage.content === 'string') {
+            const enemyUpdateMatch = newMessage.content.match(/\[ENEMY_UPDATE:\s*({[\s\S]*?})\s*\]/);
+            if (enemyUpdateMatch && battleActiveRef.current) {
+              try {
+                const updateData = JSON.parse(enemyUpdateMatch[1]);
+                setEnemies(prev => {
+                  const updated = prev.map(enemy => {
+                    const update = updateData[enemy.id];
+                    if (update) {
+                      return {
+                        ...enemy,
+                        hp: update.hp ?? enemy.hp,
+                        maxHp: update.maxHp ?? enemy.maxHp,
+                        ac: update.ac ?? enemy.ac,
+                        statusEffects: update.statusEffects ?? enemy.statusEffects,
+                      };
+                    }
+                    return enemy;
+                  });
+                  const alive = updated.filter(e => e.hp > 0);
+                  if (alive.length === 0) {
+                    setBattleActive(false);
+                  }
+                  return updated;
+                });
+              } catch (e) {
+                console.error('Failed to parse ENEMY_UPDATE from subscription:', e);
+              }
+            }
+
+            // BATTLE_END из real-time
+            if (newMessage.content.includes('[BATTLE_END]')) {
+              setBattleActive(false);
+              setEnemies([]);
+              setCurrentTurn('');
+              setBattleRound(1);
+            }
+
+            // BATTLE_START из real-time
+            const battleStartMatch = newMessage.content.match(/\[BATTLE_START:\s*({[\s\S]*?})\s*\]/);
+            if (battleStartMatch) {
+              try {
+                const battleData = JSON.parse(battleStartMatch[1]);
+                if (battleData.enemies && Array.isArray(battleData.enemies)) {
+                  const newEnemies: Enemy[] = battleData.enemies.map((e: any) => ({
+                    id: e.id || Math.random().toString(36).substring(2, 6),
+                    name: e.name || 'Враг',
+                    hp: e.hp ?? 10,
+                    maxHp: e.maxHp ?? e.hp ?? 10,
+                    ac: e.ac ?? 10,
+                    initiative: e.initiative ?? 0,
+                    statusEffects: e.statusEffects || [],
+                  }));
+                  setEnemies(newEnemies);
+                  setBattleActive(true);
+                  setBattleRound(1);
+                  const sorted = [...newEnemies, { name: userName, initiative: 999 }]
+                    .sort((a, b) => b.initiative - a.initiative);
+                  setCurrentTurn(sorted[0].name);
+                }
+              } catch (e) {
+                console.error('Failed to parse BATTLE_START from subscription:', e);
+              }
+            }
+          }
+
           setMessages((prev) => {
             if (prev.some(m => m.id === newMessage.id)) return prev;
             return [...prev, newMessage];
@@ -411,6 +489,66 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
         if (lastPauseMsg) {
           setIsPaused(lastPauseMsg.content === 'PAUSE:TRUE');
         }
+
+        // Restore battle state from history
+        const battleStartMsg = [...(data || [])].reverse().find(
+          m => m.content && typeof m.content === 'string' && m.content.includes('[BATTLE_START:')
+        );
+        const battleEndMsg = [...(data || [])].reverse().find(
+          m => m.content && typeof m.content === 'string' && m.content.includes('[BATTLE_END]')
+        );
+
+        if (battleStartMsg && (!battleEndMsg || new Date(battleStartMsg.created_at) > new Date(battleEndMsg.created_at))) {
+          try {
+            const match = battleStartMsg.content.match(/\[BATTLE_START:\s*({[\s\S]*?})\s*\]/);
+            if (match) {
+              const battleData = JSON.parse(match[1]);
+              if (battleData.enemies && Array.isArray(battleData.enemies)) {
+                const restoredEnemies: Enemy[] = battleData.enemies.map((e: any) => ({
+                  id: e.id || Math.random().toString(36).substring(2, 6),
+                  name: e.name || 'Враг',
+                  hp: e.hp ?? 10,
+                  maxHp: e.maxHp ?? e.hp ?? 10,
+                  ac: e.ac ?? 10,
+                  initiative: e.initiative ?? 0,
+                  statusEffects: e.statusEffects || [],
+                }));
+
+                // Apply updates from ENEMY_UPDATE blocks
+                const enemyUpdates = (data || []).filter(
+                  m => m.content && typeof m.content === 'string' && m.content.includes('[ENEMY_UPDATE:')
+                );
+                for (const updateMsg of enemyUpdates) {
+                  const updateMatch = updateMsg.content.match(/\[ENEMY_UPDATE:\s*({[\s\S]*?})\s*\]/);
+                  if (updateMatch) {
+                    const updateData = JSON.parse(updateMatch[1]);
+                    for (const enemy of restoredEnemies) {
+                      const update = updateData[enemy.id];
+                      if (update) {
+                        enemy.hp = update.hp ?? enemy.hp;
+                        enemy.maxHp = update.maxHp ?? enemy.maxHp;
+                        enemy.ac = update.ac ?? enemy.ac;
+                        enemy.statusEffects = update.statusEffects ?? enemy.statusEffects;
+                      }
+                    }
+                  }
+                }
+
+                const alive = restoredEnemies.filter(e => e.hp > 0);
+                if (alive.length > 0) {
+                  setEnemies(restoredEnemies);
+                  setBattleActive(true);
+                  const sorted = [...alive, { name: userName, initiative: 999 }]
+                    .sort((a, b) => b.initiative - a.initiative);
+                  setCurrentTurn(sorted[0].name);
+                  console.log('⚔️ Battle state restored from history');
+                }
+              }
+            }
+          } catch (e) {
+            console.error('Failed to restore battle state:', e);
+          }
+        }
         
         // Don't auto-trigger AI greeting - user will click button
         return; // Success
@@ -535,6 +673,68 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
       sendMessage(message, true);
       setIsRolling(false);
     }, 800);
+  };
+
+  // ═══════════════════════════════════════════════════════════════
+  // БОЕВЫЕ ДЕЙСТВИЯ
+  // ═══════════════════════════════════════════════════════════════
+
+  const getStatModifier = (value: number) => Math.floor((value - 10) / 2);
+
+  const sendBattleAction = (message: string) => {
+    sendMessage(message);
+    // Авто-триггер AI после боевого действия
+    setTimeout(() => {
+      triggerAIResponse([...messages]);
+    }, 500);
+  };
+
+  const handleBattleAttack = () => {
+    const stats = getCurrentPlayerStats();
+    if (!stats) return;
+
+    const strMod = getStatModifier(stats.stats.strength);
+    const dexMod = getStatModifier(stats.stats.dexterity);
+    const profBonus = Math.floor((stats.level + 3) / 4) + 1;
+
+    // Для простоты используем STR (melee). В будущем можно добавить выбор оружия.
+    const attackBonus = strMod + profBonus;
+    const roll = Math.floor(Math.random() * 20) + 1;
+    const total = roll + attackBonus;
+
+    const isCrit = roll === 20;
+    const isFumble = roll === 1;
+    const damageRoll = Math.floor(Math.random() * 8) + 1;
+    const damage = damageRoll + strMod;
+
+    let result = '';
+    if (isCrit) result = '🔥 **КРИТИЧЕСКОЕ ПОПАДАНИЕ!**';
+    else if (isFumble) result = '💀 **КРИТИЧЕСКИЙ ПРОМАХ!**';
+    else result = `Попадание? Класс Сложности: AC врага`;
+
+    const message = `⚔️ **Атака**: d20+${attackBonus} = **${total}** (${roll} + ${attackBonus})\n${result}\n🗡️ **Урон**: 1d8+${strMod} = **${damage}** (${damageRoll} + ${strMod})`;
+    sendBattleAction(message);
+  };
+
+  const handleBattleDefend = () => {
+    const stats = getCurrentPlayerStats();
+    const dexMod = stats ? getStatModifier(stats.stats.dexterity) : 0;
+    const message = `🛡️ **Защита**: +2 AC на этот раунд (текущий AC: ${10 + dexMod + 2})`;
+    sendBattleAction(message);
+  };
+
+  const handleBattleCastSpell = (spellName: string) => {
+    if (!spellName.trim()) return;
+    const message = `✨ **Заклинание**: ${spellName.trim()}`;
+    setInput('');
+    sendBattleAction(message);
+  };
+
+  const handleBattleUseItem = (itemName: string) => {
+    if (!itemName.trim()) return;
+    const message = `🎒 **Предмет**: ${itemName.trim()}`;
+    setInput('');
+    sendBattleAction(message);
   };
 
   const generateSceneImage = async () => {
@@ -978,6 +1178,155 @@ XP: ${stats.xp}
         }
       }
 
+      // Fallback: если STATS_UPDATE не найден, парсим ответ через Gemini Flash
+      if (!statsFound && !jsonMatch && characterStats && orchestratorRef.current) {
+        console.log('⚠️ No STATS_UPDATE found, trying AI-powered fallback parsing...');
+        try {
+          const parsedChanges = await orchestratorRef.current.parseStatsChanges(
+            aiText,
+            characterStats
+          );
+
+          if (parsedChanges.changes.length > 0) {
+            console.log('✅ Fallback parser found changes:', parsedChanges.changes);
+            statsFound = true;
+            const fallbackChanges: string[] = [];
+
+            for (const change of parsedChanges.changes) {
+              const playerName = change.characterName;
+              const prevStats = characterStats?.[playerName];
+              if (!prevStats) continue;
+
+              const updatedStats: CharacterStats = {
+                ...prevStats,
+                hp: change.hp
+                  ? { current: change.hp.current, max: change.hp.max ?? prevStats.hp.max }
+                  : prevStats.hp,
+                xp: change.xp?.current ?? prevStats.xp,
+                level: change.level?.current ?? prevStats.level,
+                story_summary: change.story_summary ?? prevStats.story_summary,
+              };
+
+              const hpDiff = change.hp ? change.hp.current - prevStats.hp.current : 0;
+              const xpDiff = change.xp ? change.xp.current - prevStats.xp : 0;
+              const levelDiff = change.level ? change.level.current - prevStats.level : 0;
+
+              const changes: string[] = [];
+              if (hpDiff !== 0) {
+                changes.push(`${hpDiff > 0 ? '🟢' : '🔴'} HP: ${hpDiff > 0 ? '+' : ''}${hpDiff} (${prevStats.hp.current} → ${updatedStats.hp.current})`);
+              }
+              if (xpDiff > 0) {
+                changes.push(`⭐ XP: +${xpDiff} (${prevStats.xp} → ${updatedStats.xp})`);
+              }
+              if (levelDiff > 0) {
+                changes.push(`🎯 Уровень повышен: ${prevStats.level} → ${updatedStats.level}!`);
+              }
+
+              if (changes.length > 0) {
+                fallbackChanges.push(`**${playerName}**:\n` + changes.join('\n'));
+              }
+
+              setCharacterStats(prev => ({ ...prev, [playerName]: updatedStats }));
+              updateRoomStats(playerName, updatedStats);
+
+              if (updatedStats.story_summary) {
+                setStorySummary(updatedStats.story_summary);
+              }
+            }
+
+            if (fallbackChanges.length > 0) {
+              notificationText = '\n\n━━━\n**📊 Изменения персонажей**\n' + fallbackChanges.join('\n\n') + '\n━━━\n\n';
+            }
+          } else {
+            console.log('⚠️ Fallback parser found no changes either');
+          }
+        } catch (e) {
+          console.error('Fallback stats parsing failed:', e);
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      // ПАРСИНГ БОЕВЫХ БЛОКОВ
+      // ═══════════════════════════════════════════════════════════
+
+      // BATTLE_START — начало боя
+      const battleStartMatch = aiText.match(/\[BATTLE_START:\s*({[\s\S]*?})\s*\]/);
+      if (battleStartMatch) {
+        try {
+          const battleData = JSON.parse(battleStartMatch[1]);
+          if (battleData.enemies && Array.isArray(battleData.enemies)) {
+            const newEnemies: Enemy[] = battleData.enemies.map((e: any) => ({
+              id: e.id || Math.random().toString(36).substring(2, 6),
+              name: e.name || 'Враг',
+              hp: e.hp ?? 10,
+              maxHp: e.maxHp ?? e.hp ?? 10,
+              ac: e.ac ?? 10,
+              initiative: e.initiative ?? 0,
+              statusEffects: e.statusEffects || [],
+            }));
+            setEnemies(newEnemies);
+            setBattleActive(true);
+            setBattleRound(1);
+
+            // Определяем первый ход (по инициативе)
+            const sorted = [...newEnemies, { name: userName || 'Игрок', initiative: 999 }]
+              .sort((a, b) => b.initiative - a.initiative);
+            setCurrentTurn(sorted[0].name);
+
+            console.log('⚔️ Battle started with enemies:', newEnemies);
+          }
+        } catch (e) {
+          console.error('Failed to parse BATTLE_START:', e);
+        }
+      }
+
+      // ENEMY_UPDATE — обновление состояния врагов
+      const enemyUpdateMatch = aiText.match(/\[ENEMY_UPDATE:\s*({[\s\S]*?})\s*\]/);
+      if (enemyUpdateMatch && battleActive) {
+        try {
+          const updateData = JSON.parse(enemyUpdateMatch[1]);
+          setEnemies(prev => {
+            const updated = prev.map(enemy => {
+              const update = updateData[enemy.id];
+              if (update) {
+                return {
+                  ...enemy,
+                  hp: update.hp ?? enemy.hp,
+                  maxHp: update.maxHp ?? enemy.maxHp,
+                  ac: update.ac ?? enemy.ac,
+                  statusEffects: update.statusEffects ?? enemy.statusEffects,
+                };
+              }
+              return enemy;
+            });
+            // Определяем следующий ход
+            const alive = updated.filter(e => e.hp > 0);
+            if (alive.length === 0) {
+              setBattleActive(false);
+            } else {
+              const currentIdx = alive.findIndex(e => e.name === currentTurn);
+              const nextIdx = (currentIdx + 1) % alive.length;
+              setCurrentTurn(alive[nextIdx].name);
+              if (nextIdx === 0) {
+                setBattleRound(prev => prev + 1);
+              }
+            }
+            return updated;
+          });
+        } catch (e) {
+          console.error('Failed to parse ENEMY_UPDATE:', e);
+        }
+      }
+
+      // BATTLE_END — конец боя
+      if (aiText.includes('[BATTLE_END]')) {
+        setBattleActive(false);
+        setEnemies([]);
+        setCurrentTurn('');
+        setBattleRound(1);
+        console.log('⚔️ Battle ended');
+      }
+
       // Добавляем уведомление перед основным текстом
       const finalContent = notificationText + aiText;
 
@@ -1247,6 +1596,15 @@ XP: ${stats.xp}
         )}
       </AnimatePresence>
 
+      {/* Enemy Panel — показываем только во время боя */}
+      {battleActive && (
+        <BattleEnemyPanel
+          enemies={enemies}
+          currentTurn={currentTurn}
+          round={battleRound}
+        />
+      )}
+
       {/* Messages */}
       <div
         ref={chatContainerRef}
@@ -1278,7 +1636,15 @@ XP: ${stats.xp}
                     currentPauseState = msg.content === 'PAUSE:TRUE';
                     return { ...msg, isPauseToggle: true, pauseState: currentPauseState };
                   }
-                  return { ...msg, isNonRp: currentPauseState };
+                  // Очищаем боевые блоки из сообщений для отображения
+                  const cleanContent = msg.content && typeof msg.content === 'string'
+                    ? msg.content
+                        .replace(/\[BATTLE_START:\s*({[\s\S]*?})\s*\]/g, '')
+                        .replace(/\[ENEMY_UPDATE:\s*({[\s\S]*?})\s*\]/g, '')
+                        .replace(/\[BATTLE_END\]/g, '')
+                        .trim()
+                    : msg.content;
+                  return { ...msg, content: cleanContent, isNonRp: currentPauseState };
                 });
 
               return renderableMessages.map((msg, idx) => {
@@ -1437,7 +1803,7 @@ XP: ${stats.xp}
         <div ref={messagesEndRef} className="h-16 shrink-0" />
       </div>
 
-      {/* Input */}
+      {/* Input — обычный режим или боевой */}
       <div className="shrink-0 p-3 md:p-4 bg-zinc-900/80 backdrop-blur-md border-t border-zinc-800 z-50 relative">
         <div className="max-w-4xl mx-auto">
           {isPaused && (
@@ -1446,75 +1812,221 @@ XP: ${stats.xp}
             </div>
           )}
 
-          <div className="flex items-center gap-3">
-            <TextareaAutosize
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Опишите ваше действие..."
-              minRows={1}
-              maxRows={5}
-              className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-zinc-600 resize-none leading-relaxed self-end"
-              onKeyDown={(e) => {
-                const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-                if (e.key === 'Enter' && !e.shiftKey && !isTouchDevice) {
-                  e.preventDefault();
-                  if (input.trim() && !isLoading) {
-                    sendMessage(input);
-                  }
-                }
-              }}
-            />
-            
-            {/* Кнопки действий */}
-            <div className="flex gap-1.5 md:gap-2 shrink-0">
-              <button
-                onClick={generateSceneImage}
-                disabled={isLoading || isGeneratingImage}
-                className={cn(
-                  "flex items-center justify-center p-2 md:p-3 rounded-xl transition-all border shrink-0 h-[42px] md:h-[46px] w-[42px] md:w-[46px]",
-                  isGeneratingImage
-                    ? "bg-zinc-800 text-zinc-500 border-zinc-700"
-                    : "bg-zinc-800 hover:bg-zinc-700 text-primary border-primary-border hover:shadow-lg hover:shadow-primary-glow"
-                )}
-                title="Сгенерировать изображение сцены"
-              >
-                {isGeneratingImage ? <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" /> : <ImageIcon className="w-4 h-4 md:w-5 md:h-5" />}
-              </button>
+          {battleActive ? (
+            /* ════════════════════════════════════════════════ */
+            /* БОЕВОЙ РЕЖИМ — кнопки действий                 */
+            /* ════════════════════════════════════════════════ */
+            <div className="space-y-2">
+              <div className="flex gap-2 overflow-x-auto scrollbar-thin scrollbar-thumb-zinc-800 pb-1">
+                <button
+                  onClick={handleBattleAttack}
+                  disabled={isLoading}
+                  className="flex items-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold text-sm transition-all shrink-0 shadow-lg shadow-red-600/20"
+                >
+                  <Swords className="w-4 h-4" />
+                  Атака
+                </button>
+                <button
+                  onClick={handleBattleDefend}
+                  disabled={isLoading}
+                  className="flex items-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-sm transition-all shrink-0"
+                >
+                  <Shield className="w-4 h-4" />
+                  Защита
+                </button>
+                <button
+                  onClick={() => setSelectedSpell(true)}
+                  disabled={isLoading || selectedSpell}
+                  className="flex items-center gap-2 px-4 py-3 bg-violet-600 hover:bg-violet-500 text-white rounded-xl font-bold text-sm transition-all shrink-0"
+                >
+                  <Zap className="w-4 h-4" />
+                  Заклинание
+                </button>
+                <button
+                  onClick={() => setSelectedItem(true)}
+                  disabled={isLoading || selectedItem}
+                  className="flex items-center gap-2 px-4 py-3 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-bold text-sm transition-all shrink-0"
+                >
+                  <Briefcase className="w-4 h-4" />
+                  Предмет
+                </button>
+                <button
+                  onClick={rollDice}
+                  disabled={isRolling}
+                  className={cn(
+                    "flex items-center justify-center px-4 py-3 rounded-xl font-bold text-sm transition-all shrink-0",
+                    isRolling
+                      ? "bg-zinc-800 text-zinc-500"
+                      : "bg-zinc-800 hover:bg-zinc-700 text-white"
+                  )}
+                >
+                  {isRolling ? <Loader2 className="w-4 h-4 animate-spin" /> : <Dices className="w-4 h-4" />}
+                </button>
+              </div>
 
-              <button
-                onClick={rollDice}
-                disabled={isLoading || isRolling}
-                className={cn(
-                  "flex items-center justify-center p-2 md:p-3 rounded-xl transition-all border shrink-0 h-[42px] md:h-[46px] w-[42px] md:w-[46px]",
-                  isRolling
-                    ? "bg-zinc-800 text-zinc-500 border-zinc-700"
-                    : "bg-zinc-800 hover:bg-zinc-700 text-primary border-primary-border hover:shadow-lg hover:shadow-primary-glow"
-                )}
-                title="Бросок кубиков"
-              >
-                {isRolling ? <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" /> : <Dices className="w-4 h-4 md:w-5 md:h-5" />}
-              </button>
+              {/* Поле ввода для заклинания */}
+              {selectedSpell && (
+                <div className="flex gap-2 animate-in slide-in-from-bottom-2 duration-200">
+                  <input
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder="Название заклинания..."
+                    className="flex-1 bg-zinc-950 border border-violet-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && input.trim()) {
+                        handleBattleCastSpell(input);
+                      }
+                    }}
+                    autoFocus
+                  />
+                  <button
+                    onClick={() => { handleBattleCastSpell(input); setSelectedSpell(false); }}
+                    disabled={!input.trim() || isLoading}
+                    className="px-4 py-2.5 bg-violet-600 hover:bg-violet-500 text-white rounded-xl font-bold text-sm transition-all disabled:opacity-50"
+                  >
+                    Кастовать
+                  </button>
+                  <button
+                    onClick={() => { setSelectedSpell(false); setInput(''); }}
+                    className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded-xl text-sm transition-all"
+                  >
+                    Отмена
+                  </button>
+                </div>
+              )}
 
-              <button
-                onClick={() => triggerAIResponse(messages)}
-                disabled={isLoading}
-                className="flex items-center justify-center p-2 md:p-3 rounded-xl transition-all border border-primary-border bg-primary/10 hover:bg-primary/20 text-primary hover:shadow-lg hover:shadow-primary-glow shrink-0 h-[42px] md:h-[46px] w-[42px] md:w-[46px] disabled:opacity-50"
-                title="Продолжить историю (ИИ)"
-              >
-                <ScrollText className="w-4 h-4 md:w-5 md:h-5" />
-              </button>
+              {/* Поле ввода для предмета */}
+              {selectedItem && (
+                <div className="flex gap-2 animate-in slide-in-from-bottom-2 duration-200">
+                  <input
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder="Название предмета..."
+                    className="flex-1 bg-zinc-950 border border-amber-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && input.trim()) {
+                        handleBattleUseItem(input);
+                      }
+                    }}
+                    autoFocus
+                  />
+                  <button
+                    onClick={() => { handleBattleUseItem(input); setSelectedItem(false); }}
+                    disabled={!input.trim() || isLoading}
+                    className="px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-bold text-sm transition-all disabled:opacity-50"
+                  >
+                    Использовать
+                  </button>
+                  <button
+                    onClick={() => { setSelectedItem(false); setInput(''); }}
+                    className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded-xl text-sm transition-all"
+                  >
+                    Отмена
+                  </button>
+                </div>
+              )}
 
-              <button
-                onClick={() => sendMessage(input)}
-                disabled={!input.trim() || isLoading}
-                className="flex items-center justify-center p-2 md:p-3 rounded-xl transition-all bg-primary-hover hover:bg-primary disabled:opacity-50 text-white shadow-lg shrink-0 h-[42px] md:h-[46px] w-[42px] md:w-[46px]"
-                title="Отправить сообщение (Enter)"
-              >
-                <Send className="w-4 h-4 md:w-5 md:h-5" />
-              </button>
+              {/* Текстовое поле для кастомных действий */}
+              <div className="flex items-center gap-2">
+                <TextareaAutosize
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Свободное действие..."
+                  minRows={1}
+                  maxRows={3}
+                  className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-zinc-600 resize-none leading-relaxed"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (input.trim() && !isLoading) {
+                        sendMessage(input);
+                      }
+                    }
+                  }}
+                />
+                <button
+                  onClick={() => sendMessage(input)}
+                  disabled={!input.trim() || isLoading}
+                  className="flex items-center justify-center p-2.5 rounded-xl bg-primary-hover hover:bg-primary disabled:opacity-50 text-white shadow-lg shrink-0"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-          </div>
+          ) : (
+            /* ════════════════════════════════════════════════ */
+            /* ОБЫЧНЫЙ РЕЖИМ — текстовый ввод                 */
+            /* ════════════════════════════════════════════════ */
+            <div className="flex items-center gap-3">
+              <TextareaAutosize
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Опишите ваше действие..."
+                minRows={1}
+                maxRows={5}
+                className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-zinc-600 resize-none leading-relaxed self-end"
+                onKeyDown={(e) => {
+                  const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+                  if (e.key === 'Enter' && !e.shiftKey && !isTouchDevice) {
+                    e.preventDefault();
+                    if (input.trim() && !isLoading) {
+                      sendMessage(input);
+                    }
+                  }
+                }}
+              />
+              
+              {/* Кнопки действий */}
+              <div className="flex gap-1.5 md:gap-2 shrink-0">
+                <button
+                  onClick={generateSceneImage}
+                  disabled={isLoading || isGeneratingImage}
+                  className={cn(
+                    "flex items-center justify-center p-2 md:p-3 rounded-xl transition-all border shrink-0 h-[42px] md:h-[46px] w-[42px] md:w-[46px]",
+                    isGeneratingImage
+                      ? "bg-zinc-800 text-zinc-500 border-zinc-700"
+                      : "bg-zinc-800 hover:bg-zinc-700 text-primary border-primary-border hover:shadow-lg hover:shadow-primary-glow"
+                  )}
+                  title="Сгенерировать изображение сцены"
+                >
+                  {isGeneratingImage ? <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" /> : <ImageIcon className="w-4 h-4 md:w-5 md:h-5" />}
+                </button>
+
+                <button
+                  onClick={rollDice}
+                  disabled={isLoading || isRolling}
+                  className={cn(
+                    "flex items-center justify-center p-2 md:p-3 rounded-xl transition-all border shrink-0 h-[42px] md:h-[46px] w-[42px] md:w-[46px]",
+                    isRolling
+                      ? "bg-zinc-800 text-zinc-500 border-zinc-700"
+                      : "bg-zinc-800 hover:bg-zinc-700 text-primary border-primary-border hover:shadow-lg hover:shadow-primary-glow"
+                  )}
+                  title="Бросок кубиков"
+                >
+                  {isRolling ? <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" /> : <Dices className="w-4 h-4 md:w-5 md:h-5" />}
+                </button>
+
+                <button
+                  onClick={() => triggerAIResponse(messages)}
+                  disabled={isLoading}
+                  className="flex items-center justify-center p-2 md:p-3 rounded-xl transition-all border border-primary-border bg-primary/10 hover:bg-primary/20 text-primary hover:shadow-lg hover:shadow-primary-glow shrink-0 h-[42px] md:h-[46px] w-[42px] md:w-[46px] disabled:opacity-50"
+                  title="Продолжить историю (ИИ)"
+                >
+                  <ScrollText className="w-4 h-4 md:w-5 md:h-5" />
+                </button>
+
+                <button
+                  onClick={() => sendMessage(input)}
+                  disabled={!input.trim() || isLoading}
+                  className="flex items-center justify-center p-2 md:p-3 rounded-xl transition-all bg-primary-hover hover:bg-primary disabled:opacity-50 text-white shadow-lg shrink-0 h-[42px] md:h-[46px] w-[42px] md:w-[46px]"
+                  title="Отправить сообщение (Enter)"
+                >
+                  <Send className="w-4 h-4 md:w-5 md:h-5" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
