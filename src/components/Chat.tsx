@@ -1374,14 +1374,26 @@ XP: ${stats.xp}
             </button>
             <button
               onClick={() => setBattleActive(!battleActive)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all border text-[10px] font-bold uppercase tracking-widest ${
+              className={`relative flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all border text-[10px] font-bold uppercase tracking-widest ${
                 battleActive
-                  ? 'bg-red-500/10 border-red-500/50 text-red-500'
-                  : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-white'
+                  ? 'bg-red-500/15 border-red-500/40 text-red-400 shadow-sm shadow-red-500/20'
+                  : 'bg-zinc-800/80 border-zinc-700/60 text-zinc-400 hover:text-zinc-300 hover:border-zinc-600'
               }`}
             >
-              <Swords className="w-3 h-3" />
-              {battleActive ? 'В бою' : 'Битва'}
+              <Swords className={`w-3 h-3 transition-colors ${battleActive ? 'text-red-400' : 'text-zinc-500'}`} />
+              <span className="mr-0.5">{battleActive ? 'В бою' : 'Битва'}</span>
+              <div className={`w-7 h-3.5 rounded-full transition-colors duration-200 ${battleActive ? 'bg-red-500/40' : 'bg-zinc-700'}`}>
+                <motion.div
+                  initial={false}
+                  animate={{ x: battleActive ? 14 : 0 }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 30, mass: 0.5 }}
+                  className={`w-3.5 h-3.5 rounded-full shadow-sm ${
+                    battleActive
+                      ? 'bg-red-400 shadow-red-400/50'
+                      : 'bg-zinc-400 shadow-black/30'
+                  }`}
+                />
+              </div>
             </button>
             <button 
               onClick={() => setIsGalleryOpen(true)}
