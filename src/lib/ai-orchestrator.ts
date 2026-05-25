@@ -319,7 +319,7 @@ export interface ImageGenerationResult {
 export async function generateImage(
   prompt: string,
   openRouterApiKey: string,
-  imageModel: string = 'openai/gpt-5.4-image-2'
+  imageModel: string = 'google/gemini-2.5-flash-image'
 ): Promise<ImageGenerationResult> {
   const requestBody = {
     model: imageModel,
