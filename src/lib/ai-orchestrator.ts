@@ -336,10 +336,12 @@ export async function generateImage(
         messages: [
           {
             role: 'user',
-            content: prompt
+            content: [
+              { type: 'text', text: prompt }
+            ]
           }
         ],
-        max_tokens: 16,
+        max_tokens: 256,
       })
     });
 
