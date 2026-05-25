@@ -11,7 +11,7 @@ export const AI_MODELS = {
   WORKHORSE: 'google/gemini-2.5-flash',
   
   // Модель для генерации изображений
-  IMAGE: 'google/gemini-2.5-flash-image',
+  IMAGE: 'openai/gpt-5.4-image-2',
 
   // Альтернативные модели (для переключения)
   ALTERNATIVES: {

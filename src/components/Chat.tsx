@@ -731,9 +731,14 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
     setIsGeneratingImage(true);
     try {
       const shortPrompt = currentPrompt.slice(0, 50).replace(/[\[\]()]/g, '');
-      const imageMarkdown = `![${shortPrompt}](${generatedImageUrl})`;
 
-      console.log('Saving image to gallery, payload size:', imageMarkdown.length);
+      // Validate URL before saving
+      let cleanUrl = generatedImageUrl;
+      try { new URL(cleanUrl); } catch { cleanUrl = generatedImageUrl.replace(/^data:image\/\w+;base64,/, '').slice(0, 200); }
+
+      const imageMarkdown = `![${shortPrompt}](${cleanUrl})`;
+
+      console.log('Saving image to gallery, URL length:', cleanUrl.length);
 
       const { data, error } = await supabase.from('messages').insert({
         session_id: sessionId,
@@ -751,17 +756,12 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
 
       console.log('Image saved successfully to gallery:', data);
 
-      // НЕ добавляем в чат локально - придёт через postgres_changes подписку
-      // Это гарантирует что ВСЕ игроки увидят изображение
-
       setIsImageModalOpen(false);
       setGeneratedImageUrl(null);
 
-      // Открываем галерею для просмотра
-      setTimeout(() => setIsGalleryOpen(true), 100);
+      setTimeout(() => setIsGalleryOpen(true), 500);
     } catch (error: any) {
       console.error('Error saving to gallery:', error);
-      alert(`Критическая ошибка: ${error.message || 'Неизвестная ошибка'}`);
     } finally {
       setIsGeneratingImage(false);
     }
