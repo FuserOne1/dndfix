@@ -190,6 +190,19 @@ html, body, #root {
 .animate-title-glow { animation: title-glow 3s ease-in-out infinite; }
 .animate-rune-glow  { animation: rune-glow 2s ease-in-out infinite; }
 
+@keyframes vignette-pulse {
+  0%, 100% { opacity: 0.3; }
+  50%      { opacity: 0.5; }
+}
+
+@keyframes rune-pulse {
+  0%, 100% { opacity: 0.15; filter: drop-shadow(0 0 1px var(--theme-primary)); }
+  50%      { opacity: 0.4; filter: drop-shadow(0 0 4px var(--theme-primary)); }
+}
+
+.animate-vignette { animation: vignette-pulse 8s ease-in-out infinite; }
+.animate-rune-pulse { animation: rune-pulse 3s ease-in-out infinite; }
+
 @layer utilities {
   .no-scrollbar::-webkit-scrollbar {
     display: none;

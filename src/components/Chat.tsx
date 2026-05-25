@@ -1337,7 +1337,9 @@ XP: ${stats.xp}
   return (
     <div className={cn("flex flex-col h-screen w-full bg-zinc-950 text-zinc-100 font-sans overflow-hidden relative", theme)}>
       {/* Header */}
-      <div className="shrink-0 p-2 md:p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50 backdrop-blur-md z-30 pt-[calc(0.75rem+env(safe-area-inset-top))] md:pt-[calc(1rem+env(safe-area-inset-top))]">
+      <div className="shrink-0 p-2 md:p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50 backdrop-blur-md z-30 pt-[calc(0.75rem+env(safe-area-inset-top))] md:pt-[calc(1rem+env(safe-area-inset-top))] relative">
+        {/* Decorative bottom accent */}
+        <div className="absolute bottom-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-primary/10 to-transparent pointer-events-none" />
         <div className="flex items-center gap-1 md:gap-4 min-w-0">
           <button
             onClick={onLeave}
@@ -1536,10 +1538,30 @@ XP: ${stats.xp}
         />
       )}
 
+      {/* Subtle atmosphere: floating particles */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+        {[18, 22, 14, 25].map((dur, i) => (
+          <div
+            key={i}
+            className="absolute w-1 h-1 bg-primary/10 rounded-full"
+            style={{
+              left: `${15 + i * 25}%`,
+              bottom: '-2%',
+              animation: `float-up-${(i % 3) + 1} ${dur}s ${i * 3}s linear infinite`,
+              '--dur': `${dur}s`,
+              '--delay': `${i * 3}s`,
+            } as React.CSSProperties}
+          />
+        ))}
+      </div>
+
+      {/* Gradient glow at bottom of messages */}
+      <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-primary-bg via-primary-bg/30 to-transparent pointer-events-none z-0" />
+
       {/* Messages */}
       <div
         ref={chatContainerRef}
-        className="flex-1 overflow-y-auto p-0 space-y-0 scrollbar-thin scrollbar-thumb-zinc-800 bg-zinc-950 flex flex-col relative"
+        className="flex-1 overflow-y-auto p-0 space-y-0 scrollbar-thin scrollbar-thumb-zinc-800 bg-zinc-950 flex flex-col relative z-[1]"
       >
         {messages.length === 0 && !isLoading ? (
           <div className="flex-1 flex flex-col items-center justify-center text-center p-8 space-y-6 opacity-40">
@@ -1589,7 +1611,9 @@ XP: ${stats.xp}
                 
                 if (isDM) {
                   return (
-                    <div key={msg.id} className="w-full border-b border-zinc-900/50 bg-gradient-to-b from-zinc-900/20 to-transparent p-6 md:p-12 animate-in fade-in duration-700">
+                    <div key={msg.id} className="w-full border-b border-zinc-900/50 bg-gradient-to-b from-zinc-900/20 to-transparent p-6 md:p-12 animate-in fade-in duration-700 relative">
+                      {/* Decorative left accent */}
+                      <div className="absolute left-0 top-8 bottom-8 w-0.5 bg-gradient-to-b from-primary/10 via-primary/20 to-primary/10 rounded-full" />
                       <div className="max-w-3xl mx-auto space-y-6">
                         <div className="flex items-center gap-3 opacity-50">
                           <ScrollText className="w-4 h-4 text-primary" />
@@ -1715,7 +1739,9 @@ XP: ${stats.xp}
 
 
       {/* Input — обычный режим или боевой */}
-      <div className="shrink-0 p-3 md:p-4 bg-zinc-900/80 backdrop-blur-md border-t border-zinc-800 z-50 relative">
+      <div className="shrink-0 p-3 md:p-4 bg-gradient-to-b from-zinc-900/85 to-zinc-950/90 backdrop-blur-md border-t border-zinc-800 z-50 relative">
+        {/* Top glow accent */}
+        <div className="absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-primary/15 to-transparent pointer-events-none" />
         <div className="max-w-4xl mx-auto">
           {battleActive ? (
             /* ════════════════════════════════════════════════ */
@@ -1945,12 +1971,15 @@ XP: ${stats.xp}
 
       {/* Глобальный popup выбора кубика (доступен всегда) */}
       {showDicePopup && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => setShowDicePopup(false)}>
-          <div className="bg-zinc-900/95 backdrop-blur-xl border border-zinc-800 border-b-0 rounded-t-3xl p-5 w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-4 duration-200 max-h-[70vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowDicePopup(false)}>
+          <div className="bg-gradient-to-t from-zinc-900 to-zinc-950/95 backdrop-blur-xl border border-zinc-800 border-b-0 rounded-t-3xl p-5 w-full max-w-sm shadow-2xl animate-in slide-in-from-bottom-4 duration-200 max-h-[70vh] overflow-y-auto relative" onClick={e => e.stopPropagation()}>
+            {/* Decorative top glow */}
+            <div className="absolute top-0 left-4 right-4 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent pointer-events-none" />
+            
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <Dices className="w-4 h-4 text-primary" />
+                <div className="p-2 rounded-lg bg-red-500/10 border border-red-500/20">
+                  <Dices className="w-4 h-4 text-red-400" />
                 </div>
                 <div>
                   <span className="text-xs font-bold uppercase tracking-widest text-zinc-300">Бросок кубика</span>
@@ -1964,7 +1993,7 @@ XP: ${stats.xp}
             <div className="grid grid-cols-3 gap-2">
               {DICE_TYPES.map(d => {
                 let c = '';
-                if (d === 20) c = 'from-red-950/40 to-red-900/20 border-red-800/40 hover:border-red-500/60 text-red-400 ring-1 ring-red-800/20';
+                if (d === 20) c = 'from-red-950/40 to-red-900/20 border-red-800/40 hover:border-red-500/60 text-red-400 shadow-red-500/10';
                 else if (d === 4) c = 'from-emerald-950/40 to-emerald-900/20 border-emerald-800/40 hover:border-emerald-500/60 text-emerald-400';
                 else if (d === 6) c = 'from-sky-950/40 to-sky-900/20 border-sky-800/40 hover:border-sky-500/60 text-sky-400';
                 else if (d === 8) c = 'from-purple-950/40 to-purple-900/20 border-purple-800/40 hover:border-purple-500/60 text-purple-400';
@@ -1975,7 +2004,7 @@ XP: ${stats.xp}
                   <button
                     key={d}
                     onClick={() => rollDice(d)}
-                    className={`p-3 bg-gradient-to-br ${c} rounded-xl border transition-all group hover:-translate-y-0.5 active:translate-y-0`}
+                    className={`p-3 bg-gradient-to-br ${c} rounded-xl border transition-all group hover:-translate-y-0.5 active:translate-y-0 shadow-lg`}
                   >
                     <span className={`block font-black ${d === 20 ? 'text-xl' : 'text-base'} group-hover:brightness-125`}>d{d}</span>
                     {d === 20 && <span className="block text-[9px] text-red-400/50 uppercase tracking-wider mt-0.5">Осн.</span>}
@@ -1990,10 +2019,16 @@ XP: ${stats.xp}
       {/* Image Preview Modal */}
       {isImageModalOpen && generatedImageUrl && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-[2.5rem] w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] animate-in slide-in-from-bottom-8 duration-300">
+          <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-[2.5rem] w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] animate-in slide-in-from-bottom-8 duration-300 relative">
+            {/* Runic side decorations */}
+            <div className="absolute left-3 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-primary/8 to-transparent pointer-events-none z-10" />
+            <div className="absolute right-3 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-primary/8 to-transparent pointer-events-none z-10" />
+            {/* Decorative top glow */}
+            <div className="absolute top-0 left-4 right-4 h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent pointer-events-none" />
+
             <div className="p-6 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50 backdrop-blur-xl">
               <div className="flex items-center gap-4">
-                <div className="p-3 bg-primary/10 rounded-2xl">
+                <div className="p-3 bg-primary/10 rounded-2xl border border-primary/20">
                   <ImageIcon className="w-6 h-6 text-primary" />
                 </div>
                 <div>
@@ -2012,7 +2047,7 @@ XP: ${stats.xp}
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-zinc-800">
-              <div className="relative rounded-2xl overflow-hidden border border-zinc-800">
+              <div className="relative rounded-2xl overflow-hidden border border-zinc-800 shadow-xl">
                 <img
                   src={generatedImageUrl}
                   alt={currentPrompt}
@@ -2048,10 +2083,16 @@ XP: ${stats.xp}
       {/* Gallery Modal */}
       {isGalleryOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-[2.5rem] w-full max-w-6xl h-[85vh] overflow-hidden shadow-2xl flex flex-col animate-in slide-in-from-bottom-8 duration-300">
+          <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-zinc-800 rounded-[2.5rem] w-full max-w-6xl h-[85vh] overflow-hidden shadow-2xl flex flex-col animate-in slide-in-from-bottom-8 duration-300 relative">
+            {/* Runic side decorations */}
+            <div className="absolute left-3 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-primary/8 to-transparent pointer-events-none z-10" />
+            <div className="absolute right-3 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-primary/8 to-transparent pointer-events-none z-10" />
+            {/* Subtle glow overlay */}
+            <div className="absolute top-0 left-0 right-0 h-48 bg-gradient-to-b from-primary-bg/5 to-transparent pointer-events-none" />
+
             <div className="p-8 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50 backdrop-blur-xl">
               <div className="flex items-center gap-4">
-                <div className="p-3 bg-primary/10 rounded-2xl">
+                <div className="p-3 bg-primary/10 rounded-2xl border border-primary/20">
                   <Layers className="w-6 h-6 text-primary" />
                 </div>
                 <div>
@@ -2174,6 +2215,11 @@ XP: ${stats.xp}
             return null;
           })()}
           <div className="max-w-4xl w-full h-[90vh] bg-zinc-900 border border-zinc-800 rounded-[3rem] shadow-2xl flex flex-col overflow-hidden relative">
+            {/* Runic side decorations */}
+            <div className="absolute left-3 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-primary/8 to-transparent pointer-events-none z-10" />
+            <div className="absolute right-3 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-primary/8 to-transparent pointer-events-none z-10" />
+            {/* Subtle glow overlay */}
+            <div className="absolute top-0 left-0 right-0 h-64 bg-gradient-to-b from-primary-bg/5 to-transparent pointer-events-none" />
             {/* Header */}
             <div className="p-8 border-b border-zinc-800 flex justify-between items-center bg-zinc-900/50 backdrop-blur-xl">
               <div className="flex items-center gap-4">

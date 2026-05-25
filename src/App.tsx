@@ -402,12 +402,14 @@ export default function App() {
             disabled={isJoining}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.97 }}
-            className="w-full flex flex-col items-center justify-center gap-2 p-4 md:p-5 bg-zinc-950/60 border border-zinc-800/50 rounded-2xl hover:border-primary/40 hover:bg-zinc-900/60 transition-all disabled:opacity-50 group"
+            className="w-full flex flex-col items-center justify-center gap-2 p-4 md:p-5 bg-zinc-950/60 border border-zinc-800/50 rounded-2xl hover:border-primary/40 hover:bg-zinc-900/60 transition-all disabled:opacity-50 group relative overflow-hidden"
           >
-            <div className="p-2.5 bg-primary-bg rounded-xl group-hover:scale-110 transition-transform">
+            {/* Subtle hover glow */}
+            <div className="absolute inset-0 bg-gradient-to-t from-primary-bg/0 group-hover:from-primary-bg/10 to-transparent transition-all duration-500 pointer-events-none" />
+            <div className="relative z-10 p-2.5 bg-primary-bg rounded-xl group-hover:scale-110 transition-transform">
               <Swords className="w-5 h-5 md:w-6 md:h-6 text-primary" />
             </div>
-            <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-zinc-500">Новое приключение</span>
+            <span className="relative z-10 text-[10px] md:text-xs font-bold uppercase tracking-widest text-zinc-500">Новое приключение</span>
           </motion.button>
 
           {/* Сохраненные сессии */}
