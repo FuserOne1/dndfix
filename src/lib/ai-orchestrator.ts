@@ -314,16 +314,15 @@ export interface ImageGenerationResult {
 }
 
 /**
- * Генерирует изображение через OpenRouter (black-forest-labs/flux-1.1-pro)
+ * Генерирует изображение через OpenRouter (images/generations endpoint)
  */
 export async function generateImage(
   prompt: string,
   openRouterApiKey: string,
-  imageModel: string = 'black-forest-labs/flux-1.1-pro'
+  imageModel: string = 'openai/gpt-5.4-image-2'
 ): Promise<ImageGenerationResult> {
   try {
-    // Flux использует chat completions API
-    const res = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+    const res = await fetch(`${OPENROUTER_BASE_URL}/images/generations`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -333,13 +332,9 @@ export async function generateImage(
       },
       body: JSON.stringify({
         model: imageModel,
-        messages: [
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        max_tokens: 32,
+        prompt: prompt,
+        n: 1,
+        size: '1024x1024',
       })
     });
 
@@ -352,44 +347,14 @@ export async function generateImage(
     
     console.log('Image API Response:', JSON.stringify(response, null, 2));
     
-    // Flux: choices[0].message.images (массив изображений)
-    const images = response.choices?.[0]?.message?.images;
-    if (images && Array.isArray(images) && images.length > 0) {
-      const imageUrl = images[0]?.image_url?.url || images[0]?.url;
-      if (imageUrl) {
-        return { imageUrl };
-      }
-    }
-    
-    // Flux: choices[0].message.content (markdown или URL)
-    const content = response.choices?.[0]?.message?.content;
-    if (content) {
-      if (typeof content === 'string' && content.startsWith('http')) {
-        return { imageUrl: content };
-      }
-      // Парсим markdown-ссылку: ![alt](url)
-      const mdMatch = typeof content === 'string' && content.match(/!\[.*?\]\((.*?)\)/);
-      if (mdMatch) {
-        return { imageUrl: mdMatch[1] };
-      }
-      // Пробуем распарсить JSON
-      try {
-        const parsed = typeof content === 'string' ? JSON.parse(content) : content;
-        if (parsed.image_url?.url) {
-          return { imageUrl: parsed.image_url.url };
-        }
-        if (parsed.url) {
-          return { imageUrl: parsed.url };
-        }
-        if (parsed.image) {
-          return { imageUrl: parsed.image };
-        }
-      } catch {}
-    }
-    
-    // DALL-E формат: data[0].url
+    // Стандартный формат: data[0].url
     if (response.data && response.data[0]?.url) {
       return { imageUrl: response.data[0].url };
+    }
+    
+    // Альтернативные форматы
+    if (response.data && response.data[0]?.b64_json) {
+      return { imageUrl: `data:image/png;base64,${response.data[0].b64_json}` };
     }
     
     return { error: 'No image URL in response. Response: ' + JSON.stringify(response).slice(0, 500) };
