@@ -1048,7 +1048,7 @@ XP: ${stats.xp}
         .replace(/\n\s*\n\s*$/, '\n')
         .trim();
       // Старый формат ```json {...} ``` для обратной совместимости
-      else if (jsonMatch) {
+      if (jsonMatch) {
         console.log('📊 Found JSON block in old format');
         try {
           const jsonData = JSON.parse(jsonMatch[1]);
