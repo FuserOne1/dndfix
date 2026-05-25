@@ -314,15 +314,24 @@ export interface ImageGenerationResult {
 }
 
 /**
- * Генерирует изображение через OpenRouter (images/generations endpoint)
+ * Генерирует изображение через OpenRouter (chat completions)
  */
 export async function generateImage(
   prompt: string,
   openRouterApiKey: string,
   imageModel: string = 'openai/gpt-5.4-image-2'
 ): Promise<ImageGenerationResult> {
+  const requestBody = {
+    model: imageModel,
+    messages: [
+      { role: 'user', content: prompt }
+    ],
+    max_tokens: 1024,
+  };
+  console.log('📤 Image gen request:', JSON.stringify(requestBody, null, 2));
+
   try {
-    const res = await fetch(`${OPENROUTER_BASE_URL}/images/generations`, {
+    const res = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -330,34 +339,38 @@ export async function generateImage(
         'HTTP-Referer': window.location.origin,
         'X-Title': 'D&D RPG App',
       },
-      body: JSON.stringify({
-        model: imageModel,
-        prompt: prompt,
-        n: 1,
-        size: '1024x1024',
-      })
+      body: JSON.stringify(requestBody),
     });
 
     if (!res.ok) {
       const errorText = await res.text();
+      console.error('📥 Image gen error response:', errorText);
       return { error: `Image generation failed: ${res.status} - ${errorText}` };
     }
 
     const response = await res.json();
-    
-    console.log('Image API Response:', JSON.stringify(response, null, 2));
-    
-    // Стандартный формат: data[0].url
-    if (response.data && response.data[0]?.url) {
+    console.log('📥 Image gen response:', JSON.stringify(response, null, 2));
+
+    const content = response.choices?.[0]?.message?.content;
+    if (content) {
+      if (typeof content === 'string') {
+        const mdMatch = content.match(/!\[.*?\]\((.*?)\)/);
+        if (mdMatch) return { imageUrl: mdMatch[1] };
+        if (content.startsWith('http')) return { imageUrl: content };
+      }
+    }
+
+    const images = response.choices?.[0]?.message?.images;
+    if (images?.length > 0) {
+      const url = images[0]?.url || images[0]?.image_url?.url;
+      if (url) return { imageUrl: url };
+    }
+
+    if (response.data?.[0]?.url) {
       return { imageUrl: response.data[0].url };
     }
-    
-    // Альтернативные форматы
-    if (response.data && response.data[0]?.b64_json) {
-      return { imageUrl: `data:image/png;base64,${response.data[0].b64_json}` };
-    }
-    
-    return { error: 'No image URL in response. Response: ' + JSON.stringify(response).slice(0, 500) };
+
+    return { error: 'No image in response: ' + JSON.stringify(response).slice(0, 500) };
   } catch (error: any) {
     return { error: error.message || 'Failed to generate image' };
   }
