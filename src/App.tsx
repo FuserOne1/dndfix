@@ -3,7 +3,7 @@ import Chat from './components/Chat';
 import CharacterSelect from './components/CharacterSelect';
 import { supabase, isSupabaseConfigured, supabaseUrl, supabaseAnonKey } from './lib/supabase';
 import { Character } from './types';
-import { Plus, LogIn, Swords, ScrollText, User as UserIcon, Loader2, AlertTriangle, Trash2, Download, Users, Sparkles, Skull } from 'lucide-react';
+import { LogIn, Swords, ScrollText, User as UserIcon, Loader2, AlertTriangle, Trash2, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
@@ -207,13 +207,6 @@ export default function App() {
     else { alert('Чтобы установить приложение:\n\n📱 Android: Меню → "Добавить на главный экран"\n\n🍎 iOS: Кнопка "Поделиться" → "На экран «Домой»"'); }
   };
 
-  if (currentScreen === 'game' && sessionId) {
-    if (!selectedCharacter) { return (<div className={theme}><CharacterSelect userSessionId={userSessionId} onCharacterSelected={handleCharacterSelected} onBack={handleLeaveGame} roomId={sessionId} /></div>); }
-    return (<div className={theme}><Chat sessionId={sessionId} userName={selectedCharacter?.name || ''} character={selectedCharacter} onLeave={handleLeaveGame} theme={theme} setTheme={handleThemeChange} /></div>);
-  }
-
-  if (currentScreen === 'character-select') { return (<div className={theme}><CharacterSelect userSessionId={userSessionId} onCharacterSelected={handleCharacterSelected} onBack={() => setCurrentScreen('menu')} roomId={sessionId || undefined} /></div>); }
-
   const particles = useMemo(() =>
     Array.from({ length: 20 }, (_, i) => ({
       x: Math.random() * 100,
@@ -224,6 +217,13 @@ export default function App() {
       animClass: i % 3 === 0 ? 'animate-float-up' : i % 3 === 1 ? 'animate-float-up-2' : 'animate-float-up-3',
     })), []
   );
+
+  if (currentScreen === 'game' && sessionId) {
+    if (!selectedCharacter) { return (<div className={theme}><CharacterSelect userSessionId={userSessionId} onCharacterSelected={handleCharacterSelected} onBack={handleLeaveGame} roomId={sessionId} /></div>); }
+    return (<div className={theme}><Chat sessionId={sessionId} userName={selectedCharacter?.name || ''} character={selectedCharacter} onLeave={handleLeaveGame} theme={theme} setTheme={handleThemeChange} /></div>);
+  }
+
+  if (currentScreen === 'character-select') { return (<div className={theme}><CharacterSelect userSessionId={userSessionId} onCharacterSelected={handleCharacterSelected} onBack={() => setCurrentScreen('menu')} roomId={sessionId || undefined} /></div>); }
 
   return (
     <div className={`min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-3 md:p-4 font-sans selection:bg-primary/30 overflow-hidden ${theme}`}>
@@ -397,32 +397,18 @@ export default function App() {
           </form>
 
           {/* Кнопки действий */}
-          <div className="grid grid-cols-2 gap-2">
-            <motion.button
-              onClick={handleCreateLobby}
-              disabled={isJoining}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.97 }}
-              className="flex flex-col items-center justify-center gap-2 p-3.5 md:p-5 bg-zinc-950/60 border border-zinc-800/50 rounded-2xl hover:border-primary/40 hover:bg-zinc-900/60 transition-all disabled:opacity-50 group"
-            >
-              <div className="p-2 bg-primary-bg rounded-xl group-hover:scale-110 transition-transform">
-                <Users className="w-5 h-5 md:w-6 md:h-6 text-primary" />
-              </div>
-              <span className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-zinc-500">Сессия</span>
-            </motion.button>
-            <motion.button
-              onClick={() => setCurrentScreen('character-select')}
-              disabled={isJoining}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.97 }}
-              className="flex flex-col items-center justify-center gap-2 p-3.5 md:p-5 bg-zinc-950/60 border border-zinc-800/50 rounded-2xl hover:border-primary/40 hover:bg-zinc-900/60 transition-all disabled:opacity-50 group"
-            >
-              <div className="p-2 bg-primary-bg rounded-xl group-hover:scale-110 transition-transform">
-                <Skull className="w-5 h-5 md:w-6 md:h-6 text-primary" />
-              </div>
-              <span className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-zinc-500">Новая игра</span>
-            </motion.button>
-          </div>
+          <motion.button
+            onClick={handleCreateLobby}
+            disabled={isJoining}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.97 }}
+            className="w-full flex flex-col items-center justify-center gap-2 p-4 md:p-5 bg-zinc-950/60 border border-zinc-800/50 rounded-2xl hover:border-primary/40 hover:bg-zinc-900/60 transition-all disabled:opacity-50 group"
+          >
+            <div className="p-2.5 bg-primary-bg rounded-xl group-hover:scale-110 transition-transform">
+              <Swords className="w-5 h-5 md:w-6 md:h-6 text-primary" />
+            </div>
+            <span className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-zinc-500">Новое приключение</span>
+          </motion.button>
 
           {/* Сохраненные сессии */}
           {recentSessions.length > 0 && (
