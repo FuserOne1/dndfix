@@ -130,6 +130,66 @@ html, body, #root {
   margin: 1rem 0;
 }
 
+/* ============================================================= */
+/* ATMOSPHERE — particles, glow, runic animations                */
+/* ============================================================= */
+
+@keyframes float-up {
+  0%   { transform: translateY(0) translateX(0) scale(1); opacity: 0; }
+  10%  { opacity: 0.6; }
+  90%  { opacity: 0.4; }
+  100% { transform: translateY(-100vh) translateX(40px) scale(0.3); opacity: 0; }
+}
+
+@keyframes float-up-2 {
+  0%   { transform: translateY(0) translateX(0) scale(1); opacity: 0; }
+  10%  { opacity: 0.5; }
+  90%  { opacity: 0.3; }
+  100% { transform: translateY(-90vh) translateX(-30px) scale(0.4); opacity: 0; }
+}
+
+@keyframes float-up-3 {
+  0%   { transform: translateY(0) translateX(0) scale(0.8); opacity: 0; }
+  15%  { opacity: 0.7; }
+  85%  { opacity: 0.4; }
+  100% { transform: translateY(-110vh) translateX(20px) scale(0.2); opacity: 0; }
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes spin-slow-reverse {
+  from { transform: rotate(360deg); }
+  to   { transform: rotate(0deg); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.3; filter: blur(60px); }
+  50%      { opacity: 0.6; filter: blur(80px); }
+}
+
+@keyframes title-glow {
+  0%, 100% { text-shadow: 0 0 20px var(--theme-primary), 0 0 40px var(--theme-primary-glow); }
+  50%      { text-shadow: 0 0 30px var(--theme-primary), 0 0 60px var(--theme-primary-glow), 0 0 80px var(--theme-primary-glow); }
+}
+
+@keyframes rune-glow {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 0.9; }
+}
+
+.animate-float-up   { animation: float-up var(--dur, 12s) var(--delay, 0s) linear infinite; }
+.animate-float-up-2 { animation: float-up-2 var(--dur, 15s) var(--delay, 0s) linear infinite; }
+.animate-float-up-3 { animation: float-up-3 var(--dur, 18s) var(--delay, 0s) linear infinite; }
+.animate-spin-slow  { animation: spin-slow 60s linear infinite; }
+.animate-spin-slower { animation: spin-slow 90s linear infinite; }
+.animate-spin-reverse { animation: spin-slow-reverse 75s linear infinite; }
+.animate-pulse-glow { animation: pulse-glow 4s ease-in-out infinite; }
+.animate-title-glow { animation: title-glow 3s ease-in-out infinite; }
+.animate-rune-glow  { animation: rune-glow 2s ease-in-out infinite; }
+
 @layer utilities {
   .no-scrollbar::-webkit-scrollbar {
     display: none;

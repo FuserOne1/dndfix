@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Chat from './components/Chat';
 import CharacterSelect from './components/CharacterSelect';
 import { supabase, isSupabaseConfigured, supabaseUrl, supabaseAnonKey } from './lib/supabase';
 import { Character } from './types';
-import { Plus, LogIn, Swords, ScrollText, User as UserIcon, Loader2, AlertTriangle, Trash2, Download, Users } from 'lucide-react';
+import { Plus, LogIn, Swords, ScrollText, User as UserIcon, Loader2, AlertTriangle, Trash2, Download, Users, Sparkles, Skull } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
@@ -214,51 +214,319 @@ export default function App() {
 
   if (currentScreen === 'character-select') { return (<div className={theme}><CharacterSelect userSessionId={userSessionId} onCharacterSelected={handleCharacterSelected} onBack={() => setCurrentScreen('menu')} roomId={sessionId || undefined} /></div>); }
 
+  const particles = useMemo(() =>
+    Array.from({ length: 20 }, (_, i) => ({
+      x: Math.random() * 100,
+      y: -(Math.random() * 20 + 10),
+      size: Math.random() * 5 + 2,
+      duration: Math.random() * 10 + 14,
+      delay: Math.random() * 12,
+      animClass: i % 3 === 0 ? 'animate-float-up' : i % 3 === 1 ? 'animate-float-up-2' : 'animate-float-up-3',
+    })), []
+  );
+
   return (
-    <div className={`min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-3 md:p-4 font-sans selection:bg-primary/30 ${theme}`}>
-      <div className="max-w-md w-full space-y-4 md:space-y-8 relative">
-        <div className="absolute -top-24 -left-24 w-64 h-64 bg-primary-bg rounded-full blur-[100px] pointer-events-none" />
-        <div className="absolute -bottom-24 -right-24 w-64 h-64 bg-zinc-900/40 rounded-full blur-[100px] pointer-events-none" />
-        <motion.button initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} onClick={handleInstallApp} className="fixed top-4 right-4 z-50 p-2 bg-primary-hover hover:bg-primary text-white rounded-xl shadow-lg shadow-primary-glow" title="Установить приложение"><Download className="w-5 h-5" /></motion.button>
-        <div className="text-center space-y-2 md:space-y-4 relative">
-          <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.5, ease: "easeOut" }} className="inline-flex p-3 md:p-4 bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl mb-2 md:mb-4"><Swords className="w-8 h-8 md:w-12 md:h-12 text-primary" /></motion.div>
-          <motion.h1 initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2, duration: 0.5 }} className="text-3xl md:text-5xl font-black tracking-tighter text-white">D&D <span className="text-primary">DARK</span> FANTASY</motion.h1>
-          <motion.p initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3, duration: 0.5 }} className="text-[10px] md:text-sm text-zinc-500 font-medium uppercase tracking-[0.2em]">Кооперативный ИИ Мастер Подземелий</motion.p>
+    <div className={`min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-3 md:p-4 font-sans selection:bg-primary/30 overflow-hidden ${theme}`}>
+      {/* ═══ Тёмный фон с партиклами ═══ */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        {particles.map((p, i) => (
+          <div
+            key={i}
+            className={`absolute rounded-full ${p.animClass}`}
+            style={{
+              left: `${p.x}%`,
+              bottom: `${p.y}px`,
+              width: `${p.size}px`,
+              height: `${p.size}px`,
+              backgroundColor: i % 4 === 0 ? 'var(--theme-primary)' : i % 4 === 1 ? '#fbbf24' : '#a1a1aa',
+              opacity: 0.15 + p.size * 0.06,
+              boxShadow: i % 4 === 0 ? '0 0 6px 2px var(--theme-primary-glow)' : 'none',
+              '--dur': `${p.duration}s`,
+              '--delay': `${p.delay}s`,
+            } as React.CSSProperties}
+          />
+        ))}
+      </div>
+
+      {/* ═══ Пульсирующее свечение ═══ */}
+      <div className="fixed -top-40 -left-40 w-[500px] h-[500px] animate-pulse-glow rounded-full pointer-events-none z-0"
+        style={{ background: 'var(--theme-primary)', opacity: 0.08 }} />
+      <div className="fixed -bottom-40 -right-40 w-[500px] h-[500px] animate-pulse-glow rounded-full pointer-events-none z-0"
+        style={{ background: 'var(--theme-primary)', opacity: 0.06, animationDelay: '2.5s' }} />
+
+      {/* ═══ Install button ═══ */}
+      <motion.button
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.9 }}
+        onClick={handleInstallApp}
+        className="fixed top-4 right-4 z-50 p-2.5 bg-zinc-900/80 backdrop-blur border border-zinc-800 hover:border-primary/50 text-zinc-400 hover:text-primary rounded-xl shadow-lg transition-colors"
+        title="Установить приложение"
+      >
+        <Download className="w-4 h-4" />
+      </motion.button>
+
+      {/* ═══ Основной контент ═══ */}
+      <div className="max-w-md w-full space-y-4 md:space-y-8 relative z-10">
+
+        {/* ═══ Рунический круг + заголовок ═══ */}
+        <div className="text-center space-y-3 md:space-y-4 relative">
+          <motion.div
+            initial={{ scale: 0.6, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.8, ease: 'easeOut' }}
+            className="flex justify-center mb-2"
+          >
+            <svg viewBox="0 0 200 200" className="w-36 h-36 md:w-52 md:h-52 text-primary/25">
+              <defs>
+                <radialGradient id="rune-grad" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="var(--theme-primary)" stopOpacity="0.15" />
+                  <stop offset="100%" stopColor="var(--theme-primary)" stopOpacity="0" />
+                </radialGradient>
+              </defs>
+              <circle cx="100" cy="100" r="95" fill="url(#rune-grad)" />
+              <g className="animate-spin-slow" style={{ transformOrigin: '100px 100px' }}>
+                <circle cx="100" cy="100" r="85" fill="none" stroke="currentColor" strokeWidth="0.8" opacity="0.3" />
+                <circle cx="100" cy="100" r="80" fill="none" stroke="currentColor" strokeWidth="0.3" opacity="0.15" strokeDasharray="3 6" />
+              </g>
+              <g className="animate-spin-reverse" style={{ transformOrigin: '100px 100px' }}>
+                <circle cx="100" cy="100" r="62" fill="none" stroke="currentColor" strokeWidth="0.5" opacity="0.2" strokeDasharray="2 8" />
+              </g>
+              {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map(angle => {
+                const rad = (angle * Math.PI) / 180;
+                const x1 = 100 + 76 * Math.cos(rad);
+                const y1 = 100 + 76 * Math.sin(rad);
+                const x2 = 100 + 90 * Math.cos(rad);
+                const y2 = 100 + 90 * Math.sin(rad);
+                return (
+                  <line key={angle} x1={x1} y1={y1} x2={x2} y2={y2}
+                    stroke="currentColor" strokeWidth="1"
+                    className="animate-rune-glow"
+                    style={{ animationDelay: `${(angle / 360) * 3}s`, opacity: 0.2 }}
+                  />
+                );
+              })}
+              {/* Ромб в центре */}
+              <polygon points="100,85 115,100 100,115 85,100"
+                fill="none" stroke="currentColor" strokeWidth="1"
+                className="animate-rune-glow" style={{ animationDelay: '0.5s' }} />
+              <circle cx="100" cy="100" r="2" fill="currentColor" opacity="0.4" />
+            </svg>
+          </motion.div>
+
+          <motion.h1
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.3, duration: 0.6 }}
+            className="text-4xl md:text-6xl font-black tracking-tighter text-white leading-none"
+          >
+            D&amp;D
+          </motion.h1>
+          <motion.p
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.5, duration: 0.6 }}
+            className="text-xl md:text-3xl font-black tracking-[0.15em] animate-title-glow"
+            style={{ color: 'var(--theme-primary)' }}
+          >
+            DARK FANTASY
+          </motion.p>
+          <motion.p
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.7, duration: 0.5 }}
+            className="text-[9px] md:text-xs text-zinc-600 font-bold uppercase tracking-[0.3em]"
+          >
+            Кооперативный ИИ-Мастер
+          </motion.p>
         </div>
-        <motion.div initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.4, duration: 0.6 }} className="bg-zinc-900/50 backdrop-blur-xl border border-zinc-800 p-4 md:p-8 rounded-[2rem] shadow-2xl space-y-3 md:space-y-6 relative overflow-hidden">
-          <div className="space-y-2 md:space-y-4">
-            <div className="flex justify-center gap-3 pb-2">{[{ id: 'theme-emerald', color: 'bg-emerald-500' },{ id: 'theme-crimson', color: 'bg-rose-500' },{ id: 'theme-amethyst', color: 'bg-violet-500' },{ id: 'theme-amber', color: 'bg-amber-500' },].map((t) => (<button key={t.id} onClick={() => handleThemeChange(t.id)} className={`w-6 h-6 rounded-full ${t.color} transition-all ${theme === t.id ? 'ring-2 ring-white ring-offset-2 ring-offset-zinc-950 scale-110' : 'opacity-50 hover:opacity-100'}`} title="Сменить тему"/>))}</div>
-            <div className="space-y-2">
-              <label className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Код сессии</label>
-              <form onSubmit={joinSession} className="space-y-2">
-                <div className="relative"><ScrollText className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 md:w-4 md:h-4 text-zinc-600" /><input type="text" value={sessionInput} onChange={(e) => setSessionInput(e.target.value)} placeholder="Введите код..." className="w-full bg-zinc-950 border border-zinc-800 rounded-2xl pl-10 md:pl-12 pr-4 py-2.5 md:py-4 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-zinc-700 uppercase tracking-widest" /></div>
-                <button type="submit" disabled={isJoining} className="w-full flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-2xl text-[10px] md:text-xs font-bold uppercase tracking-widest py-2.5 md:py-4 transition-all disabled:opacity-50">{isJoining ? <Loader2 className="w-3.5 h-3.5 md:w-4 md:h-4 animate-spin" /> : <LogIn className="w-3.5 h-3.5 md:w-4 md:h-4" />}Войти</button>
-              </form>
-            </div>
-            <button onClick={handleCreateLobby} disabled={isJoining} className="w-full group flex flex-col items-center justify-center gap-2 md:gap-3 p-4 md:p-6 bg-zinc-950 border border-zinc-800 rounded-3xl hover:border-primary/50 hover:bg-zinc-900 transition-all duration-300 shadow-lg disabled:opacity-50"><div className="p-2 md:p-3 bg-primary-bg rounded-2xl group-hover:scale-110 transition-transform"><Users className="w-5 h-5 md:w-6 md:h-6 text-primary" /></div><span className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-zinc-400">Создать сессию</span></button>
-            <button onClick={() => { setCurrentScreen('character-select'); }} disabled={isJoining} className="w-full group flex flex-col items-center justify-center gap-2 md:gap-3 p-4 md:p-6 bg-zinc-950 border border-zinc-800 rounded-3xl hover:border-primary/50 hover:bg-zinc-900 transition-all duration-300 shadow-lg disabled:opacity-50"><div className="p-2 md:p-3 bg-primary-bg rounded-2xl group-hover:scale-110 transition-transform"><Plus className="w-5 h-5 md:w-6 md:h-6 text-primary" /></div><span className="text-[10px] md:text-xs font-bold uppercase tracking-widest text-zinc-400">Создать новую игру</span></button>
+
+        {/* ═══ Карточка с действиями ═══ */}
+        <motion.div
+          initial={{ y: 40, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.8, duration: 0.6, ease: 'easeOut' }}
+          className="bg-zinc-900/40 backdrop-blur-2xl border border-zinc-800/60 p-4 md:p-6 rounded-[1.75rem] shadow-2xl space-y-3 md:space-y-4 relative overflow-hidden"
+        >
+          {/* Строка тем */}
+          <div className="flex justify-center gap-2.5 pb-1">
+            {[
+              { id: 'theme-emerald', color: 'bg-emerald-500' },
+              { id: 'theme-crimson', color: 'bg-rose-500' },
+              { id: 'theme-amethyst', color: 'bg-violet-500' },
+              { id: 'theme-amber', color: 'bg-amber-500' },
+            ].map((t) => (
+              <motion.button
+                key={t.id}
+                whileHover={{ scale: 1.2 }}
+                whileTap={{ scale: 0.8 }}
+                onClick={() => handleThemeChange(t.id)}
+                className={`w-5 h-5 md:w-6 md:h-6 rounded-full ${t.color} transition-all ${
+                  theme === t.id
+                    ? 'ring-2 ring-white/80 ring-offset-2 ring-offset-zinc-950 scale-110'
+                    : 'opacity-40 hover:opacity-80'
+                }`}
+                title={t.id.replace('theme-', '')}
+              />
+            ))}
           </div>
-          {recentSessions.length > 0 && (<div className="space-y-2 pt-2 border-t border-zinc-800/50"><h3 className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-zinc-500 ml-1">Сохраненные путешествия</h3><div className="grid grid-cols-1 gap-2">{recentSessions.map((session) => { const lastPlayedDate = session.lastPlayed ? new Date(session.lastPlayed) : null; const timeAgo = lastPlayedDate ? getTimeAgo(lastPlayedDate) : ''; return (<div key={session.id} onClick={() => { setSessionInput(session.id); setTimeout(() => { const btn = document.querySelector('button[type="submit"]') as HTMLButtonElement; btn?.click(); }, 10); }} className="flex items-center justify-between p-2 md:p-3 bg-zinc-950/50 border border-zinc-800 rounded-xl hover:border-primary/30 hover:bg-zinc-900 transition-all group relative cursor-pointer"><div className="flex items-center gap-2 flex-1 min-w-0"><div className="p-1.5 bg-zinc-900 rounded-lg"><ScrollText className="w-3.5 h-3.5 text-zinc-600 group-hover:text-primary transition-colors" /></div><div className="flex flex-col gap-0.5 min-w-0"><span className="text-xs font-medium text-zinc-300 truncate">{session.id}</span>{session.characterName && (<span className="text-[9px] text-zinc-600 truncate"><UserIcon className="w-2.5 h-2.5 inline mr-1" />{session.characterName}</span>)}{timeAgo && (<span className="text-[8px] text-zinc-700 font-mono">{timeAgo}</span>)}</div></div><button onClick={(e) => { e.stopPropagation(); handleDeleteClick(session.id); }} className="p-1.5 hover:bg-red-500/10 rounded-lg transition-colors text-zinc-700 hover:text-red-500 shrink-0" title="Удалить сессию"><Trash2 className="w-3 h-3" /></button></div>); })}</div></div>)}
-          <AnimatePresence>{error && (<motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="bg-red-500/10 border border-red-500/20 p-4 rounded-2xl space-y-2"><p className="text-xs text-red-400 font-medium text-center">{error}</p></motion.div>)}</AnimatePresence>
+
+          {/* Ввод кода сессии */}
+          <form onSubmit={joinSession} className="space-y-2">
+            <div className="relative">
+              <ScrollText className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-600" />
+              <input
+                type="text"
+                value={sessionInput}
+                onChange={(e) => setSessionInput(e.target.value)}
+                placeholder="Код сессии..."
+                className="w-full bg-zinc-950/80 border border-zinc-800/60 rounded-xl pl-10 md:pl-12 pr-4 py-3 md:py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50 transition-all placeholder:text-zinc-700 uppercase tracking-widest"
+              />
+            </div>
+            <motion.button
+              type="submit"
+              disabled={isJoining}
+              whileHover={{ scale: 1.01 }}
+              whileTap={{ scale: 0.98 }}
+              className="w-full flex items-center justify-center gap-2 bg-zinc-800/80 hover:bg-zinc-700/80 text-white rounded-xl text-[10px] md:text-xs font-bold uppercase tracking-widest py-3 md:py-3.5 transition-all disabled:opacity-50 border border-zinc-700/50"
+            >
+              {isJoining ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogIn className="w-3.5 h-3.5" />}
+              Войти
+            </motion.button>
+          </form>
+
+          {/* Кнопки действий */}
+          <div className="grid grid-cols-2 gap-2">
+            <motion.button
+              onClick={handleCreateLobby}
+              disabled={isJoining}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.97 }}
+              className="flex flex-col items-center justify-center gap-2 p-3.5 md:p-5 bg-zinc-950/60 border border-zinc-800/50 rounded-2xl hover:border-primary/40 hover:bg-zinc-900/60 transition-all disabled:opacity-50 group"
+            >
+              <div className="p-2 bg-primary-bg rounded-xl group-hover:scale-110 transition-transform">
+                <Users className="w-5 h-5 md:w-6 md:h-6 text-primary" />
+              </div>
+              <span className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-zinc-500">Сессия</span>
+            </motion.button>
+            <motion.button
+              onClick={() => setCurrentScreen('character-select')}
+              disabled={isJoining}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.97 }}
+              className="flex flex-col items-center justify-center gap-2 p-3.5 md:p-5 bg-zinc-950/60 border border-zinc-800/50 rounded-2xl hover:border-primary/40 hover:bg-zinc-900/60 transition-all disabled:opacity-50 group"
+            >
+              <div className="p-2 bg-primary-bg rounded-xl group-hover:scale-110 transition-transform">
+                <Skull className="w-5 h-5 md:w-6 md:h-6 text-primary" />
+              </div>
+              <span className="text-[9px] md:text-[10px] font-bold uppercase tracking-widest text-zinc-500">Новая игра</span>
+            </motion.button>
+          </div>
+
+          {/* Сохраненные сессии */}
+          {recentSessions.length > 0 && (
+            <div className="space-y-1.5 pt-1.5 border-t border-zinc-800/40">
+              <p className="text-[8px] md:text-[9px] font-bold uppercase tracking-widest text-zinc-600 ml-0.5">Сохранённые</p>
+              <div className="grid grid-cols-1 gap-1.5">
+                {recentSessions.map((session) => {
+                  const lastPlayedDate = session.lastPlayed ? new Date(session.lastPlayed) : null;
+                  const timeAgo = lastPlayedDate ? getTimeAgo(lastPlayedDate) : '';
+                  return (
+                    <div key={session.id}
+                      onClick={() => { setSessionInput(session.id); setTimeout(() => { const btn = document.querySelector('button[type="submit"]') as HTMLButtonElement; btn?.click(); }, 10); }}
+                      className="flex items-center justify-between p-2 md:p-2.5 bg-zinc-950/40 border border-zinc-800/40 rounded-xl hover:border-primary/30 hover:bg-zinc-900/50 transition-all group relative cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <div className="p-1 bg-zinc-900 rounded-lg">
+                          <ScrollText className="w-3 h-3 text-zinc-600 group-hover:text-primary transition-colors" />
+                        </div>
+                        <div className="flex flex-col gap-0.5 min-w-0">
+                          <span className="text-[11px] font-medium text-zinc-400 truncate">{session.id}</span>
+                          {session.characterName && (
+                            <span className="text-[8px] text-zinc-600 truncate">
+                              <UserIcon className="w-2 h-2 inline mr-0.5" />{session.characterName}
+                            </span>
+                          )}
+                          {timeAgo && <span className="text-[7px] text-zinc-700 font-mono">{timeAgo}</span>}
+                        </div>
+                      </div>
+                      <button onClick={(e) => { e.stopPropagation(); handleDeleteClick(session.id); }}
+                        className="p-1 hover:bg-red-500/10 rounded-lg transition-colors text-zinc-700 hover:text-red-500 shrink-0"
+                      >
+                        <Trash2 className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Ошибки */}
+          <AnimatePresence>
+            {error && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="bg-red-500/10 border border-red-500/20 p-3 rounded-xl"
+              >
+                <p className="text-[11px] text-red-400 font-medium text-center">{error}</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
 
-        {/* Модальное окно подтверждения удаления */}
+        {/* ═══ Модалка удаления ═══ */}
         <AnimatePresence>
           {showDeleteConfirm && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 space-y-4">
-                <h3 className="text-lg font-bold text-white">Удалить сессию?</h3>
-                <p className="text-sm text-zinc-400">Сессия "{sessionToDelete}" будет удалена навсегда вместе со всеми сообщениями. Это действие нельзя отменить.</p>
-                <div className="flex gap-3 pt-4">
-                  <button onClick={() => { setShowDeleteConfirm(false); setSessionToDelete(null); }} disabled={isDeleting} className="flex-1 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-all disabled:opacity-50">Отмена</button>
-                  <button onClick={confirmFullDelete} disabled={isDeleting} className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-all disabled:opacity-50">{isDeleting ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Удалить'}</button>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+                className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-sm w-full p-6 space-y-4"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-red-500/10 rounded-xl"><Trash2 className="w-5 h-5 text-red-400" /></div>
+                  <h3 className="text-lg font-bold text-white">Удалить сессию?</h3>
                 </div>
-              </div>
+                <p className="text-sm text-zinc-400 leading-relaxed">
+                  Сессия <span className="text-zinc-300 font-mono">{sessionToDelete}</span> будет удалена навсегда. Это действие нельзя отменить.
+                </p>
+                <div className="flex gap-3 pt-2">
+                  <button onClick={() => { setShowDeleteConfirm(false); setSessionToDelete(null); }} disabled={isDeleting}
+                    className="flex-1 px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold text-sm transition-all disabled:opacity-50"
+                  >
+                    Отмена
+                  </button>
+                  <button onClick={confirmFullDelete} disabled={isDeleting}
+                    className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-sm transition-all disabled:opacity-50 flex items-center justify-center"
+                  >
+                    {isDeleting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Удалить'}
+                  </button>
+                </div>
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        <div className="text-center space-y-2 relative"><p className="text-[10px] text-zinc-600">D&D Dark Fantasy © {new Date().getFullYear()}</p></div>
+        {/* Footer */}
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.2, duration: 0.5 }}
+          className="text-center text-[9px] text-zinc-700"
+        >
+          D&amp;D Dark Fantasy © {new Date().getFullYear()}
+        </motion.p>
       </div>
     </div>
   );
