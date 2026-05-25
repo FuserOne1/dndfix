@@ -704,6 +704,7 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
       const result = await orchestratorRef.current.generateImage(prompt);
 
       if (result.error) {
+        console.error('Full image generation error:', result.error);
         throw new Error(result.error);
       }
 
