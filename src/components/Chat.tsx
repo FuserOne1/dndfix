@@ -20,6 +20,67 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// Хелпер: достаёт JSON из блока [PREFIX:{...}] с учётом вложенных {}
+function extractJSONBlock(text: string, prefix: string): string | null {
+  const startIdx = text.indexOf(prefix);
+  if (startIdx === -1) return null;
+  const jsonStart = startIdx + prefix.length;
+  if (text[jsonStart] !== '{') return null;
+  let depth = 0;
+  let i = jsonStart;
+  while (i < text.length) {
+    if (text[i] === '{') depth++;
+    else if (text[i] === '}') { depth--; if (depth === 0) return text.slice(jsonStart, i + 1); }
+    i++;
+  }
+  return null;
+}
+
+// Хелпер: удаляет все блоки [PREFIX:{...}] из текста
+function stripBlock(text: string, prefix: string): string {
+  let result = text;
+  while (true) {
+    const startIdx = result.indexOf(prefix);
+    if (startIdx === -1) return result;
+    const jsonStart = startIdx + prefix.length;
+    if (result[jsonStart] !== '{') { result = result.slice(0, startIdx) + result.slice(jsonStart); continue; }
+    let depth = 0;
+    let i = jsonStart;
+    while (i < result.length) {
+      if (result[i] === '{') depth++;
+      else if (result[i] === '}') { depth--; if (depth === 0) break; }
+      i++;
+    }
+    if (depth === 0) {
+      const closeBracket = result.indexOf(']', i);
+      if (closeBracket !== -1) { result = result.slice(0, startIdx) + result.slice(closeBracket + 1); continue; }
+    }
+    result = result.slice(0, startIdx) + result.slice(jsonStart);
+  }
+}
+
+// Хелпер: достаёт все JSON из блоков [PREFIX:{...}]
+function extractAllJSONBlocks(text: string, prefix: string): string[] {
+  const results: string[] = [];
+  let searchFrom = 0;
+  while (true) {
+    const idx = text.indexOf(prefix, searchFrom);
+    if (idx === -1) break;
+    const jsonStart = idx + prefix.length;
+    if (text[jsonStart] !== '{') { searchFrom = jsonStart; continue; }
+    let depth = 0;
+    let i = jsonStart;
+    while (i < text.length) {
+      if (text[i] === '{') depth++;
+      else if (text[i] === '}') { depth--; if (depth === 0) break; }
+      i++;
+    }
+    if (depth === 0) { results.push(text.slice(jsonStart, i + 1)); searchFrom = i + 1; }
+    else { searchFrom = jsonStart + 1; }
+  }
+  return results;
+}
+
 interface ChatProps {
   sessionId: string;
   userName: string;
@@ -784,25 +845,21 @@ XP: ${stats.xp}
       console.log('🔍 AI Response preview:', aiText.substring(0, 500));
 
       // Parse for stats update - поддерживаем оба формата
-      // Ищем все [STATS_UPDATE:...] блоки (может быть несколько для разных персонажей)
-      const allStatsUpdates = aiText.matchAll(/\[STATS_UPDATE:\s*({[\s\S]*?})\s*\]/g);
       const jsonMatch = aiText.match(/```json\n([\s\S]*?)\n```/);
+      const allStatsUpdateJSONs = extractAllJSONBlocks(aiText, '[STATS_UPDATE:');
 
-      console.log('📊 STATS_UPDATE blocks found:', Array.from(allStatsUpdates).length);
-      // Пересоздаём итератор для последующего использования
-      const allStatsUpdates2 = aiText.matchAll(/\[STATS_UPDATE:\s*({[\s\S]*?})\s*\]/g);
+      console.log('📊 STATS_UPDATE blocks found:', allStatsUpdateJSONs.length);
 
       let notificationText = '';
       let statsFound = false;
       const allChanges: string[] = [];
 
-      // Обрабатываем ВСЕ найденные блоки [STATS_UPDATE:{...}]
-      for (const match of allStatsUpdates2) {
-        console.log('📊 Found STATS_UPDATE block in new format');
-        console.log('📊 Raw match:', match[0].substring(0, 200));
+      for (const jsonStr of allStatsUpdateJSONs) {
+        console.log('📊 Found STATS_UPDATE block');
+        console.log('📊 Raw:', jsonStr.substring(0, 200));
         statsFound = true;
         try {
-          const jsonData = JSON.parse(match[1]);
+          const jsonData = JSON.parse(jsonStr);
           const updatedStats = jsonData as CharacterStats;
           const playerName = updatedStats.name || userName;
 
@@ -901,14 +958,12 @@ XP: ${stats.xp}
       }
 
       // Удаляем все управляющие блоки из текста перед показом
-      aiText = aiText
-        .replace(/\[STATS_UPDATE:\s*({[\s\S]*?})\s*\]/g, '')
-        .replace(/\[BATTLE_START:\s*({[\s\S]*?})\s*\]/g, '')
-        .replace(/\[ENEMY_UPDATE:\s*({[\s\S]*?})\s*\]/g, '')
-        .replace(/\[BATTLE_END\]/g, '')
-        .replace(/\[DESCRIBE_BATTLE:\s*({[\s\S]*?})\s*\]/g, '')
-        .replace(/\n\s*\n\s*$/, '\n')
-        .trim();
+      aiText = stripBlock(aiText, '[STATS_UPDATE:');
+      aiText = stripBlock(aiText, '[BATTLE_START:');
+      aiText = stripBlock(aiText, '[ENEMY_UPDATE:');
+      aiText = aiText.replace(/\[BATTLE_END\]/g, '');
+      aiText = stripBlock(aiText, '[DESCRIBE_BATTLE:');
+      aiText = aiText.replace(/\n\s*\n\s*$/, '\n').trim();
       // Старый формат ```json {...} ``` для обратной совместимости
       if (jsonMatch) {
         console.log('📊 Found JSON block in old format');
@@ -1038,10 +1093,10 @@ XP: ${stats.xp}
       // ПАРСИНГ НОВОГО БОЕВОГО БЛОКА (мини-игра)
       // ═══════════════════════════════════════════════════════════
 
-      const battleStartMatch = aiText.match(/\[BATTLE_START:\s*({[\s\S]*?})\s*\]/);
-      if (battleStartMatch) {
+      const battleStartJSON = extractJSONBlock(aiText, '[BATTLE_START:');
+      if (battleStartJSON) {
         try {
-          const battleData = JSON.parse(battleStartMatch[1]);
+          const battleData = JSON.parse(battleStartJSON);
           const enemies = battleData.enemies;
           if (enemies && Array.isArray(enemies) && enemies.length > 0) {
             const parsedEnemies: BattleEnemy[] = enemies.map((e: any) => ({
@@ -1381,11 +1436,7 @@ XP: ${stats.xp}
                 .map(msg => {
                   // Очищаем боевые блоки из сообщений для отображения
                   const cleanContent = msg.content && typeof msg.content === 'string'
-                    ? msg.content
-                        .replace(/\[BATTLE_START:\s*({[\s\S]*?})\s*\]/g, '')
-                        .replace(/\[ENEMY_UPDATE:\s*({[\s\S]*?})\s*\]/g, '')
-                        .replace(/\[BATTLE_END\]/g, '')
-                        .trim()
+                    ? stripBlock(stripBlock(stripBlock(msg.content.replace(/\[BATTLE_END\]/g, ''), '[BATTLE_START:'), '[ENEMY_UPDATE:'), '[STATS_UPDATE:').trim()
                     : msg.content;
                   return { ...msg, content: cleanContent };
                 });
