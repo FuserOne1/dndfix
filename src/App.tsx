@@ -227,7 +227,7 @@ export default function App() {
   if (currentScreen === 'character-select') { return (<div className={theme}><CharacterSelect userSessionId={userSessionId} onCharacterSelected={handleCharacterSelected} onBack={() => setCurrentScreen('menu')} roomId={sessionId || undefined} /></div>); }
 
   return (
-    <div className={`min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-3 md:p-4 font-sans selection:bg-primary/30 overflow-hidden ${theme}`}>
+    <div className={`min-h-screen bg-zinc-950 text-zinc-100 flex items-start justify-center py-6 md:py-10 p-3 md:p-4 font-sans selection:bg-primary/30 overflow-y-auto ${theme}`}>
       {/* ═══ Тёмный фон с партиклами ═══ */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
         {particles.map((p, i) => (
@@ -269,7 +269,7 @@ export default function App() {
       </motion.button>
 
       {/* ═══ Основной контент ═══ */}
-      <div className="max-w-md w-full space-y-4 md:space-y-8 relative z-10">
+      <div className="max-w-md w-full space-y-3 md:space-y-6 relative z-10">
 
         {/* ═══ Рунический круг + заголовок ═══ */}
         <div className="text-center space-y-3 md:space-y-4 relative">
@@ -521,11 +521,11 @@ export default function App() {
           </div>
           <button
             onClick={() => setShowVersionInfo(!showVersionInfo)}
-            className="group inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900/40 border border-zinc-800/40 hover:bg-zinc-800/40 hover:border-zinc-700 transition-all"
+            className="group inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900/40 border border-zinc-800/40 hover:bg-zinc-800/40 hover:border-zinc-700 transition-all max-w-full"
           >
-            <Info className="w-2.5 h-2.5 text-zinc-500 group-hover:text-primary transition-colors" />
-            <span className="text-[8px] font-mono text-zinc-500 group-hover:text-zinc-300 transition-colors tracking-wider uppercase">
-              v0.2.0 — Battle Update · 163 commits · 21 Jun 2026
+            <Info className="w-2.5 h-2.5 shrink-0 text-zinc-500 group-hover:text-primary transition-colors" />
+            <span className="text-[7px] sm:text-[8px] font-mono text-zinc-500 group-hover:text-zinc-300 transition-colors tracking-wider uppercase truncate">
+              v0.2.5 — Inventory Update
             </span>
           </button>
           <AnimatePresence>
@@ -537,18 +537,17 @@ export default function App() {
                 className="overflow-hidden"
               >
                 <div className="p-3 rounded-xl bg-zinc-900/60 border border-zinc-800/60 text-left space-y-2 text-[9px] font-mono leading-relaxed">
-                  <p className="text-primary font-bold tracking-wider uppercase text-[8px]">v0.2.0 — Battle Update</p>
-                  <p className="text-zinc-400">Полноценная боевая мини-игра с пошаговой системой D&D 5e. Заменила текстовые бои.</p>
+                  <p className="text-primary font-bold tracking-wider uppercase text-[8px]">v0.2.5 — Inventory Update</p>
+                  <p className="text-zinc-400">Система предметов с эффектами, нормализация инвентаря, боевая мини-игра.</p>
                   <div className="space-y-0.5 text-zinc-500">
-                    <p className="text-zinc-600 font-bold text-[8px] uppercase tracking-wider">Что добавлено:</p>
-                    <p>• ⚔️ Пошаговая боевая система (атака, защита, заклинания, предметы)</p>
-                    <p>• 🎒 Инвентарь в бою — предметы с эффектами (хил, баффы, урон)</p>
+                    <p className="text-zinc-600 font-bold text-[8px] uppercase tracking-wider">Последние изменения:</p>
+                    <p>• 🎒 Предметы с боевыми эффектами (хил, баффы, урон, условия)</p>
+                    <p>• 🛡️ Боевая мини-игра: атака, защита, заклинания, предметы</p>
                     <p>• 🎯 Основное + бонусное действие за ход</p>
-                    <p>• 👥 Враги с D&D 5e характеристиками (AC, toHit, инициатива)</p>
                     <p>• 📜 Лог боя с группировкой по раундам</p>
-                    <p>• 🏆 Автоматическое применение наград (XP, лут, HP)</p>
-                    <p>• 🎨 Полный редизайн интерфейса (тёмное фэнтези)</p>
-                    <p>• 🖼️ Генерация изображений (OpenAI/OpenRouter)</p>
+                    <p>• 🏆 Награды применяются сразу (XP, лут, HP)</p>
+                    <p>• 🎨 Тёмное фэнтези оформление</p>
+                    <p>• 🖼️ Генерация изображений</p>
                     <p>• 👥 Мультиплеер (Supabase real-time)</p>
                   </div>
                   <div className="pt-1 border-t border-zinc-800/40 text-zinc-600">
