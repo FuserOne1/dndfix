@@ -36,6 +36,13 @@ function extractJSONBlock(text: string, prefix: string): string | null {
   return null;
 }
 
+// Хелпер: нормализует элемент экипировки — объект с name → строка, строка → строка
+function normalizeItem(item: any): string {
+  if (typeof item === 'string') return item;
+  if (item && typeof item === 'object' && item.name) return item.name;
+  return String(item);
+}
+
 // Хелпер: удаляет все блоки [PREFIX:{...}] из текста
 function stripBlock(text: string, prefix: string): string {
   let result = text;
@@ -413,7 +420,8 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
         return;
       }
 
-      // Обновляем напрямую таблицу characters
+      // Нормализуем equipment перед сохранением в БД
+      const normalizedEquipment = (stats.equipment || []).map(normalizeItem);
       const { error } = await supabase
         .from('characters')
         .update({
@@ -427,7 +435,7 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
           intelligence: stats.stats.intelligence,
           wisdom: stats.stats.wisdom,
           charisma: stats.stats.charisma,
-          equipment: stats.equipment,
+          equipment: normalizedEquipment,
           story_summary: stats.story_summary,
         })
         .eq('id', charData.id);
@@ -869,6 +877,12 @@ XP: ${stats.xp}
         try {
           const jsonData = JSON.parse(jsonStr);
           const updatedStats = jsonData as CharacterStats;
+          // Нормализуем предметы: объекты → строки
+          if (updatedStats.equipment) {
+            updatedStats.equipment = updatedStats.equipment.map(normalizeItem);
+            // Удаляем дубликаты
+            updatedStats.equipment = [...new Set(updatedStats.equipment)];
+          }
           const playerName = updatedStats.name || userName;
 
           console.log('Player:', playerName);
@@ -904,9 +918,9 @@ XP: ${stats.xp}
               changes.push(`🎯 Уровень повышен: ${prevStats.level} → ${updatedStats.level}!`);
             }
 
-            // Инвентарь - сравниваем массивы
-            const prevEquipment = prevStats.equipment || [];
-            const newEquipment = updatedStats.equipment || [];
+            // Инвентарь - сравниваем массивы (нормализуем объекты к строкам)
+            const prevEquipment = (prevStats.equipment || []).map(normalizeItem);
+            const newEquipment = (updatedStats.equipment || []).map(normalizeItem);
             
             // Находим новые предметы
             const gainedItems = newEquipment.filter(item => !prevEquipment.includes(item));
@@ -2097,7 +2111,7 @@ XP: ${stats.xp}
                           {getCurrentPlayerStats()!.equipment.map((item, i) => (
                             <div key={i} className="flex items-center gap-3 p-3 bg-zinc-900/50 border border-zinc-800 rounded-xl group hover:bg-zinc-800 transition-colors">
                               <div className="w-1.5 h-1.5 rounded-full bg-primary/50 group-hover:bg-primary transition-colors" />
-                              <span className="text-xs text-zinc-400 group-hover:text-zinc-200 transition-colors">{item}</span>
+                              <span className="text-xs text-zinc-400 group-hover:text-zinc-200 transition-colors">{normalizeItem(item)}</span>
                             </div>
                           ))}
                         </div>
