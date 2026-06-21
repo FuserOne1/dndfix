@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -11,10 +11,10 @@ import { Send, User as UserIcon, Loader2, Image as ImageIcon, Dices, Copy, Check
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import TextareaAutosize from 'react-textarea-autosize';
-import { CharacterStats, Message, Room, Character, Enemy } from '../types';
+import { CharacterStats, Message, Room, Character, Enemy, BattleEnemy, BattleStartData, BattleResult } from '../types';
 import { AIOrchestrator } from '../lib/ai-orchestrator';
 import { AI_MODELS } from '../lib/ai-config';
-import BattleEnemyPanel from './BattleEnemyPanel';
+import BattleModal from './BattleModal';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -81,21 +81,31 @@ const SYSTEM_PROMPT = `SYSTEM ROLE: ты - Архитектор Темного �
 ПЕРВЫЙ ШАГ: попроси данные персонажа. После утверждения — выведи первый [STATS_UPDATE] с полными характеристиками.
 
 БОЕВАЯ СИСТЕМА (BATTLE MODE):
-Используй структурированные блоки для управления боем.
+Когда начинается бой — добавь [BATTLE_START:{...}] в конце сообщения.
+Формат:
+[BATTLE_START:{
+  "enemies": [
+    {
+      "id":"goblin1","name":"Гоблин","hp":7,"maxHp":7,"ac":15,"initiative":14,
+      "attacks":[{"name":"Кинжал","toHit":4,"dice":"1d4","bonus":2}],
+      "xpReward":50
+    }
+  ],
+  "rewards":{"xp":100,"items":["Кинжал гоблина"]},
+  "description":"Краткое описание боя"
+}]
 
-НАЧАЛО БОЯ — добавь в конце сообщения:
-[BATTLE_START:{"enemies":[{"id":"goblin1","name":"Гоблин","hp":7,"maxHp":7,"ac":15,"initiative":14,"statusEffects":[]}]}]
-id — уникальный идентификатор врага. initiative — для порядка ходов.
+ВАЖНО:
+- id — уникальный строковый идентификатор врага
+- toHit — бонус атаки врага (включая proficiency)
+- dice — дамаг: "1d4", "2d6" и т.д.
+- bonus — дополнительный урон
+- xpReward — опыт за убийство этого врага
+- rewards.xp — общий опыт за победу
+- rewards.items — массив предметов в награде
+- Блок строго в КОНЦЕ после текста
 
-ОБНОВЛЕНИЕ ВРАГОВ — когда враг получает урон или исцеляется:
-[ENEMY_UPDATE:{"goblin1":{"hp":4},"goblin2":{"hp":0}}]
-Если hp=0 — враг мёртв. Если статус эффект добавляется: {"goblin1":{"hp":4,"statusEffects":["Отравлен"]}}
-
-КОНЕЦ БОЯ — когда все враги мертвы или сбежали:
-[BATTLE_END]
-
-ВАЖНО: Блоки должны быть в самом конце, после всего текста.
-Описывай бой атмосферно, но используй эти блоки для синхронизации UI.
+После отправки блока [BATTLE_START] игрок увидит кнопку "Начать бой", откроется мини-игра. ВСЯ механика боя обрабатывается кодом (кубы, урон, порядок ходов, AI врагов). ИИ НЕ участвует в бою (экономия токенов). После окончания боя результат (XP, лут, HP) автоматически применяется к персонажу. Твоя задача — описать сцену и врагов атмосферно, а потом вставить блок с данными.
 
 ДОПОЛНИТЕЛЬНО:
 - Прогрессия: Герои начинают слабыми. Отслеживай XP и повышай уровень согласно D&D 5e.
@@ -131,34 +141,13 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
 
-  // Боевая система
-  const [battleActive, setBattleActive] = useState(false);
-  const battleActiveRef = useRef(false);
-  const [enemies, setEnemies] = useState<Enemy[]>([]);
-  const [currentTurn, setCurrentTurn] = useState('');
-  const [battleRound, setBattleRound] = useState(1);
-  const [selectedSpell, setSelectedSpell] = useState(false);
-  const [selectedItem, setSelectedItem] = useState(false);
-  const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
+  // Новая боевая система — мини-игра
+  const [pendingBattle, setPendingBattle] = useState<BattleStartData | null>(null);
+  const [showBattleModal, setShowBattleModal] = useState(false);
+  const [battleEnemies, setBattleEnemies] = useState<BattleEnemy[]>([]);
 
   // Dice popup
   const [showDicePopup, setShowDicePopup] = useState(false);
-
-  // Pending battle detection
-
-  // Синхронизируем ref с battleActive
-  useEffect(() => { battleActiveRef.current = battleActive; }, [battleActive]);
-  const currentTurnRef = useRef(currentTurn);
-  useEffect(() => { currentTurnRef.current = currentTurn; }, [currentTurn]);
-
-  // Сброс боевого UI при выходе из боя
-  useEffect(() => {
-    if (!battleActive) {
-      setSelectedSpell(false);
-      setSelectedItem(false);
-      setSelectedTargetId(null);
-    }
-  }, [battleActive]);
 
   // Если нет персонажа - показываем уведомление
   // Эта проверка теперь в App.tsx, но оставим на всякий случай
@@ -256,84 +245,6 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
         },
         (payload) => {
           const newMessage = payload.new as Message;
-          // Парсим ENEMY_UPDATE из real-time сообщений
-          if (newMessage.content && typeof newMessage.content === 'string') {
-            const enemyUpdateMatch = newMessage.content.match(/\[ENEMY_UPDATE:\s*({[\s\S]*?})\s*\]/);
-            if (enemyUpdateMatch && battleActiveRef.current) {
-              try {
-                const updateData = JSON.parse(enemyUpdateMatch[1]);
-                setEnemies(prev => {
-                  const updated = prev.map(enemy => {
-                    const update = updateData[enemy.id];
-                    if (update) {
-                      return {
-                        ...enemy,
-                        hp: update.hp ?? enemy.hp,
-                        maxHp: update.maxHp ?? enemy.maxHp,
-                        ac: update.ac ?? enemy.ac,
-                        statusEffects: update.statusEffects ?? enemy.statusEffects,
-                      };
-                    }
-                    return enemy;
-                  });
-                  const alive = updated.filter(e => e.hp > 0);
-                  if (alive.length === 0) {
-                    setBattleActive(false);
-                  } else {
-                    const currentIdx = alive.findIndex(e => e.name === currentTurnRef.current);
-                    if (currentIdx >= 0) {
-                      const nextIdx = (currentIdx + 1) % alive.length;
-                      setCurrentTurn(alive[nextIdx].name);
-                      if (nextIdx === 0) {
-                        setBattleRound(prev => prev + 1);
-                      }
-                    } else {
-                      setCurrentTurn(alive[0].name);
-                    }
-                  }
-                  return updated;
-                });
-              } catch (e) {
-                console.error('Failed to parse ENEMY_UPDATE from subscription:', e);
-              }
-            }
-
-            // BATTLE_END из real-time
-            if (newMessage.content.includes('[BATTLE_END]')) {
-              setBattleActive(false);
-              setEnemies([]);
-              setCurrentTurn('');
-              setBattleRound(1);
-            }
-
-            // BATTLE_START из real-time
-            const battleStartMatch = newMessage.content.match(/\[BATTLE_START:\s*({[\s\S]*?})\s*\]/);
-            if (battleStartMatch) {
-              try {
-                const battleData = JSON.parse(battleStartMatch[1]);
-                if (battleData.enemies && Array.isArray(battleData.enemies)) {
-                  const newEnemies: Enemy[] = battleData.enemies.map((e: any) => ({
-                    id: e.id || Math.random().toString(36).substring(2, 6),
-                    name: e.name || 'Враг',
-                    hp: e.hp ?? 10,
-                    maxHp: e.maxHp ?? e.hp ?? 10,
-                    ac: e.ac ?? 10,
-                    initiative: e.initiative ?? 0,
-                    statusEffects: e.statusEffects || [],
-                  }));
-                  setEnemies(newEnemies);
-                  setBattleActive(true);
-                  setBattleRound(1);
-                  const sorted = [...newEnemies, { name: userName, initiative: 999 }]
-                    .sort((a, b) => b.initiative - a.initiative);
-                  setCurrentTurn(sorted[0].name);
-                }
-              } catch (e) {
-                console.error('Failed to parse BATTLE_START from subscription:', e);
-              }
-            }
-          }
-
           setMessages((prev) => {
             if (prev.some(m => m.id === newMessage.id)) return prev;
             return [...prev, newMessage];
@@ -509,66 +420,6 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
 
         setMessages(data || []);
         
-        // Restore battle state from history
-        const battleStartMsg = [...(data || [])].reverse().find(
-          m => m.content && typeof m.content === 'string' && m.content.includes('[BATTLE_START:')
-        );
-        const battleEndMsg = [...(data || [])].reverse().find(
-          m => m.content && typeof m.content === 'string' && m.content.includes('[BATTLE_END]')
-        );
-
-        if (battleStartMsg && (!battleEndMsg || new Date(battleStartMsg.created_at) > new Date(battleEndMsg.created_at))) {
-          try {
-            const match = battleStartMsg.content.match(/\[BATTLE_START:\s*({[\s\S]*?})\s*\]/);
-            if (match) {
-              const battleData = JSON.parse(match[1]);
-              if (battleData.enemies && Array.isArray(battleData.enemies)) {
-                const restoredEnemies: Enemy[] = battleData.enemies.map((e: any) => ({
-                  id: e.id || Math.random().toString(36).substring(2, 6),
-                  name: e.name || 'Враг',
-                  hp: e.hp ?? 10,
-                  maxHp: e.maxHp ?? e.hp ?? 10,
-                  ac: e.ac ?? 10,
-                  initiative: e.initiative ?? 0,
-                  statusEffects: e.statusEffects || [],
-                }));
-
-                // Apply updates from ENEMY_UPDATE blocks
-                const enemyUpdates = (data || []).filter(
-                  m => m.content && typeof m.content === 'string' && m.content.includes('[ENEMY_UPDATE:')
-                );
-                for (const updateMsg of enemyUpdates) {
-                  const updateMatch = updateMsg.content.match(/\[ENEMY_UPDATE:\s*({[\s\S]*?})\s*\]/);
-                  if (updateMatch) {
-                    const updateData = JSON.parse(updateMatch[1]);
-                    for (const enemy of restoredEnemies) {
-                      const update = updateData[enemy.id];
-                      if (update) {
-                        enemy.hp = update.hp ?? enemy.hp;
-                        enemy.maxHp = update.maxHp ?? enemy.maxHp;
-                        enemy.ac = update.ac ?? enemy.ac;
-                        enemy.statusEffects = update.statusEffects ?? enemy.statusEffects;
-                      }
-                    }
-                  }
-                }
-
-                const alive = restoredEnemies.filter(e => e.hp > 0);
-                if (alive.length > 0) {
-                  setEnemies(restoredEnemies);
-                  setBattleActive(true);
-                  const sorted = [...alive, { name: userName, initiative: 999 }]
-                    .sort((a, b) => b.initiative - a.initiative);
-                  setCurrentTurn(sorted[0].name);
-                  console.log('⚔️ Battle state restored from history');
-                }
-              }
-            }
-          } catch (e) {
-            console.error('Failed to restore battle state:', e);
-          }
-        }
-        
         // Don't auto-trigger AI greeting - user will click button
         return; // Success
       } catch (err) {
@@ -646,66 +497,7 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
     }, 600);
   };
 
-  // ═══════════════════════════════════════════════════════════════
-  // БОЕВЫЕ ДЕЙСТВИЯ
-  // ═══════════════════════════════════════════════════════════════
-
   const getStatModifier = (value: number) => Math.floor((value - 10) / 2);
-
-  const sendBattleAction = (message: string) => {
-    sendMessage(message);
-  };
-
-  const handleBattleAttack = () => {
-    const stats = getCurrentPlayerStats();
-    if (!stats) return;
-
-    const strMod = getStatModifier(stats.stats.strength);
-    const profBonus = Math.floor((stats.level + 3) / 4) + 1;
-
-    const attackBonus = strMod + profBonus;
-    const roll = Math.floor(Math.random() * 20) + 1;
-    const total = roll + attackBonus;
-
-    const isCrit = roll === 20;
-    const isFumble = roll === 1;
-    const damageRoll = Math.floor(Math.random() * 8) + 1;
-    const damage = damageRoll + strMod;
-
-    let result = '';
-    if (isCrit) result = '🔥 **КРИТИЧЕСКОЕ ПОПАДАНИЕ!**';
-    else if (isFumble) result = '💀 **КРИТИЧЕСКИЙ ПРОМАХ!**';
-    else result = `Попадание? Класс Сложности: AC врага`;
-
-    const target = selectedTargetId
-      ? enemies.find(e => e.id === selectedTargetId)
-      : null;
-    const targetStr = target ? ` (цель: **${target.name}**, AC ${target.ac})` : '';
-
-    const message = `⚔️ **Атака**: d20+${attackBonus} = **${total}** (${roll} + ${attackBonus})${targetStr}\n${result}\n🗡️ **Урон**: 1d8+${strMod} = **${damage}** (${damageRoll} + ${strMod})`;
-    sendBattleAction(message);
-  };
-
-  const handleBattleDefend = () => {
-    const stats = getCurrentPlayerStats();
-    const dexMod = stats ? getStatModifier(stats.stats.dexterity) : 0;
-    const message = `🛡️ **Защита**: +2 AC на этот раунд (текущий AC: ${10 + dexMod + 2})`;
-    sendBattleAction(message);
-  };
-
-  const handleBattleCastSpell = (spellName: string) => {
-    if (!spellName.trim()) return;
-    const message = `✨ **Заклинание**: ${spellName.trim()}`;
-    setInput('');
-    sendBattleAction(message);
-  };
-
-  const handleBattleUseItem = (itemName: string) => {
-    if (!itemName.trim()) return;
-    const message = `🎒 **Предмет**: ${itemName.trim()}`;
-    setInput('');
-    sendBattleAction(message);
-  };
 
   const generateSceneImage = async () => {
     if (!orchestratorRef.current) {
@@ -792,6 +584,48 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
       setIsGeneratingImage(false);
     }
   };
+
+  const handleBattleEnd = useCallback(async (result: BattleResult) => {
+    const stats = getCurrentPlayerStats();
+    if (!stats || !pendingBattle) return;
+
+    const newHP = Math.max(0, stats.hp.current - result.damageTaken);
+    const newXP = stats.xp + result.xpGained;
+    const newEquipment = [...(stats.equipment || [])];
+    for (const item of result.itemsGained) {
+      if (!newEquipment.includes(item)) newEquipment.push(item);
+    }
+
+    const updatedStats: CharacterStats = {
+      ...stats,
+      hp: { current: newHP, max: stats.hp.max },
+      xp: newXP,
+      equipment: newEquipment,
+    };
+
+    updateRoomStats(stats.name, updatedStats);
+
+    const resultMsg = result.victory
+      ? `⚔️ **Битва завершена! Победа!**\n⭐ XP: +${result.xpGained}\n🎒 Добыто: ${result.itemsGained.length > 0 ? result.itemsGained.join(', ') : 'нет'}\n❤️ Получено урона: ${result.damageTaken}`
+      : `💀 **Вы пали в бою...**\n❤️ Потеряно HP: ${result.damageTaken}`;
+
+    await supabase.from('messages').insert({
+      session_id: sessionId,
+      sender_id: 'system',
+      sender_name: 'System',
+      content: resultMsg,
+      is_ai: false,
+    });
+
+    setShowBattleModal(false);
+    setPendingBattle(null);
+  }, [pendingBattle, sessionId, userName]);
+
+  const startBattle = useCallback(() => {
+    if (!pendingBattle) return;
+    setBattleEnemies(pendingBattle.enemies);
+    setShowBattleModal(true);
+  }, [pendingBattle]);
 
   const triggerAIResponse = async (history: Message[], force: boolean = false) => {
     if (isGeneratingAI.current) {
@@ -1072,6 +906,7 @@ XP: ${stats.xp}
         .replace(/\[BATTLE_START:\s*({[\s\S]*?})\s*\]/g, '')
         .replace(/\[ENEMY_UPDATE:\s*({[\s\S]*?})\s*\]/g, '')
         .replace(/\[BATTLE_END\]/g, '')
+        .replace(/\[DESCRIBE_BATTLE:\s*({[\s\S]*?})\s*\]/g, '')
         .replace(/\n\s*\n\s*$/, '\n')
         .trim();
       // Старый формат ```json {...} ``` для обратной совместимости
@@ -1200,77 +1035,37 @@ XP: ${stats.xp}
       }
 
       // ═══════════════════════════════════════════════════════════
-      // ПАРСИНГ БОЕВЫХ БЛОКОВ
+      // ПАРСИНГ НОВОГО БОЕВОГО БЛОКА (мини-игра)
       // ═══════════════════════════════════════════════════════════
 
-      // BATTLE_START — начало боя
       const battleStartMatch = aiText.match(/\[BATTLE_START:\s*({[\s\S]*?})\s*\]/);
       if (battleStartMatch) {
         try {
           const battleData = JSON.parse(battleStartMatch[1]);
-          if (battleData.enemies && Array.isArray(battleData.enemies)) {
-            const newEnemies: Enemy[] = battleData.enemies.map((e: any) => ({
+          const enemies = battleData.enemies;
+          if (enemies && Array.isArray(enemies) && enemies.length > 0) {
+            const parsedEnemies: BattleEnemy[] = enemies.map((e: any) => ({
               id: e.id || Math.random().toString(36).substring(2, 6),
               name: e.name || 'Враг',
               hp: e.hp ?? 10,
               maxHp: e.maxHp ?? e.hp ?? 10,
               ac: e.ac ?? 10,
               initiative: e.initiative ?? 0,
+              attacks: e.attacks || [{ name: 'Удар', toHit: 2, dice: '1d4', bonus: 1 }],
               statusEffects: e.statusEffects || [],
+              xpReward: e.xpReward || 25,
             }));
-            setEnemies(newEnemies);
-            setBattleActive(true);
-            setBattleRound(1);
-
-            // Определяем первый ход (по инициативе)
-            const sorted = [...newEnemies, { name: userName || 'Игрок', initiative: 999 }]
-              .sort((a, b) => b.initiative - a.initiative);
-            setCurrentTurn(sorted[0].name);
-
-            console.log('⚔️ Battle started with enemies:', newEnemies);
+            const rewards = battleData.rewards || { xp: 0, items: [] };
+            setPendingBattle({
+              enemies: parsedEnemies,
+              rewards,
+              description: battleData.description || 'Бой начинается!',
+            });
+            console.log('⚔️ Battle pending for player to start:', parsedEnemies);
           }
         } catch (e) {
           console.error('Failed to parse BATTLE_START:', e);
         }
-      }
-
-      // ENEMY_UPDATE — обновление состояния врагов
-      const enemyUpdateMatch = aiText.match(/\[ENEMY_UPDATE:\s*({[\s\S]*?})\s*\]/);
-      if (enemyUpdateMatch && battleActive) {
-        try {
-          const updateData = JSON.parse(enemyUpdateMatch[1]);
-          setEnemies(prev => {
-            const updated = prev.map(enemy => {
-              const update = updateData[enemy.id];
-              if (update) {
-                return {
-                  ...enemy,
-                  hp: update.hp ?? enemy.hp,
-                  maxHp: update.maxHp ?? enemy.maxHp,
-                  ac: update.ac ?? enemy.ac,
-                  statusEffects: update.statusEffects ?? enemy.statusEffects,
-                };
-              }
-              return enemy;
-            });
-            const alive = updated.filter(e => e.hp > 0);
-            if (alive.length === 0) {
-              setBattleActive(false);
-            }
-            return updated;
-          });
-        } catch (e) {
-          console.error('Failed to parse ENEMY_UPDATE:', e);
-        }
-      }
-
-      // BATTLE_END — конец боя
-      if (aiText.includes('[BATTLE_END]')) {
-        setBattleActive(false);
-        setEnemies([]);
-        setCurrentTurn('');
-        setBattleRound(1);
-        console.log('⚔️ Battle ended');
       }
 
       // Добавляем уведомление перед основным текстом
@@ -1392,37 +1187,7 @@ XP: ${stats.xp}
             >
               <Palette className="w-5 h-5" />
             </button>
-            <button
-              onClick={() => {
-              if (battleActive) {
-                setEnemies([]);
-                setCurrentTurn('');
-                setBattleRound(1);
-                setSelectedTargetId(null);
-              }
-              setBattleActive(!battleActive);
-            }}
-              className={`relative flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all border text-[10px] font-bold uppercase tracking-widest ${
-                battleActive
-                  ? 'bg-red-500/15 border-red-500/40 text-red-400 shadow-sm shadow-red-500/20'
-                  : 'bg-zinc-800/80 border-zinc-700/60 text-zinc-400 hover:text-zinc-300 hover:border-zinc-600'
-              }`}
-            >
-              <Swords className={`w-3 h-3 transition-colors ${battleActive ? 'text-red-400' : 'text-zinc-500'}`} />
-              <span className="mr-0.5">{battleActive ? 'В бою' : 'Битва'}</span>
-              <div className={`w-7 h-3.5 rounded-full transition-colors duration-200 ${battleActive ? 'bg-red-500/40' : 'bg-zinc-700'}`}>
-                <motion.div
-                  initial={false}
-                  animate={{ x: battleActive ? 14 : 0 }}
-                  transition={{ type: 'spring', stiffness: 500, damping: 30, mass: 0.5 }}
-                  className={`w-3.5 h-3.5 rounded-full shadow-sm ${
-                    battleActive
-                      ? 'bg-red-400 shadow-red-400/50'
-                      : 'bg-zinc-400 shadow-black/30'
-                  }`}
-                />
-              </div>
-            </button>
+
             <button 
               onClick={() => setIsGalleryOpen(true)}
               className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-xl transition-colors text-zinc-300 hover:text-white text-xs font-bold uppercase tracking-widest"
@@ -1556,14 +1321,15 @@ XP: ${stats.xp}
         )}
       </AnimatePresence>
 
-      {/* Enemy Panel — показываем только во время боя */}
-      {battleActive && (
-        <BattleEnemyPanel
-          enemies={enemies}
-          currentTurn={currentTurn}
-          round={battleRound}
-          selectedTargetId={selectedTargetId}
-          onSelectTarget={setSelectedTargetId}
+      {/* Battle Modal */}
+      {showBattleModal && getCurrentPlayerStats() && (
+        <BattleModal
+          isOpen={showBattleModal}
+          enemies={battleEnemies}
+          playerStats={getCurrentPlayerStats()!}
+          playerName={userName}
+          onBattleEnd={handleBattleEnd}
+          onClose={() => setShowBattleModal(false)}
         />
       )}
 
@@ -1772,159 +1538,20 @@ XP: ${stats.xp}
         {/* Top glow accent */}
         <div className="absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-primary/15 to-transparent pointer-events-none" />
         <div className="max-w-4xl mx-auto">
-          {battleActive ? (
-            /* ════════════════════════════════════════════════ */
-            /* БОЕВОЙ РЕЖИМ — кнопки действий                 */
-            /* ════════════════════════════════════════════════ */
-            <div className="space-y-2">
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-1.5">
-                <button
-                  onClick={handleBattleAttack}
-                  disabled={isLoading}
-                  className="flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl border border-red-800/40 bg-red-950/20 text-red-400 hover:bg-red-600/20 hover:border-red-500/50 disabled:opacity-30 transition-all text-[11px] font-bold uppercase tracking-wider"
-                >
-                  <Swords className="w-3.5 h-3.5 shrink-0" />
-                  <span>Атака</span>
-                </button>
-                <button
-                  onClick={handleBattleDefend}
-                  disabled={isLoading}
-                  className="flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl border border-blue-800/40 bg-blue-950/20 text-blue-400 hover:bg-blue-600/20 hover:border-blue-500/50 disabled:opacity-30 transition-all text-[11px] font-bold uppercase tracking-wider"
-                >
-                  <Shield className="w-3.5 h-3.5 shrink-0" />
-                  <span>Защита</span>
-                </button>
-                <button
-                  onClick={() => setSelectedSpell(true)}
-                  disabled={isLoading || selectedSpell}
-                  className="flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl border border-violet-800/40 bg-violet-950/20 text-violet-400 hover:bg-violet-600/20 hover:border-violet-500/50 disabled:opacity-30 transition-all text-[11px] font-bold uppercase tracking-wider"
-                >
-                  <Zap className="w-3.5 h-3.5 shrink-0" />
-                  <span>Закл.</span>
-                </button>
-                <button
-                  onClick={() => setSelectedItem(true)}
-                  disabled={isLoading || selectedItem}
-                  className="flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl border border-amber-800/40 bg-amber-950/20 text-amber-400 hover:bg-amber-600/20 hover:border-amber-500/50 disabled:opacity-30 transition-all text-[11px] font-bold uppercase tracking-wider"
-                >
-                  <Briefcase className="w-3.5 h-3.5 shrink-0" />
-                  <span>Предмет</span>
-                </button>
-                <button
-                  onClick={() => setShowDicePopup(true)}
-                  disabled={isRolling}
-                  className={`flex items-center justify-center gap-1.5 px-2 py-2.5 rounded-xl border transition-all text-[11px] font-bold uppercase tracking-wider col-span-2 sm:col-span-1 ${
-                    isRolling
-                      ? 'border-zinc-800 bg-zinc-900/30 text-zinc-500'
-                      : 'border-zinc-700/40 bg-zinc-800/30 text-zinc-300 hover:bg-zinc-700/40 hover:border-zinc-500/50'
-                  }`}
-                >
-                  {isRolling ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" /> : <Dices className="w-3.5 h-3.5 shrink-0" />}
-                  <span>{isRolling ? 'Бросок...' : 'Кубик'}</span>
-                </button>
-              </div>
-
-              {/* Поле ввода для заклинания */}
-              {selectedSpell && (
-                <div className="flex gap-2 animate-in slide-in-from-bottom-2 duration-200">
-                  <input
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    placeholder="Название заклинания..."
-                    className="flex-1 bg-zinc-950 border border-violet-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && input.trim()) {
-                        handleBattleCastSpell(input);
-                      }
-                    }}
-                    autoFocus
-                  />
-                  <button
-                    onClick={() => { handleBattleCastSpell(input); setSelectedSpell(false); }}
-                    disabled={!input.trim() || isLoading}
-                    className="px-4 py-2.5 bg-violet-600 hover:bg-violet-500 text-white rounded-xl font-bold text-sm transition-all disabled:opacity-50"
-                  >
-                    Кастовать
-                  </button>
-                  <button
-                    onClick={() => { setSelectedSpell(false); setInput(''); }}
-                    className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded-xl text-sm transition-all"
-                  >
-                    Отмена
-                  </button>
-                </div>
-              )}
-
-              {/* Поле ввода для предмета */}
-              {selectedItem && (
-                <div className="flex gap-2 animate-in slide-in-from-bottom-2 duration-200">
-                  <input
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    placeholder="Название предмета..."
-                    className="flex-1 bg-zinc-950 border border-amber-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && input.trim()) {
-                        handleBattleUseItem(input);
-                      }
-                    }}
-                    autoFocus
-                  />
-                  <button
-                    onClick={() => { handleBattleUseItem(input); setSelectedItem(false); }}
-                    disabled={!input.trim() || isLoading}
-                    className="px-4 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-bold text-sm transition-all disabled:opacity-50"
-                  >
-                    Использовать
-                  </button>
-                  <button
-                    onClick={() => { setSelectedItem(false); setInput(''); }}
-                    className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded-xl text-sm transition-all"
-                  >
-                    Отмена
-                  </button>
-                </div>
-              )}
-
-              {/* Текстовое поле для кастомных действий */}
-              <div className="flex items-center gap-2">
-                <TextareaAutosize
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Свободное действие..."
-                  minRows={1}
-                  maxRows={3}
-                  className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-zinc-600 resize-none leading-relaxed"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      if (input.trim() && !isLoading) {
-                        sendMessage(input);
-                      }
-                    }
-                  }}
-                />
-                <button
-                  onClick={() => sendMessage(input)}
-                  disabled={!input.trim() || isLoading}
-                  className="flex items-center justify-center p-2.5 rounded-xl bg-primary-hover hover:bg-primary disabled:opacity-50 text-white shadow-lg shrink-0"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => triggerAIResponse(messages)}
-                  disabled={isLoading}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-zinc-700 hover:bg-zinc-600 text-white text-xs font-bold uppercase tracking-widest transition-all shrink-0 disabled:opacity-50"
-                >
-                  <ScrollText className="w-4 h-4" />
-                  DM
-                </button>
-              </div>
-            </div>
-          ) : (
-            /* ════════════════════════════════════════════════ */
-            /* ОБЫЧНЫЙ РЕЖИМ — текстовый ввод                 */
-            /* ════════════════════════════════════════════════ */
+          <>
+            {/* Floating "Start Battle" button */}
+            {pendingBattle && (
+              <motion.button
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 20 }}
+                onClick={startBattle}
+                className="w-full mb-3 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-red-600/20 via-red-500/20 to-red-600/20 border border-red-500/40 text-red-400 hover:from-red-600/30 hover:to-red-600/30 hover:border-red-400 transition-all text-sm font-bold uppercase tracking-widest shadow-lg shadow-red-500/10"
+              >
+                <Swords className="w-4 h-4" />
+                ⚔️ Начать бой!
+              </motion.button>
+            )}
             <div className="flex items-center gap-3">
               <TextareaAutosize
                 ref={textareaRef}
@@ -1994,7 +1621,7 @@ XP: ${stats.xp}
                 </button>
               </div>
             </div>
-          )}
+          </>
         </div>
       </div>
 

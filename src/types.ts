@@ -133,7 +133,7 @@ export interface Room {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// БОЕВАЯ СИСТЕМА
+// БОЕВАЯ СИСТЕМА (старая — удаляется)
 // ═══════════════════════════════════════════════════════════════
 
 export interface Enemy {
@@ -151,4 +151,47 @@ export interface BattleState {
   enemies: Enemy[];
   currentTurn: string;
   round: number;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// БОЕВАЯ СИСТЕМА (новая — мини-игра)
+// ═══════════════════════════════════════════════════════════════
+
+export interface EnemyAttack {
+  name: string;
+  toHit: number;
+  dice: string;
+  bonus: number;
+}
+
+export interface BattleEnemy {
+  id: string;
+  name: string;
+  hp: number;
+  maxHp: number;
+  ac: number;
+  initiative: number;
+  attacks: EnemyAttack[];
+  statusEffects: string[];
+  xpReward: number;
+}
+
+export interface BattleRewards {
+  xp: number;
+  items: string[];
+}
+
+export interface BattleStartData {
+  enemies: BattleEnemy[];
+  rewards: BattleRewards;
+  description: string;
+}
+
+export interface BattleResult {
+  victory: boolean;
+  xpGained: number;
+  itemsGained: string[];
+  damageTaken: number;
+  enemiesDefeated: string[];
+  log: string[];
 }
