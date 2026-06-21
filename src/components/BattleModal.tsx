@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Swords, Shield, Heart, Skull, Crosshair, Zap, Briefcase, X, ChevronRight, FlaskRound as Flask } from 'lucide-react';
 import { BattleEnemy, CharacterStats, BattleResult, BattleRewards } from '../types';
-import { processPlayerAttack, resolveAttack, enemyChooseAttack, getPlayerAC, getPlayerAtkBonus, getPlayerDmgBonus } from '../lib/battle-engine';
+import { processPlayerAttack, resolveAttack, enemyChooseAttack, getPlayerAC, getPlayerAtkBonus, getPlayerDmgBonus, processItemEffect } from '../lib/battle-engine';
 
 interface BattleModalProps {
   isOpen: boolean;
@@ -147,10 +147,32 @@ export default function BattleModal({ isOpen, enemies, playerStats, playerName, 
   }, [spellInput, playerName, addLog]);
 
   const handleUseItem = useCallback((itemName: string) => {
-    addLog(`🎒 ${playerName} использует: ${itemName}`, 'item', 'player');
+    const result = processItemEffect(itemName, playerStatsRef.current);
+    addLog(result.log, 'item', 'player');
+    if (result.healAmount > 0) {
+      const newHP = Math.min(playerHPRef.current + result.healAmount, playerStats.hp.max);
+      setPlayerHP(newHP);
+      addLog(`❤️ +${result.healAmount} HP (${playerHPRef.current} → ${newHP})`, 'heal', 'player');
+    }
+    if (result.damageAmount > 0 && selectedEnemyId) {
+      const eList = enemiesRef.current;
+      const enemy = eList.find(e => e.id === selectedEnemyId);
+      if (enemy && enemy.hp > 0) {
+        const newEHp = Math.max(0, enemy.hp - result.damageAmount);
+        const updated = eList.map(e => e.id === selectedEnemyId ? { ...e, hp: newEHp } : e);
+        setTurnEnemies(updated);
+        addLog(`💥 ${enemy.name} получает ${result.damageAmount} урона`, 'damage', 'player');
+        if (newEHp <= 0) addLog(`💀 ${enemy.name} повержен!`, 'system', 'system');
+        if (checkEnd(updated, playerHPRef.current)) { setActionMode('none'); setSelectedEnemyId(null); return; }
+      }
+    }
+    if (result.buffAc > 0) addLog(`🛡️ AC +${result.buffAc}`, 'defend', 'player');
+    if (result.buffAtk > 0) addLog(`⚔️ ATK +${result.buffAtk}`, 'attack', 'player');
+    if (result.condition) addLog(`✨ ${result.condition}`, 'spell', 'player');
     setActionMode('none');
     setUsedMainAction(true);
-  }, [playerName, addLog]);
+    setSelectedEnemyId(null);
+  }, [playerName, addLog, checkEnd, selectedEnemyId]);
 
   const handleFlee = useCallback(() => {
     addLog(`🏃 ${playerName} отступает!`, 'system', 'player');

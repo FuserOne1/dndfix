@@ -37,6 +37,18 @@ export interface Character {
 
 // Устаревший тип (для обратной совместимости, не использовать)
 /** @deprecated Use Character directly */
+export interface ItemEffect {
+  heal?: number;
+  tempHp?: number;
+  damage?: number;
+  damageDice?: string;
+  buffAc?: number;
+  buffAtk?: number;
+  buffDmg?: number;
+  condition?: string;
+  description?: string;
+}
+
 export interface CharacterStats {
   name: string;
   race: string;
@@ -58,6 +70,7 @@ export interface CharacterStats {
   background: string;
   equipment: string[];
   story_summary?: string;
+  item_effects?: Record<string, ItemEffect>;
 }
 
 // ═══════════════════════════════════════════════════════════════

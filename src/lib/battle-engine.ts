@@ -160,6 +160,71 @@ export function runBattle(
   };
 }
 
+export interface ItemUseResult {
+  log: string;
+  healAmount: number;
+  damageAmount: number;
+  buffAc: number;
+  buffAtk: number;
+  buffDmg: number;
+  condition: string;
+}
+
+export function processItemEffect(
+  itemName: string,
+  playerStats: CharacterStats
+): ItemUseResult {
+  const result: ItemUseResult = { log: '', healAmount: 0, damageAmount: 0, buffAc: 0, buffAtk: 0, buffDmg: 0, condition: '' };
+  const effects = playerStats.item_effects?.[itemName];
+  if (!effects) {
+    result.log = `🎒 Использован ${itemName} — эффект не найден`;
+    return result;
+  }
+
+  const parts: string[] = [];
+
+  if (effects.heal) {
+    result.healAmount = effects.heal;
+    parts.push(`❤️ +${effects.heal} HP`);
+  }
+  if (effects.tempHp) {
+    // Временно: просто как хил
+    result.healAmount += effects.tempHp;
+    parts.push(`🛡️ +${effects.tempHp} временных HP`);
+  }
+  if (effects.damage) {
+    result.damageAmount = effects.damage;
+    parts.push(`💥 ${effects.damage} урона`);
+  }
+  if (effects.damageDice) {
+    const dmg = rollDice(effects.damageDice);
+    result.damageAmount += dmg;
+    parts.push(`💥 ${effects.damageDice} (${dmg}) урона`);
+  }
+  if (effects.buffAc) {
+    result.buffAc = effects.buffAc;
+    parts.push(`🛡️ AC +${effects.buffAc}`);
+  }
+  if (effects.buffAtk) {
+    result.buffAtk = effects.buffAtk;
+    parts.push(`⚔️ ATK +${effects.buffAtk}`);
+  }
+  if (effects.buffDmg) {
+    result.buffDmg = effects.buffDmg;
+    parts.push(`💥 DMG +${effects.buffDmg}`);
+  }
+  if (effects.condition) {
+    result.condition = effects.condition;
+    parts.push(`✨ ${effects.condition}`);
+  }
+  if (effects.description) {
+    parts.push(`— ${effects.description}`);
+  }
+
+  result.log = `🎒 ${playerStats.name} использует ${itemName}${parts.length > 0 ? ': ' + parts.join(', ') : ''}`;
+  return result;
+}
+
 export function processPlayerAttack(
   enemyId: string,
   enemies: BattleEnemy[],
