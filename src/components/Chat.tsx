@@ -670,7 +670,9 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
       equipment: newEquipment,
     };
 
+    // ⚡ Обновляем и БД, и локальное состояние
     updateRoomStats(stats.name, updatedStats);
+    setCharacterStats(prev => prev ? { ...prev, [stats.name]: updatedStats } : prev);
 
     const resultMsg = result.victory
       ? `⚔️ **Битва завершена! Победа!**\n⭐ XP: +${result.xpGained}\n🎒 Добыто: ${result.itemsGained.length > 0 ? result.itemsGained.join(', ') : 'нет'}\n❤️ Получено урона: ${result.damageTaken}`
@@ -1390,6 +1392,7 @@ XP: ${stats.xp}
           enemies={battleEnemies}
           playerStats={getCurrentPlayerStats()!}
           playerName={userName}
+          rewards={pendingBattle?.rewards || { xp: 0, items: [] }}
           onBattleEnd={handleBattleEnd}
           onClose={() => setShowBattleModal(false)}
         />
