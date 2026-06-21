@@ -515,6 +515,14 @@ export default function App() {
         >
           D&amp;D Dark Fantasy © {new Date().getFullYear()}
         </motion.p>
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.3, duration: 0.5 }}
+          className="text-center text-[7px] text-zinc-700/50 font-mono"
+        >
+          v0.1.0 — Shadowbinding · 154 commits · last updated 21 Jun 2026
+        </motion.p>
       </div>
     </div>
   );

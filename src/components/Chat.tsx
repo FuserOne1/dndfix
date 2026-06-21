@@ -1576,6 +1576,50 @@ XP: ${stats.xp}
                 <span className="text-lg font-mono uppercase tracking-[0.3em]">Мастер плетет историю...</span>
               </div>
             )}
+
+            {/* Боевой вызов — карточка в чате */}
+            {pendingBattle && (
+              <div className="w-full max-w-4xl mx-auto px-4 py-2">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="relative overflow-hidden rounded-2xl border border-red-500/30 bg-gradient-to-br from-red-900/20 via-red-800/10 to-zinc-900/50 backdrop-blur-sm"
+                >
+                  <div className="absolute -top-10 -right-10 w-32 h-32 bg-red-500/10 rounded-full blur-2xl pointer-events-none" />
+                  <div className="relative p-4 md:p-5 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Swords className="w-5 h-5 text-red-400" />
+                      <span className="text-xs font-bold uppercase tracking-widest text-red-400/80">Битва!</span>
+                    </div>
+                    {pendingBattle.description && (
+                      <p className="text-sm text-zinc-300 leading-relaxed">{pendingBattle.description}</p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-zinc-400">
+                      <span>👥 Врагов: {pendingBattle.enemies.length}</span>
+                      {pendingBattle.enemies.length > 0 && (
+                        <>
+                          <span className="text-zinc-600">|</span>
+                          {pendingBattle.enemies.map((e, i) => (
+                            <span key={i} className="font-mono text-zinc-400">
+                              {e.name} {e.hp > 0 ? `❤️${e.hp}` : ''}{i < pendingBattle.enemies.length - 1 ? ',' : ''}
+                            </span>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={startBattle}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-red-600/30 via-red-500/30 to-red-600/30 border border-red-500/40 text-red-300 hover:from-red-600/40 hover:to-red-600/40 hover:border-red-400 hover:text-red-200 transition-all text-sm font-bold uppercase tracking-widest shadow-lg shadow-red-500/5"
+                    >
+                      <Swords className="w-4 h-4" />
+                      ⚔️ Начать бой!
+                    </motion.button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1590,19 +1634,6 @@ XP: ${stats.xp}
         <div className="absolute top-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-primary/15 to-transparent pointer-events-none" />
         <div className="max-w-4xl mx-auto">
           <>
-            {/* Floating "Start Battle" button */}
-            {pendingBattle && (
-              <motion.button
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 20 }}
-                onClick={startBattle}
-                className="w-full mb-3 flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-red-600/20 via-red-500/20 to-red-600/20 border border-red-500/40 text-red-400 hover:from-red-600/30 hover:to-red-600/30 hover:border-red-400 transition-all text-sm font-bold uppercase tracking-widest shadow-lg shadow-red-500/10"
-              >
-                <Swords className="w-4 h-4" />
-                ⚔️ Начать бой!
-              </motion.button>
-            )}
             <div className="flex items-center gap-3">
               <TextareaAutosize
                 ref={textareaRef}
