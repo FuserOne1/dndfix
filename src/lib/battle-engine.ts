@@ -175,7 +175,19 @@ export function processItemEffect(
   playerStats: CharacterStats
 ): ItemUseResult {
   const result: ItemUseResult = { log: '', healAmount: 0, damageAmount: 0, buffAc: 0, buffAtk: 0, buffDmg: 0, condition: '' };
-  const effects = playerStats.item_effects?.[itemName];
+  const effectsMap = playerStats.item_effects;
+  let effects = effectsMap?.[itemName];
+  // Fuzzy match: ищем по префиксу, потом по вхождению
+  if (!effects && effectsMap) {
+    const keys = Object.keys(effectsMap);
+    const prefixMatch = keys.find(k => itemName.startsWith(k));
+    if (prefixMatch) effects = effectsMap[prefixMatch];
+  }
+  if (!effects && effectsMap) {
+    const keys = Object.keys(effectsMap);
+    const containsMatch = keys.find(k => itemName.includes(k));
+    if (containsMatch) effects = effectsMap[containsMatch];
+  }
   if (!effects) {
     result.log = `🎒 Использован ${itemName} — эффект не найден`;
     return result;
