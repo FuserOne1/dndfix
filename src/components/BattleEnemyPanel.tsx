@@ -1,22 +1,22 @@
 import { Enemy } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { Heart, Shield, Swords, Skull } from 'lucide-react';
+import { Heart, Shield, Swords, Skull, Crosshair } from 'lucide-react';
 
 interface BattleEnemyPanelProps {
   enemies: Enemy[];
   currentTurn: string;
   round: number;
+  selectedTargetId: string | null;
+  onSelectTarget: (id: string | null) => void;
 }
 
-export default function BattleEnemyPanel({ enemies, currentTurn, round }: BattleEnemyPanelProps) {
+export default function BattleEnemyPanel({ enemies, currentTurn, round, selectedTargetId, onSelectTarget }: BattleEnemyPanelProps) {
   const aliveCount = enemies.filter(e => e.hp > 0).length;
 
   return (
     <div className="shrink-0 bg-gradient-to-b from-zinc-900/90 via-red-950/10 to-zinc-900/90 border-b border-red-900/20 p-3 md:p-4 relative overflow-hidden">
-      {/* Vignette overlay */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(220,38,38,0.06),transparent_70%)] pointer-events-none animate-vignette" />
 
-      {/* Rune decoration left */}
       <div className="absolute left-0 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-red-500/20 to-transparent animate-rune-pulse" />
       <div className="absolute right-0 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-red-500/20 to-transparent animate-rune-pulse" style={{ animationDelay: '1.5s' }} />
 
@@ -49,6 +49,7 @@ export default function BattleEnemyPanel({ enemies, currentTurn, round }: Battle
               const hpPercent = (enemy.hp / enemy.maxHp) * 100;
               const isDead = enemy.hp <= 0;
               const isCurrentTurn = currentTurn === enemy.name;
+              const isSelected = selectedTargetId === enemy.id;
 
               return (
                 <motion.div
@@ -56,33 +57,41 @@ export default function BattleEnemyPanel({ enemies, currentTurn, round }: Battle
                   layout
                   initial={{ opacity: 0, scale: 0.8, x: -20 }}
                   animate={{
-                    opacity: isDead ? 0.35 : isCurrentTurn ? 1 : 0.85,
-                    scale: isCurrentTurn ? 1.02 : 1,
+                    opacity: isDead ? 0.35 : 1,
+                    scale: isSelected ? 1.05 : isCurrentTurn ? 1.02 : 1,
                     x: 0,
                   }}
                   exit={{ opacity: 0, scale: 0.8, x: 20 }}
-                  className={`shrink-0 w-36 rounded-xl border-2 transition-all duration-300 overflow-hidden ${
+                  onClick={() => { if (!isDead) onSelectTarget(isSelected ? null : enemy.id); }}
+                  className={`shrink-0 w-36 rounded-xl border-2 transition-all duration-300 overflow-hidden cursor-pointer ${
                     isDead
-                      ? 'bg-zinc-950/80 border-zinc-800'
+                      ? 'bg-zinc-950/80 border-zinc-800 cursor-default'
+                      : isSelected
+                      ? 'bg-gradient-to-b from-amber-950/60 to-zinc-950 border-amber-500 shadow-lg shadow-amber-500/30'
                       : isCurrentTurn
                       ? 'bg-gradient-to-b from-red-950/60 to-zinc-950 border-red-500 shadow-lg shadow-red-500/20'
-                      : 'bg-zinc-950/80 border-zinc-800/60 hover:border-zinc-700'
+                      : 'bg-zinc-950/80 border-zinc-800/60 hover:border-zinc-600'
                   }`}
                 >
-                  {/* Subtle glow on active enemy card */}
-                  {isCurrentTurn && !isDead && (
-                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(220,38,38,0.1),transparent_60%)] pointer-events-none" />
+                  {(isCurrentTurn || isSelected) && !isDead && (
+                    <div className={`absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(220,38,38,0.1),transparent_60%)] pointer-events-none ${isSelected ? 'opacity-50' : ''}`} />
                   )}
 
                   <div className="p-3 relative z-10">
                     <div className="flex items-center justify-between mb-2">
-                      <span className={`text-xs font-bold truncate max-w-[100px] ${isDead ? 'text-zinc-700 line-through' : 'text-white'}`}>
+                      <span className={`text-xs font-bold truncate max-w-[100px] ${isDead ? 'text-zinc-700 line-through' : isSelected ? 'text-amber-300' : 'text-white'}`}>
                         {enemy.name}
                       </span>
                       {isDead && (
                         <span className="flex items-center gap-1 text-[10px] font-bold text-red-900">
                           <Skull className="w-3 h-3" />
                           Dead
+                        </span>
+                      )}
+                      {isSelected && !isDead && (
+                        <span className="flex items-center gap-1 text-[10px] font-bold text-amber-400">
+                          <Crosshair className="w-3 h-3" />
+                          Цель
                         </span>
                       )}
                     </div>

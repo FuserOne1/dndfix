@@ -139,6 +139,7 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
   const [battleRound, setBattleRound] = useState(1);
   const [selectedSpell, setSelectedSpell] = useState(false);
   const [selectedItem, setSelectedItem] = useState(false);
+  const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
 
   // Dice popup
   const [showDicePopup, setShowDicePopup] = useState(false);
@@ -147,6 +148,17 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
 
   // Синхронизируем ref с battleActive
   useEffect(() => { battleActiveRef.current = battleActive; }, [battleActive]);
+  const currentTurnRef = useRef(currentTurn);
+  useEffect(() => { currentTurnRef.current = currentTurn; }, [currentTurn]);
+
+  // Сброс боевого UI при выходе из боя
+  useEffect(() => {
+    if (!battleActive) {
+      setSelectedSpell(false);
+      setSelectedItem(false);
+      setSelectedTargetId(null);
+    }
+  }, [battleActive]);
 
   // Если нет персонажа - показываем уведомление
   // Эта проверка теперь в App.tsx, но оставим на всякий случай
@@ -267,6 +279,17 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
                   const alive = updated.filter(e => e.hp > 0);
                   if (alive.length === 0) {
                     setBattleActive(false);
+                  } else {
+                    const currentIdx = alive.findIndex(e => e.name === currentTurnRef.current);
+                    if (currentIdx >= 0) {
+                      const nextIdx = (currentIdx + 1) % alive.length;
+                      setCurrentTurn(alive[nextIdx].name);
+                      if (nextIdx === 0) {
+                        setBattleRound(prev => prev + 1);
+                      }
+                    } else {
+                      setCurrentTurn(alive[0].name);
+                    }
                   }
                   return updated;
                 });
@@ -638,10 +661,8 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
     if (!stats) return;
 
     const strMod = getStatModifier(stats.stats.strength);
-    const dexMod = getStatModifier(stats.stats.dexterity);
     const profBonus = Math.floor((stats.level + 3) / 4) + 1;
 
-    // Для простоты используем STR (melee). В будущем можно добавить выбор оружия.
     const attackBonus = strMod + profBonus;
     const roll = Math.floor(Math.random() * 20) + 1;
     const total = roll + attackBonus;
@@ -656,7 +677,12 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
     else if (isFumble) result = '💀 **КРИТИЧЕСКИЙ ПРОМАХ!**';
     else result = `Попадание? Класс Сложности: AC врага`;
 
-    const message = `⚔️ **Атака**: d20+${attackBonus} = **${total}** (${roll} + ${attackBonus})\n${result}\n🗡️ **Урон**: 1d8+${strMod} = **${damage}** (${damageRoll} + ${strMod})`;
+    const target = selectedTargetId
+      ? enemies.find(e => e.id === selectedTargetId)
+      : null;
+    const targetStr = target ? ` (цель: **${target.name}**, AC ${target.ac})` : '';
+
+    const message = `⚔️ **Атака**: d20+${attackBonus} = **${total}** (${roll} + ${attackBonus})${targetStr}\n${result}\n🗡️ **Урон**: 1d8+${strMod} = **${damage}** (${damageRoll} + ${strMod})`;
     sendBattleAction(message);
   };
 
@@ -1227,17 +1253,9 @@ XP: ${stats.xp}
               }
               return enemy;
             });
-            // Определяем следующий ход
             const alive = updated.filter(e => e.hp > 0);
             if (alive.length === 0) {
               setBattleActive(false);
-            } else {
-              const currentIdx = alive.findIndex(e => e.name === currentTurn);
-              const nextIdx = (currentIdx + 1) % alive.length;
-              setCurrentTurn(alive[nextIdx].name);
-              if (nextIdx === 0) {
-                setBattleRound(prev => prev + 1);
-              }
             }
             return updated;
           });
@@ -1375,7 +1393,15 @@ XP: ${stats.xp}
               <Palette className="w-5 h-5" />
             </button>
             <button
-              onClick={() => setBattleActive(!battleActive)}
+              onClick={() => {
+              if (battleActive) {
+                setEnemies([]);
+                setCurrentTurn('');
+                setBattleRound(1);
+                setSelectedTargetId(null);
+              }
+              setBattleActive(!battleActive);
+            }}
               className={`relative flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all border text-[10px] font-bold uppercase tracking-widest ${
                 battleActive
                   ? 'bg-red-500/15 border-red-500/40 text-red-400 shadow-sm shadow-red-500/20'
@@ -1536,6 +1562,8 @@ XP: ${stats.xp}
           enemies={enemies}
           currentTurn={currentTurn}
           round={battleRound}
+          selectedTargetId={selectedTargetId}
+          onSelectTarget={setSelectedTargetId}
         />
       )}
 
