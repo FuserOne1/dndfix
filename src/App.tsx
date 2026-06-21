@@ -3,7 +3,7 @@ import Chat from './components/Chat';
 import CharacterSelect from './components/CharacterSelect';
 import { supabase, isSupabaseConfigured, supabaseUrl, supabaseAnonKey } from './lib/supabase';
 import { Character } from './types';
-import { LogIn, Swords, ScrollText, User as UserIcon, Loader2, AlertTriangle, Trash2, Download } from 'lucide-react';
+import { LogIn, Swords, ScrollText, User as UserIcon, Loader2, AlertTriangle, Trash2, Download, Info } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
@@ -19,6 +19,7 @@ export default function App() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<'menu' | 'character-select' | 'game'>('menu');
+  const [showVersionInfo, setShowVersionInfo] = useState(false);
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
 
   const [userSessionId] = useState(() => {
@@ -506,23 +507,59 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {/* Footer */}
-        <motion.p
+        {/* Version info */}
+        <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 1.2, duration: 0.5 }}
-          className="text-center text-[9px] text-zinc-700"
+          className="text-center space-y-2"
         >
-          D&amp;D Dark Fantasy © {new Date().getFullYear()}
-        </motion.p>
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.3, duration: 0.5 }}
-          className="text-center text-[7px] text-zinc-700/50 font-mono"
-        >
-          v0.1.0 — Shadowbinding · 154 commits · last updated 21 Jun 2026
-        </motion.p>
+          <div className="flex items-center justify-center gap-2">
+            <span className="text-[9px] text-zinc-600/80 font-mono tracking-wide">
+              D&amp;D Dark Fantasy © {new Date().getFullYear()}
+            </span>
+          </div>
+          <button
+            onClick={() => setShowVersionInfo(!showVersionInfo)}
+            className="group inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900/40 border border-zinc-800/40 hover:bg-zinc-800/40 hover:border-zinc-700 transition-all"
+          >
+            <Info className="w-2.5 h-2.5 text-zinc-500 group-hover:text-primary transition-colors" />
+            <span className="text-[8px] font-mono text-zinc-500 group-hover:text-zinc-300 transition-colors tracking-wider uppercase">
+              v0.2.0 — Battle Update · 163 commits · 21 Jun 2026
+            </span>
+          </button>
+          <AnimatePresence>
+            {showVersionInfo && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="p-3 rounded-xl bg-zinc-900/60 border border-zinc-800/60 text-left space-y-2 text-[9px] font-mono leading-relaxed">
+                  <p className="text-primary font-bold tracking-wider uppercase text-[8px]">v0.2.0 — Battle Update</p>
+                  <p className="text-zinc-400">Полноценная боевая мини-игра с пошаговой системой D&D 5e. Заменила текстовые бои.</p>
+                  <div className="space-y-0.5 text-zinc-500">
+                    <p className="text-zinc-600 font-bold text-[8px] uppercase tracking-wider">Что добавлено:</p>
+                    <p>• ⚔️ Пошаговая боевая система (атака, защита, заклинания, предметы)</p>
+                    <p>• 🎒 Инвентарь в бою — предметы с эффектами (хил, баффы, урон)</p>
+                    <p>• 🎯 Основное + бонусное действие за ход</p>
+                    <p>• 👥 Враги с D&D 5e характеристиками (AC, toHit, инициатива)</p>
+                    <p>• 📜 Лог боя с группировкой по раундам</p>
+                    <p>• 🏆 Автоматическое применение наград (XP, лут, HP)</p>
+                    <p>• 🎨 Полный редизайн интерфейса (тёмное фэнтези)</p>
+                    <p>• 🖼️ Генерация изображений (OpenAI/OpenRouter)</p>
+                    <p>• 👥 Мультиплеер (Supabase real-time)</p>
+                  </div>
+                  <div className="pt-1 border-t border-zinc-800/40 text-zinc-600">
+                    <span className="text-[7px]">163 commits · last updated 21 Jun 2026 · </span>
+                    <a href="https://github.com/FuserOne1/dndfix" target="_blank" rel="noopener noreferrer" className="text-primary/60 hover:text-primary underline">GitHub</a>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
       </div>
     </div>
   );
