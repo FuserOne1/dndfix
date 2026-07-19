@@ -23,13 +23,21 @@ CREATE TABLE IF NOT EXISTS campaign_participants (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
   user_session_id TEXT NOT NULL,
-  character_id UUID NOT NULL REFERENCES characters(id) ON DELETE RESTRICT,
+  character_id UUID REFERENCES characters(id) ON DELETE SET NULL,
   character_snapshot JSONB NOT NULL,
   is_host BOOLEAN NOT NULL DEFAULT FALSE,
   is_ready BOOLEAN NOT NULL DEFAULT FALSE,
   joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(campaign_id, user_session_id)
 );
+
+-- A campaign owns an immutable character snapshot. Deleting a reusable hero
+-- from the library must not delete or block an existing campaign.
+ALTER TABLE campaign_participants ALTER COLUMN character_id DROP NOT NULL;
+ALTER TABLE campaign_participants DROP CONSTRAINT IF EXISTS campaign_participants_character_id_fkey;
+ALTER TABLE campaign_participants
+  ADD CONSTRAINT campaign_participants_character_id_fkey
+  FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE SET NULL;
 
 CREATE TABLE IF NOT EXISTS campaign_scenes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

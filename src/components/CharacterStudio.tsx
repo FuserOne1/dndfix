@@ -125,7 +125,10 @@ export default function CharacterStudio({ onSelect, onBack, title = 'Выбер�
   async function deleteCharacter(character: Character) {
     if (!window.confirm(`Удалить героя «${character.name}»?`)) return;
     const { error: deleteError } = await supabase.from('characters').delete().eq('id', character.id);
-    if (deleteError) setError(deleteError.message); else setCharacters(previous => previous.filter(item => item.id !== character.id));
+    if (deleteError) {
+      const linkedToCampaign = deleteError.code === '23503' || /campaign_participants_character_id_fkey|foreign key constraint/i.test(deleteError.message);
+      setError(linkedToCampaign ? 'Старая связь с кампанией блокирует удаление героя. Повторно выполните migration_interactive_rpg_v1.sql в Supabase и попробуйте ещё раз.' : deleteError.message);
+    } else setCharacters(previous => previous.filter(item => item.id !== character.id));
   }
 
   if (loading) return <Screen><div className="flex items-center gap-3 text-zinc-400"><Loader2 className="animate-spin"/>Загружаем библиотеку героев…</div></Screen>;

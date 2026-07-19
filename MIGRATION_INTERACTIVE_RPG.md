@@ -5,7 +5,7 @@
 ## Перед запуском
 
 1. Откройте SQL Editor проекта Supabase.
-2. Выполните [`migration_interactive_rpg_v1.sql`](./migration_interactive_rpg_v1.sql). Миграцию можно безопасно запускать повторно: она добавит недостающие поля, включая `characters.gold`, и обновит кеш схемы API.
+2. Выполните [`migration_interactive_rpg_v1.sql`](./migration_interactive_rpg_v1.sql). Миграцию можно безопасно запускать повторно: она добавит недостающие поля, включая `characters.gold`, обновит кеш схемы API и разрешит удалять героев из библиотеки без удаления сохранённых кампаний.
 3. Проверьте переменные окружения:
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
