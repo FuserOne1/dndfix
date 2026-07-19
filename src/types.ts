@@ -29,6 +29,7 @@ export interface Character {
   abilities?: string;
   gold?: number;
   equipment: string[];
+  inventory_data?: import('./game/types').InventoryData;
   story_summary?: string;
   rules_data?: import('./game/types').CharacterRulesData;
   backstory_data?: import('./game/types').BackstoryData;
@@ -71,6 +72,8 @@ export interface CharacterStats {
   };
   background: string;
   equipment: string[];
+  combat_items?: string[];
+  passive_bonuses?: { ac: number; attack: number; damage: number };
   story_summary?: string;
   item_effects?: Record<string, ItemEffect>;
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
-import { ArrowLeft, ArrowRight, Check, Loader2, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Backpack, Check, Loader2, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Character } from '../types';
 import { ATTRIBUTE_LABELS, CLASSES, LINEAGES, ORIGINS, getClassDefinition, getLineage, getOrigin } from '../game/catalog';
@@ -9,18 +9,19 @@ import { AttributeScores, BASE_SCORES, POINT_BUY_BUDGET, applyLineageBonuses, bu
 
 interface CharacterStudioProps {
   onSelect: (character: Character) => void;
+  onInventory?: (character: Character) => void;
   onBack: () => void;
   title?: string;
 }
 
 type Step = 'identity' | 'lineage' | 'class' | 'origin' | 'attributes' | 'skills' | 'story' | 'review';
 const STEPS: Step[] = ['identity', 'lineage', 'class', 'origin', 'attributes', 'skills', 'story', 'review'];
-const STEP_LABELS: Record<Step, string> = { identity: 'Герой', lineage: 'Наследие', class: 'Путь', origin: 'Происхождение', attributes: 'Характеристики', skills: 'Навыки', story: 'Предыстория', review: 'Итог' };
+const STEP_LABELS: Record<Step, string> = { identity: 'Герой', lineage: 'Раса', class: 'Путь', origin: 'Происхождение', attributes: 'Характеристики', skills: 'Навыки', story: 'Предыстория', review: 'Итог' };
 
 const EMPTY_ANSWERS: BackstoryAnswers = { homeland: '', goal: '', loss: '', connection: '', fear: '', secret: '', tone: 'dramatic' };
 const EMPTY_BACKSTORY: BackstoryData = { homeland: '', goal: '', loss: '', connection: '', fear: '', secret: '', values: [], hooks: [], prose: '' };
 
-export default function CharacterStudio({ onSelect, onBack, title = 'Выберите героя' }: CharacterStudioProps) {
+export default function CharacterStudio({ onSelect, onInventory, onBack, title = 'Выберите героя' }: CharacterStudioProps) {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [view, setView] = useState<'library' | 'create'>('library');
   const [step, setStep] = useState<Step>('identity');
@@ -98,7 +99,7 @@ export default function CharacterStudio({ onSelect, onBack, title = 'Выбер�
     const insertPayload: Record<string, unknown> = { ...draft };
     const payload: Record<string, unknown> = { ...insertPayload };
     const omittedFields: Record<string, unknown> = {};
-    const optionalColumns = new Set(['rules_data', 'backstory_data', 'gold', 'story_summary', 'avatar_icon']);
+    const optionalColumns = new Set(['rules_data', 'backstory_data', 'inventory_data', 'gold', 'story_summary', 'avatar_icon']);
     let data: Character | null = null;
     let saveError: { message: string } | null = null;
 
@@ -139,8 +140,8 @@ export default function CharacterStudio({ onSelect, onBack, title = 'Выбер�
         <Header onBack={onBack} eyebrow="Библиотека героев" title={title} subtitle="Выберите героя для кампании или создайте нового."/>
         {error && <ErrorBox>{error}</ErrorBox>}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <button onClick={openCreator} className="min-h-52 rounded-2xl border border-dashed border-amber-500/40 bg-amber-500/5 hover:bg-amber-500/10 flex flex-col items-center justify-center gap-3 text-amber-300 transition"><span className="p-3 rounded-full bg-amber-500/10"><Plus/></span><strong>Создать героя</strong><span className="text-xs text-zinc-500">Наследие, путь и предыстория</span></button>
-          {characters.map(character => <CharacterCard key={character.id} character={character} onSelect={() => onSelect(character)} onDelete={() => void deleteCharacter(character)}/>) }
+          <button onClick={openCreator} className="min-h-52 rounded-2xl border border-dashed border-amber-500/40 bg-amber-500/5 hover:bg-amber-500/10 flex flex-col items-center justify-center gap-3 text-amber-300 transition"><span className="p-3 rounded-full bg-amber-500/10"><Plus/></span><strong>Создать героя</strong><span className="text-xs text-zinc-500">Раса, класс и предыстория</span></button>
+          {characters.map(character => <CharacterCard key={character.id} character={character} onSelect={() => onSelect(character)} onInventory={onInventory ? () => onInventory(character) : undefined} onDelete={() => void deleteCharacter(character)}/>) }
         </div>
       </div>
     </Screen>
@@ -175,8 +176,8 @@ function Screen({ children }: { children: ReactNode }) { return <div className="
 function Header({ onBack, eyebrow, title, subtitle }: { onBack: () => void; eyebrow: string; title: string; subtitle: string }) { return <div className="flex items-start gap-3 sm:gap-4"><button onClick={onBack} className="shrink-0 p-3 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-800"><ArrowLeft className="w-5 h-5"/></button><div className="min-w-0"><p className="text-[10px] sm:text-xs uppercase tracking-[0.16em] sm:tracking-[0.22em] text-amber-500">{eyebrow}</p><h1 className="text-2xl sm:text-3xl font-black text-white break-words">{title}</h1><p className="text-sm text-zinc-500 mt-1">{subtitle}</p></div></div>; }
 function ErrorBox({ children }: { children: ReactNode }) { return <div className="p-3 rounded-xl border border-red-500/30 bg-red-500/10 text-sm text-red-300">{children}</div>; }
 
-function CharacterCard({ character, onSelect, onDelete }: { character: Character; onSelect: () => void; onDelete: () => void }) {
-  return <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 flex flex-col min-h-52"><div className="flex justify-between"><div className="w-11 h-11 rounded-xl bg-zinc-800 flex items-center justify-center text-xl">{getClassDefinition(character.rules_data?.classId || '').icon}</div><button onClick={onDelete} className="p-2 text-zinc-600 hover:text-red-400"><Trash2 className="w-4 h-4"/></button></div><h2 className="text-lg font-bold mt-4">{character.name}</h2><p className="text-sm text-zinc-400">{character.race} · {character.class}</p><p className="text-xs text-zinc-600 mt-1">Уровень {character.level} · {character.hp_current}/{character.hp_max} HP</p><button onClick={onSelect} className="mt-auto pt-4 text-left text-sm font-bold text-amber-400 hover:text-amber-300">Выбрать героя →</button></div>;
+function CharacterCard({ character, onSelect, onInventory, onDelete }: { character: Character; onSelect: () => void; onInventory?: () => void; onDelete: () => void }) {
+  return <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 flex flex-col min-h-52"><div className="flex justify-between"><div className="w-11 h-11 rounded-xl bg-zinc-800 flex items-center justify-center text-xl">{getClassDefinition(character.rules_data?.classId || '').icon}</div><button onClick={onDelete} className="p-2 text-zinc-600 hover:text-red-400"><Trash2 className="w-4 h-4"/></button></div><h2 className="text-lg font-bold mt-4">{character.name}</h2><p className="text-sm text-zinc-400">{character.race} · {character.class}</p><p className="text-xs text-zinc-600 mt-1">Уровень {character.level} · {character.hp_current}/{character.hp_max} HP · {character.gold || 0} зол.</p><div className="mt-auto pt-4 flex justify-between gap-3">{onInventory && <button onClick={onInventory} className="text-sm font-bold text-zinc-400 hover:text-zinc-200 flex items-center gap-1"><Backpack className="w-4 h-4"/>Рюкзак</button>}<button onClick={onSelect} className="text-left text-sm font-bold text-amber-400 hover:text-amber-300">Выбрать →</button></div></div>;
 }
 
 function IdentityStep({ name, setName }: { name: string; setName: (value: string) => void }) { return <div className="max-w-xl mx-auto py-12 space-y-5 text-center"><div className="text-5xl">✦</div><div><h2 className="text-2xl font-bold">Как зовут вашего героя?</h2><p className="text-zinc-500 text-sm mt-2">Имя станет частью личных сюжетных линий.</p></div><input autoFocus value={name} onChange={event => setName(event.target.value)} maxLength={50} placeholder="Введите имя" className="w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-4 text-center text-xl font-bold outline-none focus:border-amber-500"/></div>; }

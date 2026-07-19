@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, BookOpen, ChevronRight, Loader2, Plus, ScrollText, Swords, Users } from 'lucide-react';
 import CharacterStudio from './components/CharacterStudio';
 import CampaignSetup from './components/CampaignSetup';
@@ -8,8 +8,11 @@ import { supabase, isSupabaseConfigured, supabaseAnonKey, supabaseUrl } from './
 import { Character } from './types';
 import { generateCampaignBible, generateOpeningScene } from './game/campaign-generator';
 import { CampaignPreferences, CampaignRuntime, GameMode } from './game/types';
+import { createDirectorState } from './game/scene-director';
 
-type Screen = 'home' | 'characters' | 'setup' | 'join' | 'waiting' | 'story' | 'library';
+const InventoryPanel = lazy(() => import('./components/InventoryPanel'));
+
+type Screen = 'home' | 'characters' | 'setup' | 'join' | 'waiting' | 'story' | 'library' | 'inventory';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home');
@@ -24,6 +27,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [flow, setFlow] = useState<'play' | 'library' | 'join'>('play');
+  const [inventoryReturn, setInventoryReturn] = useState<Screen>('characters');
   const [userSessionId] = useState(() => {
     const existing = localStorage.getItem('user_session_id');
     if (existing) return existing;
@@ -124,7 +128,7 @@ export default function App() {
       const opening = await generateOpeningScene(bible, preferences, characters);
       const runtime: CampaignRuntime = {
         id, mode, status: 'playing', hostUserId: userSessionId, preferences, bible, currentScene: opening,
-        state: { flags: [], inventory: [], relationships: {}, completedSceneIds: [], currentActId: opening.actId, currentSceneId: opening.id, sceneNumber: 1 },
+        state: { flags: [], inventory: [], relationships: {}, completedSceneIds: [], currentActId: opening.actId, currentSceneId: opening.id, sceneNumber: 1, director: createDirectorState(opening, characters) },
       };
       setCampaignCharacters(characters);
       const payload = runtimeToRow(runtime);
@@ -155,7 +159,7 @@ export default function App() {
 
   async function updateCampaign(runtime: CampaignRuntime) {
     setCampaign(runtime);
-    const { error: updateError } = await supabase.from('campaigns').update({ state: runtime.state, current_scene: runtime.currentScene, updated_at: new Date().toISOString() }).eq('id', runtime.id);
+    const { error: updateError } = await supabase.from('campaigns').update({ status: runtime.status, state: runtime.state, current_scene: runtime.currentScene, updated_at: new Date().toISOString() }).eq('id', runtime.id);
     if (updateError) throw updateError;
     await supabase.from('campaign_scenes').upsert({ campaign_id: runtime.id, scene_id: runtime.currentScene.id, act_id: runtime.currentScene.actId, scene_number: runtime.state.sceneNumber, content: runtime.currentScene }, { onConflict: 'campaign_id,scene_id' });
   }
@@ -163,7 +167,7 @@ export default function App() {
   async function updateCharacter(character: Character) {
     setSelectedCharacter(character);
     setCampaignCharacters(previous => previous.map(item => item.id === character.id ? character : item));
-    const { error: characterError } = await supabase.from('characters').update({ hp_current: character.hp_current, hp_max: character.hp_max, xp: character.xp, equipment: character.equipment }).eq('id', character.id);
+    const { error: characterError } = await supabase.from('characters').update({ hp_current: character.hp_current, hp_max: character.hp_max, xp: character.xp, gold: character.gold || 0, equipment: character.equipment, inventory_data: character.inventory_data }).eq('id', character.id);
     if (characterError) throw characterError;
     if (campaign) {
       const { error: snapshotError } = await supabase.from('campaign_participants').update({ character_snapshot: character }).eq('campaign_id', campaign.id).eq('user_session_id', userSessionId);
@@ -173,7 +177,8 @@ export default function App() {
 
   const isPlaceholder = supabaseUrl.includes('your-project-id') || supabaseAnonKey === 'your-anon-key';
   if (!isSupabaseConfigured || isPlaceholder) return <ConfigurationScreen/>;
-  if (screen === 'characters') return <CharacterStudio onSelect={character => void handleCharacterSelected(character)} onBack={() => setScreen(flow === 'join' ? 'join' : 'home')} title={flow === 'library' ? 'Библиотека героев' : 'Кто отправится в путь?'}/>;
+  if (screen === 'characters') return <CharacterStudio onSelect={character => void handleCharacterSelected(character)} onInventory={character => { setSelectedCharacter(character); setInventoryReturn('characters'); setScreen('inventory'); }} onBack={() => setScreen(flow === 'join' ? 'join' : 'home')} title={flow === 'library' ? 'Библиотека героев' : 'Кто отправится в путь?'}/>;
+  if (screen === 'inventory' && selectedCharacter) return <Suspense fallback={<div className="min-h-screen bg-zinc-950 flex items-center justify-center text-amber-400"><Loader2 className="animate-spin"/></div>}><InventoryPanel character={selectedCharacter} onSave={updateCharacter} onClose={() => setScreen(inventoryReturn)}/></Suspense>;
   if (screen === 'setup' && selectedCharacter) return <CampaignSetup mode={mode} character={selectedCharacter} onBack={() => setScreen('characters')} onStart={handleSetupStart} loading={loading} error={error}/>;
   if (screen === 'waiting' && draftCampaignId) return <PartyWaitingRoom campaignId={draftCampaignId} currentUserId={userSessionId} onBack={() => setScreen('home')} onStartCampaign={() => void startPreparedParty()} starting={loading} externalError={error} onCampaignStarted={() => void openStartedCampaign(draftCampaignId)}/>;
   if (screen === 'story' && campaign && selectedCharacter) return <StoryReader campaign={campaign} characters={campaignCharacters.length ? campaignCharacters : [selectedCharacter]} activeCharacter={selectedCharacter} currentUserId={userSessionId} onUpdate={updateCampaign} onRemoteUpdate={setCampaign} onCharacterUpdate={updateCharacter} onLeave={() => { setCampaign(null); setScreen('home'); void loadCampaigns(); }}/>;

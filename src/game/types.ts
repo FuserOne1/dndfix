@@ -49,6 +49,69 @@ export interface OriginDefinition {
   storyTags: string[];
 }
 
+export type ItemType = 'weapon' | 'armor' | 'shield' | 'accessory' | 'consumable' | 'tool' | 'quest' | 'misc';
+export type ItemRarity = 'common' | 'uncommon' | 'rare' | 'epic';
+export type EquipmentSlot = 'mainHand' | 'offHand' | 'armor' | 'accessory1' | 'accessory2';
+
+export interface InventoryItemEffect {
+  heal?: number;
+  tempHp?: number;
+  damage?: number;
+  damageDice?: string;
+  buffAc?: number;
+  buffAtk?: number;
+  buffDmg?: number;
+  condition?: string;
+  description?: string;
+}
+
+export interface ItemDefinition {
+  id: string;
+  name: string;
+  description: string;
+  type: ItemType;
+  rarity: ItemRarity;
+  icon: string;
+  value: number;
+  slots: number;
+  stackLimit: number;
+  equipSlots?: EquipmentSlot[];
+  weaponDice?: string;
+  armorClass?: number;
+  effect?: InventoryItemEffect;
+  storyTags: string[];
+}
+
+export interface InventoryItem {
+  uid: string;
+  templateId: string;
+  name: string;
+  quantity: number;
+  customDescription?: string;
+}
+
+export interface InventoryData {
+  version: 1;
+  capacity: number;
+  items: InventoryItem[];
+  equipped: Partial<Record<EquipmentSlot, string>>;
+  quickSlots: Array<string | null>;
+}
+
+export interface MerchantStockItem {
+  templateId: string;
+  quantity: number;
+  priceModifier: number;
+}
+
+export interface MerchantData {
+  key: string;
+  name: string;
+  stock: MerchantStockItem[];
+  buyModifier: number;
+  sellModifier: number;
+}
+
 export interface BackstoryData {
   homeland: string;
   goal: string;
@@ -87,6 +150,55 @@ export interface CampaignPreferences {
   voteTimerSeconds: number | null;
 }
 
+export type SceneType =
+  | 'narrative'
+  | 'social'
+  | 'exploration'
+  | 'investigation'
+  | 'challenge'
+  | 'combat'
+  | 'travel'
+  | 'camp'
+  | 'rest'
+  | 'trade'
+  | 'loot'
+  | 'personal'
+  | 'discovery'
+  | 'climax'
+  | 'ending';
+
+export type LegacySceneType = 'group' | 'check' | 'battle';
+export type SceneAudience = 'group' | 'personal' | 'solo';
+
+export interface SceneServices {
+  trade: boolean;
+  rest: boolean;
+  stash: boolean;
+}
+
+export interface SceneBlueprint {
+  id: string;
+  actId: string;
+  type: SceneType;
+  purpose: string;
+  tension: 1 | 2 | 3 | 4 | 5;
+  audience: SceneAudience;
+  focusCharacter?: string;
+  services: SceneServices;
+  requiredFlags?: string[];
+  forbiddenFlags?: string[];
+}
+
+export interface SceneDirectorState {
+  currentBlueprintId?: string;
+  completedBlueprintIds: string[];
+  recentTypes: SceneType[];
+  scenesSinceCombat: number;
+  scenesSinceRest: number;
+  scenesSinceTrade: number;
+  personalSceneCounts: Record<string, number>;
+}
+
 export interface CampaignBible {
   title: string;
   tagline: string;
@@ -100,6 +212,7 @@ export interface CampaignBible {
   truths: string[];
   endings: Array<{ id: string; title: string; condition: string }>;
   characterHooks: Array<{ characterName: string; hook: string; relatedNpc?: string }>;
+  scenePlan?: SceneBlueprint[];
 }
 
 export type ChoiceCheck = {
@@ -138,7 +251,12 @@ export interface StoryScene {
   title: string;
   location: string;
   body: string[];
-  type: 'group' | 'personal' | 'check' | 'battle' | 'rest' | 'ending';
+  type: SceneType | LegacySceneType;
+  audience?: SceneAudience;
+  purpose?: string;
+  tension?: 1 | 2 | 3 | 4 | 5;
+  services?: SceneServices;
+  blueprintId?: string;
   focusCharacter?: string;
   choices: StoryChoice[];
   recap?: string;
@@ -152,6 +270,7 @@ export interface CampaignState {
   currentActId: string;
   currentSceneId: string;
   sceneNumber: number;
+  director?: SceneDirectorState;
 }
 
 export interface ChoiceResolution {

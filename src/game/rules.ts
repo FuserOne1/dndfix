@@ -1,5 +1,6 @@
 import { Character } from '../types';
 import { getClassDefinition, getLineage, getOrigin } from './catalog';
+import { createStartingInventory, equippedItemNames } from './inventory';
 import { AttributeKey, BackstoryData, CharacterRulesData, ChoiceResolution, StoryChoice } from './types';
 
 export type AttributeScores = Record<AttributeKey, number>;
@@ -64,6 +65,7 @@ export function buildCharacterDraft(input: {
     traits: [...lineage.traits, ...classDefinition.traits].map(trait => trait.id),
     storyTags: [...new Set([...lineage.storyTags, ...classDefinition.storyTags, ...origin.storyTags])],
   };
+  const inventoryData = createStartingInventory([...new Set([...classDefinition.startingEquipment, ...origin.equipment])]);
 
   return {
     name: input.name.trim(),
@@ -80,7 +82,8 @@ export function buildCharacterDraft(input: {
     wisdom: finalScores.wisdom,
     charisma: finalScores.charisma,
     background: origin.name,
-    equipment: [...new Set([...classDefinition.startingEquipment, ...origin.equipment])],
+    equipment: equippedItemNames(inventoryData),
+    inventory_data: inventoryData,
     story_summary: input.backstory.prose,
     avatar_icon: input.avatarIcon,
     gold: origin.gold,

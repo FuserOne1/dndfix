@@ -4,6 +4,7 @@
 ALTER TABLE characters ADD COLUMN IF NOT EXISTS rules_data JSONB;
 ALTER TABLE characters ADD COLUMN IF NOT EXISTS backstory_data JSONB;
 ALTER TABLE characters ADD COLUMN IF NOT EXISTS gold INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS inventory_data JSONB NOT NULL DEFAULT '{"version":1,"capacity":18,"items":[],"equipped":{},"quickSlots":[null,null,null,null]}'::jsonb;
 
 CREATE TABLE IF NOT EXISTS campaigns (
   id TEXT PRIMARY KEY,
@@ -62,15 +63,39 @@ CREATE TABLE IF NOT EXISTS campaign_votes (
   UNIQUE(campaign_id, scene_id, user_session_id)
 );
 
+CREATE TABLE IF NOT EXISTS campaign_stash_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  item_data JSONB NOT NULL,
+  added_by TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS campaign_merchants (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  merchant_key TEXT NOT NULL,
+  name TEXT NOT NULL,
+  stock JSONB NOT NULL DEFAULT '[]'::jsonb,
+  buy_modifier NUMERIC NOT NULL DEFAULT 1,
+  sell_modifier NUMERIC NOT NULL DEFAULT 0.45,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(campaign_id, merchant_key)
+);
+
 CREATE INDEX IF NOT EXISTS idx_campaigns_updated ON campaigns(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_campaign_participants_campaign ON campaign_participants(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_campaign_scenes_campaign_number ON campaign_scenes(campaign_id, scene_number);
 CREATE INDEX IF NOT EXISTS idx_campaign_votes_scene ON campaign_votes(campaign_id, scene_id);
+CREATE INDEX IF NOT EXISTS idx_campaign_stash_campaign ON campaign_stash_items(campaign_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_campaign_merchants_campaign ON campaign_merchants(campaign_id);
 
 ALTER TABLE campaigns ENABLE ROW LEVEL SECURITY;
 ALTER TABLE campaign_participants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE campaign_scenes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE campaign_votes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE campaign_stash_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE campaign_merchants ENABLE ROW LEVEL SECURITY;
 
 -- Текущая версия использует анонимные локальные идентификаторы участников.
 -- Политики намеренно повторяют существующую открытую модель приложения.
@@ -89,6 +114,10 @@ DROP POLICY IF EXISTS "campaign_scenes_all" ON campaign_scenes;
 CREATE POLICY "campaign_scenes_all" ON campaign_scenes FOR ALL USING (true) WITH CHECK (true);
 DROP POLICY IF EXISTS "campaign_votes_all" ON campaign_votes;
 CREATE POLICY "campaign_votes_all" ON campaign_votes FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "campaign_stash_items_all" ON campaign_stash_items;
+CREATE POLICY "campaign_stash_items_all" ON campaign_stash_items FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "campaign_merchants_all" ON campaign_merchants;
+CREATE POLICY "campaign_merchants_all" ON campaign_merchants FOR ALL USING (true) WITH CHECK (true);
 
 DO $$
 BEGIN
@@ -99,6 +128,18 @@ END $$;
 DO $$
 BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE campaign_votes;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE campaign_stash_items;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE campaign_merchants;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 

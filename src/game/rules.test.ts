@@ -24,7 +24,7 @@ describe('Chronicles d20 character rules', () => {
 
   it('собирает структурированный снимок героя', () => {
     const draft = buildCharacterDraft({ name: 'Эйра', lineageId: 'aelir', classId: 'arcanist', originId: 'scholar', scores: { ...BASE_SCORES, intelligence: 15 }, skills: ['Природа', 'Медицина'], backstory: story, avatarIcon: 'arcanist' });
-    expect(draft).toMatchObject({ name: 'Эйра', race: 'Аэлир', class: 'Арканист', background: 'Исследователь' });
+    expect(draft).toMatchObject({ name: 'Эйра', race: 'Эльф', class: 'Арканист', background: 'Исследователь' });
     expect(draft.rules_data?.selectedSkills).toEqual(expect.arrayContaining(['Знание', 'Расследование', 'Природа']));
     expect(draft.backstory_data?.hooks).toEqual(['Пропавший брат']);
   });

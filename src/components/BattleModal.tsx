@@ -53,8 +53,8 @@ export default function BattleModal({ isOpen, enemies, playerStats, playerName, 
   const [turnEnemies, setTurnEnemies] = useState(initialEnemies);
   const [playerHP, setPlayerHP] = useState(playerStats.hp.current);
   const [tempHP, setTempHP] = useState(0);
-  const [equipment, setEquipment] = useState([...(playerStats.equipment || [])]);
-  const [buffs, setBuffs] = useState<BattleBuffs>({ ac: 0, attack: 0, damage: 0, conditions: [] });
+  const [equipment, setEquipment] = useState([...(playerStats.combat_items || playerStats.equipment || [])]);
+  const [buffs, setBuffs] = useState<BattleBuffs>({ ac: playerStats.passive_bonuses?.ac || 0, attack: playerStats.passive_bonuses?.attack || 0, damage: playerStats.passive_bonuses?.damage || 0, conditions: [] });
   const [turnIndex, setTurnIndex] = useState(0);
   const [phase, setPhase] = useState<Phase>(initiativeOrder[0]?.kind === 'enemy' ? 'enemy_turn' : 'player_turn');
   const [round, setRound] = useState(1);
