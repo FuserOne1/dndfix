@@ -6,11 +6,43 @@ import { applyBlueprint, chooseNextBlueprint, ensureScenePlan, normalizeSceneTyp
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-async function requestJson<T>(system: string, prompt: string): Promise<T> {
+interface AiRequestOptions {
+  model?: string;
+  maxTokens?: number;
+  timeoutMs?: number;
+}
+
+async function requestJson<T>(system: string, prompt: string, options: AiRequestOptions = {}): Promise<T> {
   const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
   if (!apiKey) throw new Error('VITE_OPENROUTER_API_KEY не настроен');
-  const response = await fetch(OPENROUTER_URL, {
+  const content = await requestCompletion(apiKey, system, prompt, {
+    model: options.model || AI_MODELS.MAIN,
+    maxTokens: options.maxTokens || 2600,
+    timeoutMs: options.timeoutMs || 50_000,
+  });
+  try {
+    return parseJson<T>(content);
+  } catch (parseError) {
+    if ((options.model || AI_MODELS.MAIN) === AI_MODELS.WORKHORSE) throw parseError;
+    console.warn('Claude returned malformed JSON, asking Gemini to repair it:', parseError);
+    const repaired = await requestCompletion(
+      apiKey,
+      'Ты технический JSON-редактор. Исправь только синтаксис и структуру JSON, не переписывай художественный текст и не добавляй новые факты. Ответ — только корректный JSON.',
+      `Исправь JSON:\n${content}`,
+      { model: AI_MODELS.WORKHORSE, maxTokens: options.maxTokens || 2600, timeoutMs: 25_000 },
+    );
+    return parseJson<T>(repaired);
+  }
+}
+
+async function requestCompletion(apiKey: string, system: string, prompt: string, options: Required<AiRequestOptions>): Promise<string> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), options.timeoutMs);
+  let response: Response;
+  try {
+    response = await fetch(OPENROUTER_URL, {
     method: 'POST',
+    signal: controller.signal,
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
@@ -18,17 +50,27 @@ async function requestJson<T>(system: string, prompt: string): Promise<T> {
       'X-Title': 'Chronicles RPG',
     },
     body: JSON.stringify({
-      model: AI_MODELS.MAIN,
+      model: options.model,
       temperature: 0.65,
-      max_tokens: 7000,
+      max_tokens: options.maxTokens,
       response_format: { type: 'json_object' },
       messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }],
     }),
-  });
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') throw new Error(`Генерация превысила ${Math.round(options.timeoutMs / 1000)} секунд`);
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
   if (!response.ok) throw new Error(`Генератор кампании недоступен: ${response.status}`);
   const payload = await response.json();
   const content = payload.choices?.[0]?.message?.content;
   if (typeof content !== 'string') throw new Error('Генератор вернул пустой ответ');
+  return content;
+}
+
+function parseJson<T>(content: string): T {
   const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1] || content;
   return JSON.parse(fenced) as T;
 }
@@ -56,6 +98,72 @@ function characterContext(character: Character) {
   };
 }
 
+export interface GeneratedCampaignPackage {
+  bible: CampaignBible;
+  opening: StoryScene;
+}
+
+export async function generateCampaignPackage(preferences: CampaignPreferences, characters: Character[]): Promise<GeneratedCampaignPackage> {
+  const system = `Ты — главный автор интерактивной текстовой RPG для оригинальной d20-системы. За один ответ создай библию всей кампании и полностью написанную первую сцену. История должна иметь заранее определённые тайны, личные линии героев, кульминацию и несколько возможных финалов. Не меняй факты и характеристики героев, не используй коммерческие франшизы. Ответ — только JSON вида {"bible":CampaignBible,"opening":StoryScene}.`;
+  const prompt = `НАСТРОЙКИ:\n${JSON.stringify(preferences)}
+
+ГЕРОИ:\n${JSON.stringify(characters.map(characterContext))}
+
+ТРЕБОВАНИЯ К БИБЛИИ:
+- поля: title, tagline, premise, setting, tone, centralConflict, antagonist, keyNpcs, acts, truths, endings, characterHooks;
+- актов: короткая кампания — 3, средняя — 4, длинная — 5;
+- каждый акт: id, title, goal, turningPoint, sceneSeeds;
+- для каждого героя отдельный characterHook с точным именем;
+- все тайны имеют заранее определённые ответы.
+
+ТРЕБОВАНИЯ К ПЕРВОЙ СЦЕНЕ:
+- id "scene-1", actId первого акта, type "narrative";
+- конкретная проблема с первых абзацев, без обязательного боя;
+- 2–5 выразительных абзацев и 3–5 содержательных вариантов;
+- поля StoryScene: id, actId, title, location, body, type, recap, choices;
+- каждый выбор: id, label, description, intent, необязательные check/requirements и consequences;
+- хотя бы один вариант должен учитывать конкретного героя.
+
+Не включай scenePlan: технический план построит игровой движок.`;
+
+  try {
+    const generated = await requestJson<{ bible: CampaignBible; opening: StoryScene }>(system, prompt, { model: AI_MODELS.MAIN, maxTokens: 5200, timeoutMs: 65_000 });
+    const bible = ensureScenePlan(validateBible(generated.bible), preferences, characters);
+    const opening = validateScene(generated.opening, bible.acts[0]?.id || 'act-1', 'scene-1', bible.scenePlan?.[0]);
+    return { bible, opening };
+  } catch (error) {
+    console.warn('Campaign package generation failed, using local campaign:', error);
+    const bible = ensureScenePlan(createFallbackBible(preferences, characters), preferences, characters);
+    return { bible, opening: createFallbackOpening(bible, characters, bible.scenePlan?.[0]) };
+  }
+}
+
+export function compactBibleForScene(bible: CampaignBible) {
+  const { scenePlan: _scenePlan, ...creativeBible } = bible;
+  return creativeBible;
+}
+
+function compactStateForScene(state: CampaignState) {
+  return {
+    flags: state.flags,
+    inventory: state.inventory,
+    relationships: state.relationships,
+    currentActId: state.currentActId,
+    sceneNumber: state.sceneNumber,
+    recentSceneIds: state.completedSceneIds.slice(-6),
+    recentTypes: state.director?.recentTypes,
+    personalSceneCounts: state.director?.personalSceneCounts,
+  };
+}
+
+function compactPreviousScene(scene: StoryScene) {
+  return {
+    id: scene.id, actId: scene.actId, title: scene.title, location: scene.location, body: scene.body,
+    type: scene.type, focusCharacter: scene.focusCharacter, recap: scene.recap,
+    choices: scene.choices.map(choice => ({ id: choice.id, label: choice.label, intent: choice.intent })),
+  };
+}
+
 export async function generateCampaignBible(preferences: CampaignPreferences, characters: Character[]): Promise<CampaignBible> {
   const system = `Ты — архитектор интерактивных RPG-кампаний для собственной d20-системы. Создай связный заранее определённый каркас, а не импровизационный чат. Не меняй характеристики героев. Не используй существующие миры, персонажей и названия коммерческих франшиз. Ответ — только JSON.`;
   const prompt = `Создай библию кампании по настройкам.
@@ -80,7 +188,7 @@ ${JSON.stringify(characters.map(characterContext), null, 2)}
 
 Количество актов: короткая 3, средняя 4, длинная 5. Для каждого героя обязательно создай личный крючок. Тайны должны иметь заранее определённые ответы.`;
   try {
-    return ensureScenePlan(validateBible(await requestJson<CampaignBible>(system, prompt)), preferences, characters);
+    return ensureScenePlan(validateBible(await requestJson<CampaignBible>(system, prompt, { model: AI_MODELS.MAIN, maxTokens: 3800, timeoutMs: 60_000 })), preferences, characters);
   } catch (error) {
     console.warn('Campaign generation failed, using local campaign:', error);
     return ensureScenePlan(createFallbackBible(preferences, characters), preferences, characters);
@@ -93,7 +201,7 @@ export async function generateOpeningScene(bible: CampaignBible, preferences: Ca
   const prompt = `Напиши первую сцену кампании. Она должна сразу поставить героев перед конкретной проблемой, но не начинать обязательный бой.
 
 БИБЛИЯ:
-${JSON.stringify(bible, null, 2)}
+${JSON.stringify(compactBibleForScene(bible))}
 
 ГЕРОИ:
 ${JSON.stringify(characters.map(characterContext), null, 2)}
@@ -103,7 +211,7 @@ ${JSON.stringify(preferences, null, 2)}
 
 Верни StoryScene в заданном формате. Дай 3–5 содержательных вариантов: прямой, осторожный, социальный и хотя бы один условный под конкретного героя.`;
   try {
-    return validateScene(await requestJson<StoryScene>(system, `${prompt}\n\nSCENE CONTRACT (do not change its fields):\n${JSON.stringify(blueprint, null, 2)}`), bible.acts[0]?.id || 'act-1', 'scene-1', blueprint);
+    return validateScene(await requestJson<StoryScene>(system, `${prompt}\n\nSCENE CONTRACT (do not change its fields):\n${JSON.stringify(blueprint)}`, { model: AI_MODELS.MAIN, maxTokens: 2400, timeoutMs: 50_000 }), bible.acts[0]?.id || 'act-1', 'scene-1', blueprint);
   } catch (error) {
     console.warn('Opening scene generation failed, using local scene:', error);
     return createFallbackOpening(bible, characters, blueprint);
@@ -123,23 +231,23 @@ export async function generateNextScene(input: {
   const prompt = `Продолжи кампанию строго в рамках библии. Учитывай фактический результат выбора, не переигрывай его и не добавляй новых глобальных тайн без необходимости.
 
 БИБЛИЯ:
-${JSON.stringify(input.bible, null, 2)}
+${JSON.stringify(compactBibleForScene(input.bible))}
 
 ПРЕДЫДУЩАЯ СЦЕНА:
-${JSON.stringify(input.previousScene, null, 2)}
+${JSON.stringify(compactPreviousScene(input.previousScene))}
 
 РЕЗУЛЬТАТ:
 ${JSON.stringify(input.resolution, null, 2)}
 
 СОСТОЯНИЕ:
-${JSON.stringify(input.state, null, 2)}
+${JSON.stringify(compactStateForScene(input.state))}
 
 ГЕРОИ:
 ${JSON.stringify(input.characters.map(characterContext), null, 2)}
 
 Верни следующую StoryScene. id должен быть "${nextId}".`;
   try {
-    return validateScene(await requestJson<StoryScene>(sceneSystemPrompt(), `${prompt}\n\nSCENE CONTRACT (do not change its fields):\n${JSON.stringify(blueprint, null, 2)}`), input.state.currentActId, nextId, blueprint);
+    return validateScene(await requestJson<StoryScene>(sceneSystemPrompt(), `${prompt}\n\nSCENE CONTRACT (do not change its fields):\n${JSON.stringify(blueprint)}`, { model: AI_MODELS.MAIN, maxTokens: 2400, timeoutMs: 50_000 }), input.state.currentActId, nextId, blueprint);
   } catch (error) {
     console.warn('Next scene generation failed, using local continuation:', error);
     return createFallbackContinuation(input, nextId, blueprint);

@@ -6,7 +6,7 @@ import PartyWaitingRoom from './components/PartyWaitingRoom';
 import StoryReader from './components/StoryReader';
 import { supabase, isSupabaseConfigured, supabaseAnonKey, supabaseUrl } from './lib/supabase';
 import { Character } from './types';
-import { generateCampaignBible, generateOpeningScene } from './game/campaign-generator';
+import { generateCampaignPackage } from './game/campaign-generator';
 import { CampaignPreferences, CampaignRuntime, GameMode } from './game/types';
 import { createDirectorState } from './game/scene-director';
 
@@ -124,8 +124,7 @@ export default function App() {
         characters = (rows || []).map((row: { character_snapshot: Character }) => row.character_snapshot);
         await supabase.from('campaigns').update({ status: 'generating', preferences }).eq('id', id);
       }
-      const bible = await generateCampaignBible(preferences, characters);
-      const opening = await generateOpeningScene(bible, preferences, characters);
+      const { bible, opening } = await generateCampaignPackage(preferences, characters);
       const runtime: CampaignRuntime = {
         id, mode, status: 'playing', hostUserId: userSessionId, preferences, bible, currentScene: opening,
         state: { flags: [], inventory: [], relationships: {}, completedSceneIds: [], currentActId: opening.actId, currentSceneId: opening.id, sceneNumber: 1, director: createDirectorState(opening, characters) },

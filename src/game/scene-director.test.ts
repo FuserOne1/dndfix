@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Character } from '../types';
 import { CampaignBible, CampaignPreferences, CampaignState, StoryScene } from './types';
 import { buildScenePlan, chooseNextBlueprint, normalizeSceneType, servicesForScene } from './scene-director';
+import { compactBibleForScene } from './campaign-generator';
 
 const characters = [
   { id: 'hero-1', name: 'Эйра', hp_current: 10, hp_max: 10 },
@@ -68,6 +69,14 @@ describe('scene director', () => {
     expect(servicesForScene('trade')).toEqual({ trade: true, rest: false, stash: true });
     expect(servicesForScene('narrative').trade).toBe(false);
     expect(servicesForScene('camp').rest).toBe(true);
+  });
+
+  it('does not send the full technical scene plan back to the prose model', () => {
+    const scenePlan = buildScenePlan(bible, preferences, characters);
+    const compact = compactBibleForScene({ ...bible, scenePlan });
+    expect(compact).not.toHaveProperty('scenePlan');
+    expect(compact.acts).toEqual(bible.acts);
+    expect(compact.centralConflict).toBe(bible.centralConflict);
   });
 
   it('prevents consecutive battles even if the plan requests one', () => {
