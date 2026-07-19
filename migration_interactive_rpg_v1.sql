@@ -121,6 +121,12 @@ CREATE POLICY "campaign_merchants_all" ON campaign_merchants FOR ALL USING (true
 
 DO $$
 BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE campaigns;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE campaign_participants;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;

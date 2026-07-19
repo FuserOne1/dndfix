@@ -18,13 +18,14 @@ interface StoryReaderProps {
   currentUserId: string;
   onUpdate: (campaign: CampaignRuntime) => void | Promise<void>;
   onRemoteUpdate?: (campaign: CampaignRuntime) => void;
+  onPartyCharactersUpdate?: (characters: Character[]) => void;
   onCharacterUpdate: (character: Character) => void | Promise<void>;
   onLeave: () => void;
 }
 
 interface Vote { user_session_id: string; choice_id: string; }
 
-export default function StoryReader({ campaign, characters, activeCharacter, currentUserId, onUpdate, onRemoteUpdate, onCharacterUpdate, onLeave }: StoryReaderProps) {
+export default function StoryReader({ campaign, characters, activeCharacter, currentUserId, onUpdate, onRemoteUpdate, onPartyCharactersUpdate, onCharacterUpdate, onLeave }: StoryReaderProps) {
   const [selectedChoiceId, setSelectedChoiceId] = useState('');
   const [votes, setVotes] = useState<Vote[]>([]);
   const [resolving, setResolving] = useState(false);
@@ -48,18 +49,50 @@ export default function StoryReader({ campaign, characters, activeCharacter, cur
     void loadVotes();
     if (campaign.mode !== 'party') return;
     const channel = supabase.channel(`campaign-votes:${campaign.id}:${scene.id}`).on('postgres_changes', { event: '*', schema: 'public', table: 'campaign_votes', filter: `campaign_id=eq.${campaign.id}` }, () => void loadVotes()).subscribe();
-    return () => { void supabase.removeChannel(channel); };
+    const poll = window.setInterval(() => void loadVotes(), 2_500);
+    return () => { window.clearInterval(poll); void supabase.removeChannel(channel); };
   }, [campaign.id, campaign.mode, loadVotes, scene.id]);
 
   useEffect(() => {
-    if (campaign.mode !== 'party' || !onRemoteUpdate) return;
-    const channel = supabase.channel(`campaign-state:${campaign.id}`).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'campaigns', filter: `id=eq.${campaign.id}` }, payload => {
-      const row = payload.new;
-      if (!row.current_scene || row.current_scene.id === campaign.currentScene.id) return;
-      onRemoteUpdate({ ...campaign, status: row.status, preferences: row.preferences, bible: row.bible, state: row.state, currentScene: row.current_scene });
-    }).subscribe();
-    return () => { void supabase.removeChannel(channel); };
-  }, [campaign, onRemoteUpdate]);
+    if (campaign.mode !== 'party' || isHost || !onRemoteUpdate) return;
+    let applying = false;
+    const applyRemoteRow = (row: any) => {
+      if (!row?.current_scene) return;
+      const sceneChanged = row.current_scene.id !== campaign.currentScene.id;
+      const statusChanged = row.status && row.status !== campaign.status;
+      if (!sceneChanged && !statusChanged) return;
+      onRemoteUpdate({ ...campaign, status: row.status || campaign.status, preferences: row.preferences || campaign.preferences, bible: row.bible || campaign.bible, state: row.state || campaign.state, currentScene: row.current_scene });
+    };
+    const pollCampaign = async () => {
+      if (applying) return;
+      applying = true;
+      const { data } = await supabase.from('campaigns').select('status, preferences, bible, state, current_scene').eq('id', campaign.id).maybeSingle();
+      applying = false;
+      applyRemoteRow(data);
+    };
+    const channel = supabase.channel(`campaign-state:${campaign.id}`).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'campaigns', filter: `id=eq.${campaign.id}` }, payload => applyRemoteRow(payload.new)).subscribe();
+    const poll = window.setInterval(() => void pollCampaign(), 2_500);
+    const refreshWhenVisible = () => { if (document.visibilityState === 'visible') void pollCampaign(); };
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    void pollCampaign();
+    return () => { window.clearInterval(poll); document.removeEventListener('visibilitychange', refreshWhenVisible); void supabase.removeChannel(channel); };
+  }, [campaign, isHost, onRemoteUpdate]);
+
+  useEffect(() => {
+    if (campaign.mode !== 'party' || !onPartyCharactersUpdate) return;
+    const loadPartyCharacters = async () => {
+      const { data } = await supabase.from('campaign_participants').select('character_snapshot').eq('campaign_id', campaign.id).order('joined_at');
+      if (data?.length) onPartyCharactersUpdate(data.map((row: { character_snapshot: Character }) => row.character_snapshot));
+    };
+    const channel = supabase.channel(`campaign-party:${campaign.id}`).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'campaign_participants', filter: `campaign_id=eq.${campaign.id}` }, () => void loadPartyCharacters()).subscribe();
+    const poll = window.setInterval(() => void loadPartyCharacters(), 5_000);
+    void loadPartyCharacters();
+    return () => { window.clearInterval(poll); void supabase.removeChannel(channel); };
+  }, [campaign.id, campaign.mode, onPartyCharactersUpdate]);
+
+  useEffect(() => {
+    if (campaign.mode === 'party' && !isHost && campaign.status === 'finished') onLeave();
+  }, [campaign.mode, campaign.status, isHost, onLeave]);
 
   const availableChoices = useMemo(() => scene.choices.map(choice => ({ choice, availability: isChoiceAvailable(choice, activeCharacter, campaign.state.flags, availableStoryItems) })), [activeCharacter, availableStoryItems, campaign.state.flags, scene.choices]);
 
@@ -73,7 +106,7 @@ export default function StoryReader({ campaign, characters, activeCharacter, cur
       // До применения миграции голос остаётся локальным — соло и локальная партия продолжают работать.
       setVotes(previous => [...previous.filter(vote => vote.user_session_id !== currentUserId), { user_session_id: currentUserId, choice_id: choice.id }]);
       setError('Голос сохранён локально. Для синхронизации примените новую SQL-миграцию.');
-    }
+    } else await loadVotes();
   }
 
   function winningChoice(): StoryChoice | undefined {

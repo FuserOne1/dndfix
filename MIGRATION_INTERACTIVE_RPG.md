@@ -5,7 +5,7 @@
 ## Перед запуском
 
 1. Откройте SQL Editor проекта Supabase.
-2. Выполните [`migration_interactive_rpg_v1.sql`](./migration_interactive_rpg_v1.sql). Миграцию можно безопасно запускать повторно: она добавит недостающие поля `characters.gold` и `characters.inventory_data`, создаст торговцев и общий сундук, обновит кеш схемы API и разрешит удалять героев из библиотеки без удаления сохранённых кампаний.
+2. Выполните [`migration_interactive_rpg_v1.sql`](./migration_interactive_rpg_v1.sql). Миграцию можно безопасно запускать повторно: она добавит недостающие поля `characters.gold` и `characters.inventory_data`, создаст торговцев и общий сундук, включит realtime для кампаний, обновит кеш схемы API и разрешит удалять героев из библиотеки без удаления сохранённых кампаний.
 3. Проверьте переменные окружения:
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
