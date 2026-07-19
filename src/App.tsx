@@ -1,565 +1,176 @@
-import { useState, useEffect, useMemo } from 'react';
-import Chat from './components/Chat';
-import CharacterSelect from './components/CharacterSelect';
-import { supabase, isSupabaseConfigured, supabaseUrl, supabaseAnonKey } from './lib/supabase';
+import { useCallback, useEffect, useState } from 'react';
+import { AlertTriangle, BookOpen, ChevronRight, Loader2, Plus, ScrollText, Swords, Users } from 'lucide-react';
+import CharacterStudio from './components/CharacterStudio';
+import CampaignSetup from './components/CampaignSetup';
+import PartyWaitingRoom from './components/PartyWaitingRoom';
+import StoryReader from './components/StoryReader';
+import { supabase, isSupabaseConfigured, supabaseAnonKey, supabaseUrl } from './lib/supabase';
 import { Character } from './types';
-import { LogIn, Swords, ScrollText, User as UserIcon, Loader2, AlertTriangle, Trash2, Download, Info } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { generateCampaignBible, generateOpeningScene } from './game/campaign-generator';
+import { CampaignPreferences, CampaignRuntime, GameMode } from './game/types';
+
+type Screen = 'home' | 'characters' | 'setup' | 'join' | 'waiting' | 'story' | 'library';
 
 export default function App() {
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [sessionInput, setSessionInput] = useState<string>('');
-  const [isJoining, setIsJoining] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [recentSessions, setRecentSessions] = useState<{id: string, name: string, characterName?: string, lastPlayed?: string}[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [theme, setTheme] = useState('theme-emerald');
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
-  const [currentScreen, setCurrentScreen] = useState<'menu' | 'character-select' | 'game'>('menu');
-  const [showVersionInfo, setShowVersionInfo] = useState(false);
+  const [screen, setScreen] = useState<Screen>('home');
+  const [mode, setMode] = useState<GameMode>('solo');
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
-
+  const [campaignCharacters, setCampaignCharacters] = useState<Character[]>([]);
+  const [campaign, setCampaign] = useState<CampaignRuntime | null>(null);
+  const [campaigns, setCampaigns] = useState<CampaignRuntime[]>([]);
+  const [draftCampaignId, setDraftCampaignId] = useState('');
+  const [joinCode, setJoinCode] = useState('');
+  const [joinTargetId, setJoinTargetId] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [flow, setFlow] = useState<'play' | 'library' | 'join'>('play');
   const [userSessionId] = useState(() => {
-    const stored = localStorage.getItem('user_session_id');
-    if (stored) return stored;
-    const newId = `session_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-    localStorage.setItem('user_session_id', newId);
-    return newId;
+    const existing = localStorage.getItem('user_session_id');
+    if (existing) return existing;
+    const generated = `player_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    localStorage.setItem('user_session_id', generated);
+    return generated;
   });
 
-  useEffect(() => {
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-      const beforeInstallPromptEvent = e as any;
-      setDeferredPrompt(beforeInstallPromptEvent);
-      setShowInstallPrompt(true);
-    };
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-  }, []);
+  useEffect(() => { void loadCampaigns(); }, []);
 
-  // Обработка sessionId из URL
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const sessionFromUrl = params.get('session');
-    if (sessionFromUrl) {
-      console.log('=== SESSION FROM URL ===');
-      console.log('Session ID:', sessionFromUrl);
-      loadSessionWithStats(sessionFromUrl);
-      window.history.replaceState({}, '', window.location.pathname);
+  async function loadCampaigns() {
+    if (!isSupabaseConfigured) return;
+    const { data: participantRows } = await supabase.from('campaign_participants').select('campaign_id').eq('user_session_id', userSessionId);
+    const ids = (participantRows || []).map((row: { campaign_id: string }) => row.campaign_id);
+    const { data, error: loadError } = ids.length ? await supabase.from('campaigns').select('*').in('id', ids).order('updated_at', { ascending: false }) : { data: [], error: null };
+    if (!loadError) setCampaigns((data || []).filter(row => row.bible && row.current_scene).map(rowToRuntime));
+  }
+
+  function startFlow(nextMode: GameMode) {
+    setMode(nextMode); setFlow('play'); setSelectedCharacter(null); setDraftCampaignId(''); setError(''); setScreen('characters');
+  }
+
+  async function handleCharacterSelected(character: Character) {
+    setSelectedCharacter(character);
+    if (flow === 'library') { setScreen('home'); return; }
+    if (flow === 'join') { await joinWithCharacter(character); return; }
+    if (mode === 'solo') { setScreen('setup'); return; }
+    await createPartyDraft(character);
+  }
+
+  async function createPartyDraft(character: Character) {
+    setLoading(true); setError('');
+    const id = createCode();
+    const { error: campaignError } = await supabase.from('campaigns').insert({ id, mode: 'party', status: 'setup', host_user_id: userSessionId, preferences: {}, state: {} });
+    if (campaignError) { setError(migrationMessage(campaignError.message)); setLoading(false); return; }
+    const { error: participantError } = await supabase.from('campaign_participants').insert({ campaign_id: id, user_session_id: userSessionId, character_id: character.id, character_snapshot: character, is_host: true, is_ready: true });
+    if (participantError) { setError(migrationMessage(participantError.message)); setLoading(false); return; }
+    setDraftCampaignId(id); setScreen('setup'); setLoading(false);
+  }
+
+  async function findCampaignToJoin() {
+    const code = joinCode.trim().toUpperCase();
+    if (!code) return;
+    setLoading(true); setError('');
+    const { data, error: lookupError } = await supabase.from('campaigns').select('*').eq('id', code).single();
+    if (lookupError || !data) { setError(migrationMessage(lookupError?.message || 'Кампания не найдена')); setLoading(false); return; }
+    const { data: existing } = await supabase.from('campaign_participants').select('character_snapshot').eq('campaign_id', code).eq('user_session_id', userSessionId).maybeSingle();
+    if (existing?.character_snapshot && data.status === 'playing') {
+      const { data: partyRows } = await supabase.from('campaign_participants').select('character_snapshot').eq('campaign_id', code);
+      setSelectedCharacter(existing.character_snapshot as Character);
+      setCampaignCharacters((partyRows || []).map((row: { character_snapshot: Character }) => row.character_snapshot));
+      setCampaign(rowToRuntime(data)); setScreen('story'); setLoading(false); return;
     }
-  }, []);
+    setJoinTargetId(code); setMode('party'); setFlow('join'); setScreen('characters'); setLoading(false);
+  }
 
-  const loadSessionWithStats = async (sessionId: string) => {
+  async function joinWithCharacter(character: Character) {
+    setLoading(true); setError('');
+    const { error: joinError } = await supabase.from('campaign_participants').upsert({ campaign_id: joinTargetId, user_session_id: userSessionId, character_id: character.id, character_snapshot: character, is_host: false, is_ready: false }, { onConflict: 'campaign_id,user_session_id' });
+    if (joinError) { setError(migrationMessage(joinError.message)); setLoading(false); return; }
+    setDraftCampaignId(joinTargetId); setScreen('waiting'); setLoading(false);
+  }
+
+  async function startCampaign(preferences: CampaignPreferences) {
+    if (!selectedCharacter) return;
+    setLoading(true); setError('');
     try {
-      const { data: session, error } = await supabase
-        .from('game_sessions')
-        .select('id')
-        .eq('id', sessionId)
-        .single();
-      
-      if (!error && session) {
-        setSessionId(sessionId);
-        // character_stats больше не используем - статы загружаются из characters напрямую
-        setCurrentScreen('game');
+      let characters = [selectedCharacter];
+      const id = mode === 'party' ? draftCampaignId : createCode();
+      if (mode === 'party') {
+        const { data: rows, error: participantError } = await supabase.from('campaign_participants').select('character_snapshot, is_ready, is_host').eq('campaign_id', id);
+        if (participantError) throw participantError;
+        if ((rows || []).some((row: { is_ready: boolean; is_host: boolean }) => !row.is_host && !row.is_ready)) throw new Error('Не все участники готовы');
+        characters = (rows || []).map((row: { character_snapshot: Character }) => row.character_snapshot);
+        await supabase.from('campaigns').update({ status: 'generating', preferences }).eq('id', id);
       }
-    } catch (err) {
-      console.error('Error loading session:', err);
+      const bible = await generateCampaignBible(preferences, characters);
+      const opening = await generateOpeningScene(bible, preferences, characters);
+      const runtime: CampaignRuntime = {
+        id, mode, status: 'playing', hostUserId: userSessionId, preferences, bible, currentScene: opening,
+        state: { flags: [], inventory: [], relationships: {}, completedSceneIds: [], currentActId: opening.actId, currentSceneId: opening.id, sceneNumber: 1 },
+      };
+      setCampaignCharacters(characters);
+      const payload = runtimeToRow(runtime);
+      const operation = mode === 'party' ? supabase.from('campaigns').update(payload).eq('id', id) : supabase.from('campaigns').insert(payload);
+      const { error: saveError } = await operation;
+      if (saveError) {
+        if (mode === 'party') throw saveError;
+        setError(`Кампания запущена локально, но не сохранена: ${migrationMessage(saveError.message)}`);
+      } else {
+        if (mode === 'solo') await supabase.from('campaign_participants').insert({ campaign_id: id, user_session_id: userSessionId, character_id: selectedCharacter.id, character_snapshot: selectedCharacter, is_host: true, is_ready: true });
+        await supabase.from('campaign_scenes').insert({ campaign_id: id, scene_id: opening.id, act_id: opening.actId, scene_number: 1, content: opening });
+      }
+      setCampaign(runtime); setScreen('story'); void loadCampaigns();
+    } catch (caught) { setError(caught instanceof Error ? caught.message : 'Не удалось создать кампанию'); }
+    finally { setLoading(false); }
+  }
+
+  const openStartedCampaign = useCallback(async (id: string) => {
+    const { data, error: loadError } = await supabase.from('campaigns').select('*').eq('id', id).single();
+    if (loadError || !data?.current_scene) { setError(loadError?.message || 'Кампания ещё не запущена'); return; }
+    const { data: participantRows } = await supabase.from('campaign_participants').select('user_session_id, character_snapshot').eq('campaign_id', id);
+    const snapshots = (participantRows || []).map((row: { character_snapshot: Character }) => row.character_snapshot);
+    const ownCharacter = (participantRows || []).find((row: { user_session_id: string }) => row.user_session_id === userSessionId)?.character_snapshot as Character | undefined;
+    if (ownCharacter) setSelectedCharacter(ownCharacter);
+    setCampaignCharacters(snapshots);
+    setCampaign(rowToRuntime(data)); setScreen('story');
+  }, [userSessionId]);
+
+  async function updateCampaign(runtime: CampaignRuntime) {
+    setCampaign(runtime);
+    const { error: updateError } = await supabase.from('campaigns').update({ state: runtime.state, current_scene: runtime.currentScene, updated_at: new Date().toISOString() }).eq('id', runtime.id);
+    if (updateError) throw updateError;
+    await supabase.from('campaign_scenes').upsert({ campaign_id: runtime.id, scene_id: runtime.currentScene.id, act_id: runtime.currentScene.actId, scene_number: runtime.state.sceneNumber, content: runtime.currentScene }, { onConflict: 'campaign_id,scene_id' });
+  }
+
+  async function updateCharacter(character: Character) {
+    setSelectedCharacter(character);
+    setCampaignCharacters(previous => previous.map(item => item.id === character.id ? character : item));
+    const { error: characterError } = await supabase.from('characters').update({ hp_current: character.hp_current, hp_max: character.hp_max, xp: character.xp, equipment: character.equipment }).eq('id', character.id);
+    if (characterError) throw characterError;
+    if (campaign) {
+      const { error: snapshotError } = await supabase.from('campaign_participants').update({ character_snapshot: character }).eq('campaign_id', campaign.id).eq('user_session_id', userSessionId);
+      if (snapshotError) throw snapshotError;
     }
-  };
-
-  useEffect(() => {
-    const saved = localStorage.getItem('recent_sessions');
-    if (saved) {
-      try { setRecentSessions(JSON.parse(saved)); } catch (e) { console.error('Failed to parse recent sessions', e); }
-    }
-    const savedTheme = localStorage.getItem('app_theme');
-    if (savedTheme) { setTheme(savedTheme); }
-  }, []);
-
-  const handleThemeChange = (newTheme: string) => { setTheme(newTheme); localStorage.setItem('app_theme', newTheme); };
-
-  const getTimeAgo = (date: Date): string => {
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-    if (diffMins < 1) return 'только что';
-    if (diffMins < 60) return `${diffMins} мин назад`;
-    if (diffHours < 24) return `${diffHours} ч назад`;
-    if (diffDays < 7) return `${diffDays} дн назад`;
-    return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
-  };
-
-  const saveSessionToRecent = (id: string, characterName?: string) => {
-    const newRecent = [{ id, name: `Adventure ${id}`, characterName: characterName || '', lastPlayed: new Date().toISOString() }, ...recentSessions.filter(r => r.id !== id)].slice(0, 5);
-    setRecentSessions(newRecent);
-    localStorage.setItem('recent_sessions', JSON.stringify(newRecent));
-  };
-
-  const confirmFullDelete = async () => {
-    if (!sessionToDelete) return;
-    setIsDeleting(true);
-    try {
-      await supabase.from('messages').delete().eq('session_id', sessionToDelete);
-      await supabase.from('game_sessions').delete().eq('id', sessionToDelete);
-      const newRecent = recentSessions.filter(r => r.id !== sessionToDelete);
-      setRecentSessions(newRecent);
-      localStorage.setItem('recent_sessions', JSON.stringify(newRecent));
-      setSessionToDelete(null);
-      setShowDeleteConfirm(false);
-    } catch (err: any) {
-      setError(`Failed to delete session: ${err.message}`);
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const handleDeleteClick = (sessionId: string) => {
-    setSessionToDelete(sessionId);
-    setShowDeleteConfirm(true);
-  };
+  }
 
   const isPlaceholder = supabaseUrl.includes('your-project-id') || supabaseAnonKey === 'your-anon-key';
-  if (!isSupabaseConfigured || isPlaceholder) {
-    return (<div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-4 font-sans"><div className="max-w-md w-full bg-zinc-900 border border-zinc-800 p-8 rounded-[2rem] shadow-2xl space-y-6 text-center"><div className="inline-flex p-4 bg-amber-500/10 border border-amber-500/20 rounded-3xl mb-4"><AlertTriangle className="w-12 h-12 text-amber-500" /></div><h1 className="text-2xl font-bold text-white">Configuration Required</h1><p className="text-zinc-400 text-sm leading-relaxed">Please set your <b>real</b> Supabase credentials in the <b>Secrets</b> panel:</p><div className="bg-zinc-950 p-4 rounded-xl text-left font-mono text-xs space-y-2 border border-zinc-800"><p className="text-emerald-500">VITE_SUPABASE_URL</p><p className="text-emerald-500">VITE_SUPABASE_ANON_KEY</p></div></div></div>);
-  }
-
-  const createSession = async (character: Character) => {
-    setIsJoining(true);
-    setError(null);
-    const newSessionId = Math.random().toString(36).substring(2, 8).toUpperCase();
-    console.log('=== CREATING SESSION ===');
-    console.log('Session ID:', newSessionId);
-    console.log('Character:', character.name);
-    try {
-      const { data, error: sessionError } = await supabase.from('game_sessions').insert({
-        id: newSessionId,
-        created_by: character.name,
-      }).select();
-      if (sessionError) throw sessionError;
-      console.log('Session created:', data);
-      saveSessionToRecent(newSessionId, character.name);
-      setSessionId(newSessionId);
-      setSelectedCharacter(character);
-      setCurrentScreen('game');
-    } catch (err: any) { setError(`Ошибка создания сессии: ${err.message}`); console.error('Create session error:', err); }
-    finally { setIsJoining(false); }
-  };
-
-  const joinSession = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!sessionInput.trim()) { setError('Пожалуйста, введите код сессии.'); return; }
-    setIsJoining(true);
-    setError(null);
-    try {
-      console.log('🔍 joinSession: input =', sessionInput.toUpperCase());
-      await loadSessionWithStats(sessionInput.toUpperCase());
-      saveSessionToRecent(sessionInput.toUpperCase());
-    } catch (err: any) {
-      console.error('❌ joinSession error:', err);
-      setError(`Ошибка входа: ${err.message}`);
-    } finally {
-      setIsJoining(false);
-    }
-  };
-
-  const handleCharacterSelected = async (character: Character, sessionId?: string) => {
-    console.log('=== CHARACTER SELECTED ===');
-    console.log('Character:', character);
-    console.log('SessionId:', sessionId);
-    setSelectedCharacter(character);
-    
-    if (sessionId) {
-      console.log('Joining session with character:', character.name);
-      setSessionId(sessionId);
-      setCurrentScreen('game');
-    }
-  };
-
-  const handleLeaveGame = () => { setSessionId(null); setCurrentScreen('menu'); setSelectedCharacter(null); };
-
-  const handleCreateLobby = async () => {
-    console.log('=== CREATING SESSION DIRECTLY ===');
-    setIsJoining(true);
-    setError(null);
-    try {
-      const sessionCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-      console.log('Generated session code:', sessionCode);
-      const { data, error } = await supabase.from('game_sessions').insert({
-        id: sessionCode,
-        created_by: userSessionId,
-      }).select();
-      if (error) { console.error('Session creation error:', error); throw error; }
-      console.log('Session created:', data);
-      setSessionId(sessionCode);
-      saveSessionToRecent(sessionCode);
-      setCurrentScreen('character-select');
-    } catch (err: any) { console.error('Create session error:', err); setError(`Ошибка создания сессии: ${err.message}`); }
-    finally { setIsJoining(false); }
-  };
-
-  const handleInstallApp = () => {
-    if (deferredPrompt) { deferredPrompt.prompt(); deferredPrompt.userChoice.then((choiceResult: any) => { if (choiceResult.outcome === 'accepted') { console.log('User accepted the install prompt'); } setDeferredPrompt(null); setShowInstallPrompt(false); }); }
-    else { alert('Чтобы установить приложение:\n\n📱 Android: Меню → "Добавить на главный экран"\n\n🍎 iOS: Кнопка "Поделиться" → "На экран «Домой»"'); }
-  };
-
-  const particles = useMemo(() =>
-    Array.from({ length: 20 }, (_, i) => ({
-      x: Math.random() * 100,
-      y: -(Math.random() * 20 + 10),
-      size: Math.random() * 5 + 2,
-      duration: Math.random() * 10 + 14,
-      delay: Math.random() * 12,
-      animClass: i % 3 === 0 ? 'animate-float-up' : i % 3 === 1 ? 'animate-float-up-2' : 'animate-float-up-3',
-    })), []
-  );
-
-  if (currentScreen === 'game' && sessionId) {
-    if (!selectedCharacter) { return (<div className={theme}><CharacterSelect userSessionId={userSessionId} onCharacterSelected={handleCharacterSelected} onBack={handleLeaveGame} roomId={sessionId} /></div>); }
-    return (<div className={theme}><Chat sessionId={sessionId} userName={selectedCharacter?.name || ''} character={selectedCharacter} onLeave={handleLeaveGame} theme={theme} setTheme={handleThemeChange} /></div>);
-  }
-
-  if (currentScreen === 'character-select') { return (<div className={theme}><CharacterSelect userSessionId={userSessionId} onCharacterSelected={handleCharacterSelected} onBack={() => setCurrentScreen('menu')} roomId={sessionId || undefined} /></div>); }
-
-  return (
-    <div className={`min-h-screen bg-zinc-950 text-zinc-100 flex items-start justify-center py-6 md:py-10 p-3 md:p-4 font-sans selection:bg-primary/30 overflow-y-auto ${theme}`}>
-      {/* ═══ Тёмный фон с партиклами ═══ */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-        {particles.map((p, i) => (
-          <div
-            key={i}
-            className={`absolute rounded-full ${p.animClass}`}
-            style={{
-              left: `${p.x}%`,
-              bottom: `${p.y}px`,
-              width: `${p.size}px`,
-              height: `${p.size}px`,
-              backgroundColor: i % 4 === 0 ? 'var(--theme-primary)' : i % 4 === 1 ? '#fbbf24' : '#a1a1aa',
-              opacity: 0.15 + p.size * 0.06,
-              boxShadow: i % 4 === 0 ? '0 0 6px 2px var(--theme-primary-glow)' : 'none',
-              '--dur': `${p.duration}s`,
-              '--delay': `${p.delay}s`,
-            } as React.CSSProperties}
-          />
-        ))}
-      </div>
-
-      {/* ═══ Пульсирующее свечение ═══ */}
-      <div className="fixed -top-40 -left-40 w-[500px] h-[500px] animate-pulse-glow rounded-full pointer-events-none z-0"
-        style={{ background: 'var(--theme-primary)', opacity: 0.08 }} />
-      <div className="fixed -bottom-40 -right-40 w-[500px] h-[500px] animate-pulse-glow rounded-full pointer-events-none z-0"
-        style={{ background: 'var(--theme-primary)', opacity: 0.06, animationDelay: '2.5s' }} />
-
-      {/* ═══ Install button ═══ */}
-      <motion.button
-        initial={{ scale: 0, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.9 }}
-        onClick={handleInstallApp}
-        className="fixed top-4 right-4 z-50 p-2.5 bg-zinc-900/80 backdrop-blur border border-zinc-800 hover:border-primary/50 text-zinc-400 hover:text-primary rounded-xl shadow-lg transition-colors"
-        title="Установить приложение"
-      >
-        <Download className="w-4 h-4" />
-      </motion.button>
-
-      {/* ═══ Основной контент ═══ */}
-      <div className="max-w-md w-full space-y-3 md:space-y-6 relative z-10">
-
-        {/* ═══ Рунический круг + заголовок ═══ */}
-        <div className="text-center space-y-3 md:space-y-4 relative">
-          <motion.div
-            initial={{ scale: 0.6, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.8, ease: 'easeOut' }}
-            className="flex justify-center mb-2"
-          >
-            <svg viewBox="0 0 200 200" className="w-36 h-36 md:w-52 md:h-52 text-primary/25">
-              <defs>
-                <radialGradient id="rune-grad" cx="50%" cy="50%" r="50%">
-                  <stop offset="0%" stopColor="var(--theme-primary)" stopOpacity="0.15" />
-                  <stop offset="100%" stopColor="var(--theme-primary)" stopOpacity="0" />
-                </radialGradient>
-              </defs>
-              <circle cx="100" cy="100" r="95" fill="url(#rune-grad)" />
-              <g className="animate-spin-slow" style={{ transformOrigin: '100px 100px' }}>
-                <circle cx="100" cy="100" r="85" fill="none" stroke="currentColor" strokeWidth="0.8" opacity="0.3" />
-                <circle cx="100" cy="100" r="80" fill="none" stroke="currentColor" strokeWidth="0.3" opacity="0.15" strokeDasharray="3 6" />
-              </g>
-              <g className="animate-spin-reverse" style={{ transformOrigin: '100px 100px' }}>
-                <circle cx="100" cy="100" r="62" fill="none" stroke="currentColor" strokeWidth="0.5" opacity="0.2" strokeDasharray="2 8" />
-              </g>
-              {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map(angle => {
-                const rad = (angle * Math.PI) / 180;
-                const x1 = 100 + 76 * Math.cos(rad);
-                const y1 = 100 + 76 * Math.sin(rad);
-                const x2 = 100 + 90 * Math.cos(rad);
-                const y2 = 100 + 90 * Math.sin(rad);
-                return (
-                  <line key={angle} x1={x1} y1={y1} x2={x2} y2={y2}
-                    stroke="currentColor" strokeWidth="1"
-                    className="animate-rune-glow"
-                    style={{ animationDelay: `${(angle / 360) * 3}s`, opacity: 0.2 }}
-                  />
-                );
-              })}
-              {/* Ромб в центре */}
-              <polygon points="100,85 115,100 100,115 85,100"
-                fill="none" stroke="currentColor" strokeWidth="1"
-                className="animate-rune-glow" style={{ animationDelay: '0.5s' }} />
-              <circle cx="100" cy="100" r="2" fill="currentColor" opacity="0.4" />
-            </svg>
-          </motion.div>
-
-          <motion.h1
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.3, duration: 0.6 }}
-            className="text-4xl md:text-6xl font-black tracking-tighter text-white leading-none"
-          >
-            D&amp;D
-          </motion.h1>
-          <motion.p
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.5, duration: 0.6 }}
-            className="text-xl md:text-3xl font-black tracking-[0.15em] animate-title-glow"
-            style={{ color: 'var(--theme-primary)' }}
-          >
-            DARK FANTASY
-          </motion.p>
-          <motion.p
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.7, duration: 0.5 }}
-            className="text-[9px] md:text-xs text-zinc-600 font-bold uppercase tracking-[0.3em]"
-          >
-            Кооперативный ИИ-Мастер
-          </motion.p>
-        </div>
-
-        {/* ═══ Карточка с действиями ═══ */}
-        <motion.div
-          initial={{ y: 40, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.8, duration: 0.6, ease: 'easeOut' }}
-          className="bg-zinc-900/40 backdrop-blur-2xl border border-zinc-800/60 p-4 md:p-6 rounded-[1.75rem] shadow-2xl space-y-3 md:space-y-4 relative overflow-hidden"
-        >
-          {/* Строка тем */}
-          <div className="flex justify-center gap-2.5 pb-1">
-            {[
-              { id: 'theme-emerald', color: 'bg-emerald-500' },
-              { id: 'theme-crimson', color: 'bg-rose-500' },
-              { id: 'theme-amethyst', color: 'bg-violet-500' },
-              { id: 'theme-amber', color: 'bg-amber-500' },
-            ].map((t) => (
-              <motion.button
-                key={t.id}
-                whileHover={{ scale: 1.2 }}
-                whileTap={{ scale: 0.8 }}
-                onClick={() => handleThemeChange(t.id)}
-                className={`w-5 h-5 md:w-6 md:h-6 rounded-full ${t.color} transition-all ${
-                  theme === t.id
-                    ? 'ring-2 ring-white/80 ring-offset-2 ring-offset-zinc-950 scale-110'
-                    : 'opacity-40 hover:opacity-80'
-                }`}
-                title={t.id.replace('theme-', '')}
-              />
-            ))}
-          </div>
-
-          {/* Ввод кода сессии */}
-          <form onSubmit={joinSession} className="space-y-2">
-            <div className="relative">
-              <ScrollText className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-600" />
-              <input
-                type="text"
-                value={sessionInput}
-                onChange={(e) => setSessionInput(e.target.value)}
-                placeholder="Код сессии..."
-                className="w-full bg-zinc-950/80 border border-zinc-800/60 rounded-xl pl-10 md:pl-12 pr-4 py-3 md:py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary/50 transition-all placeholder:text-zinc-700 uppercase tracking-widest"
-              />
-            </div>
-            <motion.button
-              type="submit"
-              disabled={isJoining}
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.98 }}
-              className="w-full flex items-center justify-center gap-2 bg-zinc-800/80 hover:bg-zinc-700/80 text-white rounded-xl text-[10px] md:text-xs font-bold uppercase tracking-widest py-3 md:py-3.5 transition-all disabled:opacity-50 border border-zinc-700/50"
-            >
-              {isJoining ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogIn className="w-3.5 h-3.5" />}
-              Войти
-            </motion.button>
-          </form>
-
-          {/* Кнопки действий */}
-          <motion.button
-            onClick={handleCreateLobby}
-            disabled={isJoining}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.97 }}
-            className="w-full flex flex-col items-center justify-center gap-2 p-4 md:p-5 bg-zinc-950/60 border border-zinc-800/50 rounded-2xl hover:border-primary/40 hover:bg-zinc-900/60 transition-all disabled:opacity-50 group relative overflow-hidden"
-          >
-            {/* Subtle hover glow */}
-            <div className="absolute inset-0 bg-gradient-to-t from-primary-bg/0 group-hover:from-primary-bg/10 to-transparent transition-all duration-500 pointer-events-none" />
-            <div className="relative z-10 p-2.5 bg-primary-bg rounded-xl group-hover:scale-110 transition-transform">
-              <Swords className="w-5 h-5 md:w-6 md:h-6 text-primary" />
-            </div>
-            <span className="relative z-10 text-[10px] md:text-xs font-bold uppercase tracking-widest text-zinc-500">Новое приключение</span>
-          </motion.button>
-
-          {/* Сохраненные сессии */}
-          {recentSessions.length > 0 && (
-            <div className="space-y-1.5 pt-1.5 border-t border-zinc-800/40">
-              <p className="text-[8px] md:text-[9px] font-bold uppercase tracking-widest text-zinc-600 ml-0.5">Сохранённые</p>
-              <div className="grid grid-cols-1 gap-1.5">
-                {recentSessions.map((session) => {
-                  const lastPlayedDate = session.lastPlayed ? new Date(session.lastPlayed) : null;
-                  const timeAgo = lastPlayedDate ? getTimeAgo(lastPlayedDate) : '';
-                  return (
-                    <div key={session.id}
-                      onClick={() => { setSessionInput(session.id); setTimeout(() => { const btn = document.querySelector('button[type="submit"]') as HTMLButtonElement; btn?.click(); }, 10); }}
-                      className="flex items-center justify-between p-2 md:p-2.5 bg-zinc-950/40 border border-zinc-800/40 rounded-xl hover:border-primary/30 hover:bg-zinc-900/50 transition-all group relative cursor-pointer"
-                    >
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <div className="p-1 bg-zinc-900 rounded-lg">
-                          <ScrollText className="w-3 h-3 text-zinc-600 group-hover:text-primary transition-colors" />
-                        </div>
-                        <div className="flex flex-col gap-0.5 min-w-0">
-                          <span className="text-[11px] font-medium text-zinc-400 truncate">{session.id}</span>
-                          {session.characterName && (
-                            <span className="text-[8px] text-zinc-600 truncate">
-                              <UserIcon className="w-2 h-2 inline mr-0.5" />{session.characterName}
-                            </span>
-                          )}
-                          {timeAgo && <span className="text-[7px] text-zinc-700 font-mono">{timeAgo}</span>}
-                        </div>
-                      </div>
-                      <button onClick={(e) => { e.stopPropagation(); handleDeleteClick(session.id); }}
-                        className="p-1 hover:bg-red-500/10 rounded-lg transition-colors text-zinc-700 hover:text-red-500 shrink-0"
-                      >
-                        <Trash2 className="w-2.5 h-2.5" />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Ошибки */}
-          <AnimatePresence>
-            {error && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="bg-red-500/10 border border-red-500/20 p-3 rounded-xl"
-              >
-                <p className="text-[11px] text-red-400 font-medium text-center">{error}</p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.div>
-
-        {/* ═══ Модалка удаления ═══ */}
-        <AnimatePresence>
-          {showDeleteConfirm && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            >
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.9, opacity: 0 }}
-                transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-                className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-sm w-full p-6 space-y-4"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-red-500/10 rounded-xl"><Trash2 className="w-5 h-5 text-red-400" /></div>
-                  <h3 className="text-lg font-bold text-white">Удалить сессию?</h3>
-                </div>
-                <p className="text-sm text-zinc-400 leading-relaxed">
-                  Сессия <span className="text-zinc-300 font-mono">{sessionToDelete}</span> будет удалена навсегда. Это действие нельзя отменить.
-                </p>
-                <div className="flex gap-3 pt-2">
-                  <button onClick={() => { setShowDeleteConfirm(false); setSessionToDelete(null); }} disabled={isDeleting}
-                    className="flex-1 px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold text-sm transition-all disabled:opacity-50"
-                  >
-                    Отмена
-                  </button>
-                  <button onClick={confirmFullDelete} disabled={isDeleting}
-                    className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-sm transition-all disabled:opacity-50 flex items-center justify-center"
-                  >
-                    {isDeleting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Удалить'}
-                  </button>
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Version info */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.2, duration: 0.5 }}
-          className="text-center space-y-2"
-        >
-          <div className="flex items-center justify-center gap-2">
-            <span className="text-[9px] text-zinc-600/80 font-mono tracking-wide">
-              D&amp;D Dark Fantasy © {new Date().getFullYear()}
-            </span>
-          </div>
-          <button
-            onClick={() => setShowVersionInfo(!showVersionInfo)}
-            className="group inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900/40 border border-zinc-800/40 hover:bg-zinc-800/40 hover:border-zinc-700 transition-all max-w-full"
-          >
-            <Info className="w-2.5 h-2.5 shrink-0 text-zinc-500 group-hover:text-primary transition-colors" />
-            <span className="text-[7px] sm:text-[8px] font-mono text-zinc-500 group-hover:text-zinc-300 transition-colors tracking-wider uppercase truncate">
-              v0.2.5 — Inventory Update
-            </span>
-          </button>
-          <AnimatePresence>
-            {showVersionInfo && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="p-3 rounded-xl bg-zinc-900/60 border border-zinc-800/60 text-left space-y-2 text-[9px] font-mono leading-relaxed">
-                  <p className="text-primary font-bold tracking-wider uppercase text-[8px]">v0.2.5 — Inventory Update</p>
-                  <p className="text-zinc-400">Система предметов с эффектами, нормализация инвентаря, боевая мини-игра.</p>
-                  <div className="space-y-0.5 text-zinc-500">
-                    <p className="text-zinc-600 font-bold text-[8px] uppercase tracking-wider">Последние изменения:</p>
-                    <p>• 🎒 Предметы с боевыми эффектами (хил, баффы, урон, условия)</p>
-                    <p>• 🛡️ Боевая мини-игра: атака, защита, заклинания, предметы</p>
-                    <p>• 🎯 Основное + бонусное действие за ход</p>
-                    <p>• 📜 Лог боя с группировкой по раундам</p>
-                    <p>• 🏆 Награды применяются сразу (XP, лут, HP)</p>
-                    <p>• 🎨 Тёмное фэнтези оформление</p>
-                    <p>• 🖼️ Генерация изображений</p>
-                    <p>• 👥 Мультиплеер (Supabase real-time)</p>
-                  </div>
-                  <div className="pt-1 border-t border-zinc-800/40 text-zinc-600">
-                    <span className="text-[7px]">163 commits · last updated 21 Jun 2026 · </span>
-                    <a href="https://github.com/FuserOne1/dndfix" target="_blank" rel="noopener noreferrer" className="text-primary/60 hover:text-primary underline">GitHub</a>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.div>
-      </div>
-    </div>
-  );
+  if (!isSupabaseConfigured || isPlaceholder) return <ConfigurationScreen/>;
+  if (screen === 'characters') return <CharacterStudio onSelect={character => void handleCharacterSelected(character)} onBack={() => setScreen(flow === 'join' ? 'join' : 'home')} title={flow === 'library' ? 'Библиотека героев' : 'Кто отправится в путь?'}/>;
+  if (screen === 'setup' && selectedCharacter) return <CampaignSetup mode={mode} character={selectedCharacter} onBack={() => setScreen('characters')} onStart={startCampaign} loading={loading} error={error} sessionCode={draftCampaignId || undefined}/>;
+  if (screen === 'waiting' && draftCampaignId) return <PartyWaitingRoom campaignId={draftCampaignId} currentUserId={userSessionId} onBack={() => setScreen('home')} onCampaignStarted={() => void openStartedCampaign(draftCampaignId)}/>;
+  if (screen === 'story' && campaign && selectedCharacter) return <StoryReader campaign={campaign} characters={campaignCharacters.length ? campaignCharacters : [selectedCharacter]} activeCharacter={selectedCharacter} currentUserId={userSessionId} onUpdate={updateCampaign} onRemoteUpdate={setCampaign} onCharacterUpdate={updateCharacter} onLeave={() => { setCampaign(null); setScreen('home'); void loadCampaigns(); }}/>;
+  if (screen === 'join') return <JoinScreen code={joinCode} setCode={setJoinCode} onBack={() => setScreen('home')} onJoin={() => void findCampaignToJoin()} loading={loading} error={error}/>;
+  return <HomeScreen campaigns={campaigns} onSolo={() => startFlow('solo')} onParty={() => startFlow('party')} onJoin={() => { setError(''); setScreen('join'); }} onLibrary={() => { setFlow('library'); setScreen('characters'); }} onContinue={runtime => { setCampaign(runtime); setMode(runtime.mode); void openStartedCampaign(runtime.id); }} error={error}/>;
 }
+
+function HomeScreen({ campaigns, onSolo, onParty, onJoin, onLibrary, onContinue, error }: { campaigns: CampaignRuntime[]; onSolo: () => void; onParty: () => void; onJoin: () => void; onLibrary: () => void; onContinue: (campaign: CampaignRuntime) => void; error: string }) {
+  return <div className="min-h-screen bg-[#09090b] text-zinc-100 p-4 sm:p-8"><div className="max-w-6xl mx-auto"><header className="py-10 sm:py-16"><p className="text-xs uppercase tracking-[0.35em] text-amber-500">Chronicles</p><h1 className="text-4xl sm:text-6xl font-black mt-3 max-w-3xl">Истории, которые помнят ваши решения.</h1><p className="text-zinc-500 mt-4 max-w-xl">Кооперативная текстовая RPG с заранее созданным сюжетом, личными линиями и тактическими боями.</p></header>{error && <div className="mb-5 p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-sm">{error}</div>}<div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3"><HomeAction icon={<BookOpen/>} title="Новая соло-игра" subtitle="Один герой, мгновенные решения" onClick={onSolo} primary/><HomeAction icon={<Users/>} title="Создать партию" subtitle="Код приглашения и голосование" onClick={onParty}/><HomeAction icon={<Swords/>} title="Войти по коду" subtitle="Присоединиться к кампании" onClick={onJoin}/><HomeAction icon={<ScrollText/>} title="Герои" subtitle="Создание и библиотека" onClick={onLibrary}/></div><section className="mt-12"><div className="flex justify-between items-end"><div><p className="text-xs uppercase tracking-[0.2em] text-zinc-600">Продолжить</p><h2 className="text-2xl font-bold mt-1">Ваши кампании</h2></div></div>{campaigns.length ? <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">{campaigns.map(campaign => <button key={campaign.id} onClick={() => onContinue(campaign)} className="text-left p-5 rounded-2xl border border-zinc-800 bg-zinc-900/60 hover:border-amber-500/40"><p className="text-xs text-amber-500">{campaign.mode === 'solo' ? 'Соло' : 'Партия'} · сцена {campaign.state.sceneNumber}</p><h3 className="font-bold text-lg mt-2">{campaign.bible.title}</h3><p className="text-xs text-zinc-500 mt-1 line-clamp-2">{campaign.currentScene.recap || campaign.bible.tagline}</p></button>)}</div> : <div className="mt-4 p-8 rounded-2xl border border-dashed border-zinc-800 text-center text-zinc-600">Здесь появятся начатые приключения.</div>}</section></div></div>;
+}
+
+function HomeAction({ icon, title, subtitle, onClick, primary = false }: { icon: React.ReactNode; title: string; subtitle: string; onClick: () => void; primary?: boolean }) { return <button onClick={onClick} className={`p-5 min-h-40 rounded-2xl border text-left flex flex-col ${primary ? 'border-amber-400 bg-amber-500 text-zinc-950' : 'border-zinc-800 bg-zinc-900/60 hover:border-zinc-600'}`}><span className={`w-10 h-10 rounded-xl flex items-center justify-center ${primary ? 'bg-black/10' : 'bg-zinc-800 text-amber-400'}`}>{icon}</span><strong className="mt-auto">{title}</strong><span className={`text-xs mt-1 ${primary ? 'text-zinc-800' : 'text-zinc-500'}`}>{subtitle}</span></button>; }
+
+function JoinScreen({ code, setCode, onBack, onJoin, loading, error }: { code: string; setCode: (code: string) => void; onBack: () => void; onJoin: () => void; loading: boolean; error: string }) { return <div className="min-h-screen bg-[#09090b] text-zinc-100 flex items-center justify-center p-4"><div className="max-w-md w-full rounded-3xl border border-zinc-800 bg-zinc-900/70 p-6 space-y-5"><button onClick={onBack} className="text-sm text-zinc-500">← На главный экран</button><div><p className="text-xs uppercase tracking-[0.2em] text-amber-500">Совместная игра</p><h1 className="text-2xl font-black mt-2">Введите код кампании</h1></div><input autoFocus value={code} onChange={event => setCode(event.target.value.toUpperCase())} onKeyDown={event => event.key === 'Enter' && onJoin()} maxLength={8} placeholder="ABC123" className="w-full bg-zinc-950 border border-zinc-700 rounded-2xl p-4 text-center text-2xl font-black tracking-[0.25em] uppercase outline-none focus:border-amber-500"/>{error && <p className="text-sm text-red-400">{error}</p>}<button disabled={loading || !code.trim()} onClick={onJoin} className="w-full p-4 rounded-2xl bg-amber-500 text-zinc-950 font-bold flex justify-center gap-2 disabled:opacity-40">{loading ? <Loader2 className="animate-spin"/> : <ChevronRight/>}Продолжить</button></div></div>; }
+function ConfigurationScreen() { return <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center p-4"><div className="max-w-md text-center p-8 rounded-3xl bg-zinc-900 border border-zinc-800"><AlertTriangle className="w-12 h-12 text-amber-500 mx-auto"/><h1 className="text-2xl font-bold mt-4">Нужна конфигурация</h1><p className="text-sm text-zinc-500 mt-2">Укажите VITE_SUPABASE_URL и VITE_SUPABASE_ANON_KEY.</p></div></div>; }
+
+function createCode() { return Math.random().toString(36).slice(2, 8).toUpperCase(); }
+function migrationMessage(message: string) { return /campaigns|campaign_participants|schema cache|relation/i.test(message) ? `Новая структура БД ещё не применена. Выполните migration_interactive_rpg_v1.sql. Техническая ошибка: ${message}` : message; }
+function runtimeToRow(runtime: CampaignRuntime) { return { id: runtime.id, mode: runtime.mode, status: runtime.status, host_user_id: runtime.hostUserId, title: runtime.bible.title, preferences: runtime.preferences, bible: runtime.bible, state: runtime.state, current_scene: runtime.currentScene, updated_at: new Date().toISOString() }; }
+function rowToRuntime(row: any): CampaignRuntime { return { id: row.id, mode: row.mode, status: row.status, hostUserId: row.host_user_id, preferences: row.preferences, bible: row.bible, state: row.state, currentScene: row.current_scene }; }

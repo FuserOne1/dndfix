@@ -30,6 +30,8 @@ export interface Character {
   gold?: number;
   equipment: string[];
   story_summary?: string;
+  rules_data?: import('./game/types').CharacterRulesData;
+  backstory_data?: import('./game/types').BackstoryData;
   avatar_icon?: string;
   created_at: string;
   updated_at: string;

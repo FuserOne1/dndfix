@@ -20,14 +20,6 @@
   --theme-primary-text: #34d399;
 }
 
-/* PWA: Safe area insets for iOS */
-@supports (padding: max(0px)) {
-  body {
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
-  }
-}
-
 /* Theme classes - apply to any element */
 .theme-emerald,
 :root:has(.theme-emerald) {
@@ -69,14 +61,32 @@
   --theme-primary-text: #fbbf24 !important;
 }
 
+html {
+  @apply bg-zinc-950 h-full w-full m-0 p-0;
+}
+
+body {
+  @apply bg-zinc-950 min-h-full w-full overflow-x-hidden overflow-y-auto m-0;
+}
+
+#root {
+  @apply bg-zinc-950 min-h-full w-full;
+}
+
 html, body, #root {
-  @apply bg-zinc-950 h-full w-full overflow-hidden m-0 p-0;
-  
   /* Mobile optimizations */
   -webkit-tap-highlight-color: transparent;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   touch-action: manipulation;
+}
+
+/* Keep content outside the notch while preserving normal page scrolling. */
+@supports (padding: max(0px)) {
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
 }
 
 /* Mobile: Prevent zoom on input focus */

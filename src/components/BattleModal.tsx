@@ -373,5 +373,5 @@ export default function BattleModal({ isOpen, enemies, playerStats, playerName, 
 }
 
 function ActionButton({ label, icon, disabled, onClick }: { label: string; icon: ReactNode; disabled: boolean; onClick: () => void }) {
-  return <button disabled={disabled} onClick={onClick} className="flex items-center justify-center gap-1 px-2 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-[10px] font-bold uppercase text-zinc-300 transition hover:bg-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed">{icon}{label}</button>;
+  return <button disabled={disabled} onClick={onClick} className="min-h-11 flex items-center justify-center gap-1 px-2 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-[11px] font-bold uppercase text-zinc-300 transition hover:bg-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed">{icon}{label}</button>;
 }
