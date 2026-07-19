@@ -95,13 +95,25 @@ export default function CharacterStudio({ onSelect, onBack, title = 'Выбер�
   async function saveCharacter() {
     setSaving(true); setError('');
     const draft = buildCharacterDraft({ name, lineageId, classId, originId, scores, skills, backstory, avatarIcon: classId });
-    const insertPayload = { ...draft };
-    let { data, error: saveError } = await supabase.from('characters').insert(insertPayload).select().single();
-    if (saveError && /rules_data|backstory_data|column/i.test(saveError.message)) {
-      const { rules_data, backstory_data, ...legacyPayload } = insertPayload;
-      const retry = await supabase.from('characters').insert(legacyPayload).select().single();
-      data = retry.data ? { ...retry.data, rules_data, backstory_data } : null;
-      saveError = retry.error;
+    const insertPayload: Record<string, unknown> = { ...draft };
+    const payload: Record<string, unknown> = { ...insertPayload };
+    const omittedFields: Record<string, unknown> = {};
+    const optionalColumns = new Set(['rules_data', 'backstory_data', 'gold', 'story_summary', 'avatar_icon']);
+    let data: Character | null = null;
+    let saveError: { message: string } | null = null;
+
+    for (let attempt = 0; attempt <= optionalColumns.size; attempt += 1) {
+      const result = await supabase.from('characters').insert(payload).select().single();
+      saveError = result.error;
+      if (!saveError && result.data) {
+        data = { ...result.data, ...omittedFields } as Character;
+        break;
+      }
+
+      const missingColumn = saveError?.message.match(/Could not find the '([^']+)' column/i)?.[1];
+      if (!missingColumn || !optionalColumns.has(missingColumn) || !(missingColumn in payload)) break;
+      omittedFields[missingColumn] = payload[missingColumn];
+      delete payload[missingColumn];
     }
     if (saveError || !data) { setError(saveError?.message || 'Не удалось создать героя'); setSaving(false); return; }
     const character = data as Character;

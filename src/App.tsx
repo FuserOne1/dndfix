@@ -50,18 +50,38 @@ export default function App() {
     setSelectedCharacter(character);
     if (flow === 'library') { setScreen('home'); return; }
     if (flow === 'join') { await joinWithCharacter(character); return; }
-    if (mode === 'solo') { setScreen('setup'); return; }
-    await createPartyDraft(character);
+    setScreen('setup');
   }
 
-  async function createPartyDraft(character: Character) {
+  async function createPartyDraft(character: Character, preferences: CampaignPreferences) {
     setLoading(true); setError('');
     const id = createCode();
-    const { error: campaignError } = await supabase.from('campaigns').insert({ id, mode: 'party', status: 'setup', host_user_id: userSessionId, preferences: {}, state: {} });
+    const { error: campaignError } = await supabase.from('campaigns').insert({ id, mode: 'party', status: 'setup', host_user_id: userSessionId, preferences, state: {} });
     if (campaignError) { setError(migrationMessage(campaignError.message)); setLoading(false); return; }
     const { error: participantError } = await supabase.from('campaign_participants').insert({ campaign_id: id, user_session_id: userSessionId, character_id: character.id, character_snapshot: character, is_host: true, is_ready: true });
     if (participantError) { setError(migrationMessage(participantError.message)); setLoading(false); return; }
-    setDraftCampaignId(id); setScreen('setup'); setLoading(false);
+    setDraftCampaignId(id); setScreen('waiting'); setLoading(false);
+  }
+
+  async function handleSetupStart(preferences: CampaignPreferences) {
+    if (!selectedCharacter) return;
+    if (mode === 'party') {
+      await createPartyDraft(selectedCharacter, preferences);
+      return;
+    }
+    await startCampaign(preferences);
+  }
+
+  async function startPreparedParty() {
+    if (!draftCampaignId) return;
+    setLoading(true); setError('');
+    const { data, error: loadError } = await supabase.from('campaigns').select('preferences').eq('id', draftCampaignId).single();
+    if (loadError || !data?.preferences) {
+      setError(migrationMessage(loadError?.message || 'Не удалось загрузить настройки кампании'));
+      setLoading(false);
+      return;
+    }
+    await startCampaign(data.preferences as CampaignPreferences);
   }
 
   async function findCampaignToJoin() {
@@ -154,8 +174,8 @@ export default function App() {
   const isPlaceholder = supabaseUrl.includes('your-project-id') || supabaseAnonKey === 'your-anon-key';
   if (!isSupabaseConfigured || isPlaceholder) return <ConfigurationScreen/>;
   if (screen === 'characters') return <CharacterStudio onSelect={character => void handleCharacterSelected(character)} onBack={() => setScreen(flow === 'join' ? 'join' : 'home')} title={flow === 'library' ? 'Библиотека героев' : 'Кто отправится в путь?'}/>;
-  if (screen === 'setup' && selectedCharacter) return <CampaignSetup mode={mode} character={selectedCharacter} onBack={() => setScreen('characters')} onStart={startCampaign} loading={loading} error={error} sessionCode={draftCampaignId || undefined}/>;
-  if (screen === 'waiting' && draftCampaignId) return <PartyWaitingRoom campaignId={draftCampaignId} currentUserId={userSessionId} onBack={() => setScreen('home')} onCampaignStarted={() => void openStartedCampaign(draftCampaignId)}/>;
+  if (screen === 'setup' && selectedCharacter) return <CampaignSetup mode={mode} character={selectedCharacter} onBack={() => setScreen('characters')} onStart={handleSetupStart} loading={loading} error={error}/>;
+  if (screen === 'waiting' && draftCampaignId) return <PartyWaitingRoom campaignId={draftCampaignId} currentUserId={userSessionId} onBack={() => setScreen('home')} onStartCampaign={() => void startPreparedParty()} starting={loading} externalError={error} onCampaignStarted={() => void openStartedCampaign(draftCampaignId)}/>;
   if (screen === 'story' && campaign && selectedCharacter) return <StoryReader campaign={campaign} characters={campaignCharacters.length ? campaignCharacters : [selectedCharacter]} activeCharacter={selectedCharacter} currentUserId={userSessionId} onUpdate={updateCampaign} onRemoteUpdate={setCampaign} onCharacterUpdate={updateCharacter} onLeave={() => { setCampaign(null); setScreen('home'); void loadCampaigns(); }}/>;
   if (screen === 'join') return <JoinScreen code={joinCode} setCode={setJoinCode} onBack={() => setScreen('home')} onJoin={() => void findCampaignToJoin()} loading={loading} error={error}/>;
   return <HomeScreen campaigns={campaigns} onSolo={() => startFlow('solo')} onParty={() => startFlow('party')} onJoin={() => { setError(''); setScreen('join'); }} onLibrary={() => { setFlow('library'); setScreen('characters'); }} onContinue={runtime => { setCampaign(runtime); setMode(runtime.mode); void openStartedCampaign(runtime.id); }} error={error}/>;

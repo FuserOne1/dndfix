@@ -3,6 +3,7 @@
 
 ALTER TABLE characters ADD COLUMN IF NOT EXISTS rules_data JSONB;
 ALTER TABLE characters ADD COLUMN IF NOT EXISTS backstory_data JSONB;
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS gold INTEGER NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS campaigns (
   id TEXT PRIMARY KEY,
@@ -92,3 +93,6 @@ BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE campaign_votes;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
+
+-- Force PostgREST to see newly added columns immediately.
+NOTIFY pgrst, 'reload schema';
