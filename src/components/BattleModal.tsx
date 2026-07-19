@@ -1,8 +1,18 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Swords, Shield, Heart, Skull, Crosshair, Zap, Briefcase, X, ChevronRight, FlaskRound as Flask } from 'lucide-react';
-import { BattleEnemy, CharacterStats, BattleResult, BattleRewards } from '../types';
-import { processPlayerAttack, resolveAttack, enemyChooseAttack, getPlayerAC, getPlayerAtkBonus, getPlayerDmgBonus, processItemEffect } from '../lib/battle-engine';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import { Briefcase, ChevronRight, Crosshair, FlaskRound, Heart, Shield, Skull, Swords, Zap } from 'lucide-react';
+import { BattleEnemy, BattleResult, BattleRewards, CharacterStats } from '../types';
+import {
+  createInitiativeOrder,
+  enemyChooseAttack,
+  getAbilityModifier,
+  getPlayerAC,
+  getPlayerAtkBonus,
+  processItemEffect,
+  processPlayerAttack,
+  resolveAttack,
+  rollDice,
+} from '../lib/battle-engine';
 
 interface BattleModalProps {
   isOpen: boolean;
@@ -10,527 +20,358 @@ interface BattleModalProps {
   playerStats: CharacterStats;
   playerName: string;
   rewards: BattleRewards;
-  onBattleEnd: (result: BattleResult) => void;
+  onBattleEnd: (result: BattleResult) => void | Promise<void>;
   onClose: () => void;
 }
 
-type Phase = 'player_turn' | 'enemy_turn' | 'animating' | 'victory' | 'defeat';
+type Phase = 'player_turn' | 'enemy_turn' | 'victory' | 'defeat';
+type ActionMode = 'none' | 'attack' | 'spell' | 'item';
+type ItemAction = 'main' | 'bonus';
 
 interface LogEntry {
   text: string;
-  type: 'attack' | 'defend' | 'spell' | 'item' | 'system' | 'damage' | 'heal' | 'round';
   round: number;
   actor: 'player' | 'enemy' | 'system';
+  divider?: boolean;
+}
+
+interface BattleBuffs {
+  ac: number;
+  attack: number;
+  damage: number;
+  conditions: string[];
+}
+
+function removeOne(items: string[], target: string): string[] {
+  const index = items.indexOf(target);
+  return index < 0 ? items : [...items.slice(0, index), ...items.slice(index + 1)];
 }
 
 export default function BattleModal({ isOpen, enemies, playerStats, playerName, rewards, onBattleEnd, onClose }: BattleModalProps) {
-  const [phase, setPhase] = useState<Phase>('player_turn');
-  const [turnEnemies, setTurnEnemies] = useState<BattleEnemy[]>(enemies);
+  const initialEnemies = useMemo(() => enemies.map(enemy => ({ ...enemy, attacks: [...enemy.attacks], statusEffects: [...enemy.statusEffects] })), [enemies]);
+  const initiativeOrder = useMemo(() => createInitiativeOrder(playerStats, initialEnemies), [initialEnemies, playerStats]);
+  const [turnEnemies, setTurnEnemies] = useState(initialEnemies);
   const [playerHP, setPlayerHP] = useState(playerStats.hp.current);
-  const [playerMaxHP] = useState(playerStats.hp.max);
+  const [tempHP, setTempHP] = useState(0);
+  const [equipment, setEquipment] = useState([...(playerStats.equipment || [])]);
+  const [buffs, setBuffs] = useState<BattleBuffs>({ ac: 0, attack: 0, damage: 0, conditions: [] });
+  const [turnIndex, setTurnIndex] = useState(0);
+  const [phase, setPhase] = useState<Phase>(initiativeOrder[0]?.kind === 'enemy' ? 'enemy_turn' : 'player_turn');
   const [round, setRound] = useState(1);
   const [log, setLog] = useState<LogEntry[]>([]);
   const [selectedEnemyId, setSelectedEnemyId] = useState<string | null>(null);
-  const [actionMode, setActionMode] = useState<'none' | 'attack' | 'defend' | 'spell' | 'item'>('none');
+  const [actionMode, setActionMode] = useState<ActionMode>('none');
+  const [itemAction, setItemAction] = useState<ItemAction>('main');
   const [playerDefending, setPlayerDefending] = useState(false);
-  const [spellInput, setSpellInput] = useState('');
   const [usedMainAction, setUsedMainAction] = useState(false);
   const [usedBonusAction, setUsedBonusAction] = useState(false);
-  const logRef = useRef<HTMLDivElement>(null);
+  const [usedSpells, setUsedSpells] = useState<string[]>([]);
+  const [saveError, setSaveError] = useState('');
   const enemiesRef = useRef(turnEnemies);
-  const playerHPRef = useRef(playerHP);
+  const hpRef = useRef(playerHP);
+  const tempHpRef = useRef(tempHP);
   const roundRef = useRef(round);
-  const playerStatsRef = useRef(playerStats);
+  const finishedRef = useRef(false);
+  const consumedItemsRef = useRef<string[]>([]);
+  const logEntriesRef = useRef<LogEntry[]>([]);
+  const resultRef = useRef<BattleResult | null>(null);
+  const timersRef = useRef<number[]>([]);
+  const logRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { enemiesRef.current = turnEnemies; }, [turnEnemies]);
-  useEffect(() => { playerHPRef.current = playerHP; }, [playerHP]);
+  useEffect(() => { hpRef.current = playerHP; }, [playerHP]);
+  useEffect(() => { tempHpRef.current = tempHP; }, [tempHP]);
   useEffect(() => { roundRef.current = round; }, [round]);
-  useEffect(() => { playerStatsRef.current = playerStats; }, [playerStats]);
+  useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [log]);
+  useEffect(() => () => timersRef.current.forEach(window.clearTimeout), []);
 
-  useEffect(() => {
-    if (logRef.current) {
-      logRef.current.scrollTop = logRef.current.scrollHeight;
-    }
-  }, [log]);
-
-  const addLog = useCallback((text: string, type: LogEntry['type'], actor: LogEntry['actor']) => {
-    setLog(prev => [...prev, { text, type, round: roundRef.current, actor }]);
+  const schedule = useCallback((callback: () => void, delay: number) => {
+    const id = window.setTimeout(callback, delay);
+    timersRef.current.push(id);
   }, []);
 
-  const calcAC = useCallback(() => {
-    const base = getPlayerAC(playerStatsRef.current);
-    return playerDefending ? base + 2 : base;
-  }, [playerDefending]);
+  const addLog = useCallback((text: string, actor: LogEntry['actor'], divider = false) => {
+    const entry = { text, actor, divider, round: roundRef.current };
+    logEntriesRef.current = [...logEntriesRef.current, entry];
+    setLog(logEntriesRef.current);
+  }, []);
 
-  const checkEnd = useCallback((currentEnemies: BattleEnemy[], hp: number): boolean => {
+  const submitResult = useCallback((result: BattleResult) => {
+    setSaveError('');
+    void Promise.resolve(onBattleEnd(result)).then(onClose).catch(error => {
+      console.error('Failed to save battle result:', error);
+      setSaveError('Не удалось сохранить результат боя. Проверьте подключение и повторите попытку.');
+      addLog('⚠️ Результат боя не сохранён.', 'system');
+    });
+  }, [addLog, onBattleEnd, onClose]);
+
+  const finishBattle = useCallback((victory: boolean, hp: number, currentEnemies: BattleEnemy[]) => {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
+    const totalXp = rewards.xp > 0 ? rewards.xp : enemies.reduce((sum, enemy) => sum + enemy.xpReward, 0);
+    const result: BattleResult = {
+      victory,
+      xpGained: victory ? totalXp : 0,
+      itemsGained: victory ? [...new Set(rewards.items)] : [],
+      itemsConsumed: consumedItemsRef.current,
+      finalHp: Math.max(0, Math.min(playerStats.hp.max, hp)),
+      damageTaken: Math.max(0, playerStats.hp.current - hp),
+      enemiesDefeated: currentEnemies.filter(enemy => enemy.hp <= 0).map(enemy => enemy.name),
+      log: logEntriesRef.current.map(entry => entry.text),
+    };
+    resultRef.current = result;
+
+    setPhase(victory ? 'victory' : 'defeat');
+    addLog(victory ? `🏆 Победа! XP: +${result.xpGained}` : '💀 Бой завершён поражением.', 'system');
+    schedule(() => submitResult(result), 900);
+  }, [addLog, enemies, playerStats.hp.current, playerStats.hp.max, rewards, schedule, submitResult]);
+
+  const advanceTurn = useCallback((fromIndex: number, currentEnemies: BattleEnemy[], hp: number) => {
+    if (finishedRef.current) return;
     if (hp <= 0) {
-      setPhase('defeat');
-      addLog('💀 Вы повержены!', 'system', 'system');
-      setTimeout(() => {
-        onBattleEnd({
-          victory: false,
-          xpGained: 0,
-          itemsGained: [],
-          damageTaken: playerStats.hp.current - hp,
-          enemiesDefeated: [],
-          log: [],
-        });
-      }, 1500);
-      return true;
+      finishBattle(false, 0, currentEnemies);
+      return;
     }
-    const alive = currentEnemies.filter(e => e.hp > 0);
-    if (alive.length === 0) {
-      setPhase('victory');
-      const gainedItems: string[] = [];
-      for (const item of rewards.items) {
-        if (!gainedItems.includes(item)) gainedItems.push(item);
-      }
-      const totalXp = rewards.xp > 0 ? rewards.xp : enemies.reduce((s, e) => s + e.xpReward, 0);
-      const defeated = enemies.map(e => e.name);
-      addLog(`🎉 Победа! XP: +${totalXp}`, 'system', 'system');
-      if (gainedItems.length > 0) addLog(`🎒 Добыто: ${gainedItems.join(', ')}`, 'system', 'system');
-
-      setTimeout(() => {
-        onBattleEnd({
-          victory: true,
-          xpGained: totalXp,
-          itemsGained: gainedItems,
-          damageTaken: playerStats.hp.current - hp,
-          enemiesDefeated: defeated,
-          log: [],
-        });
-      }, 1500);
-      return true;
-    }
-    return false;
-  }, [enemies, playerStats, addLog, onBattleEnd]);
-
-  const endPlayerTurn = useCallback(() => {
-    setUsedMainAction(false);
-    setUsedBonusAction(false);
-    setPlayerDefending(false);
-    setActionMode('none');
-    setSelectedEnemyId(null);
-    setPhase('enemy_turn');
-  }, []);
-
-  const handleAttack = useCallback((enemyId: string) => {
-    const eList = enemiesRef.current;
-    const enemy = eList.find(e => e.id === enemyId);
-    if (!enemy || enemy.hp <= 0) return;
-
-    const result = processPlayerAttack(enemyId, eList, playerStatsRef.current);
-    addLog(result.log, result.hit ? 'attack' : 'system', 'player');
-
-    const updated = eList.map(e => e.id === enemyId ? { ...e, hp: result.enemyHp } : e);
-    setTurnEnemies(updated);
-    setSelectedEnemyId(null);
-    setActionMode('none');
-    setUsedMainAction(true);
-
-    if (checkEnd(updated, playerHPRef.current)) return;
-  }, [addLog, checkEnd]);
-
-  const handleDefend = useCallback(() => {
-    setPlayerDefending(true);
-    addLog(`🛡️ ${playerName} принимает защитную стойку (+2 AC на раунд)`, 'defend', 'player');
-    setActionMode('none');
-    setUsedMainAction(true);
-  }, [playerName, addLog]);
-
-  const handleCastSpell = useCallback(() => {
-    if (!spellInput.trim()) return;
-    addLog(`✨ ${playerName} произносит заклинание: ${spellInput.trim()}`, 'spell', 'player');
-    setSpellInput('');
-    setActionMode('none');
-    setUsedMainAction(true);
-  }, [spellInput, playerName, addLog]);
-
-  const handleUseItem = useCallback((itemName: string) => {
-    const result = processItemEffect(itemName, playerStatsRef.current);
-    addLog(result.log, 'item', 'player');
-    if (result.healAmount > 0) {
-      const newHP = Math.min(playerHPRef.current + result.healAmount, playerStats.hp.max);
-      setPlayerHP(newHP);
-      addLog(`❤️ +${result.healAmount} HP (${playerHPRef.current} → ${newHP})`, 'heal', 'player');
-    }
-    if (result.damageAmount > 0 && selectedEnemyId) {
-      const eList = enemiesRef.current;
-      const enemy = eList.find(e => e.id === selectedEnemyId);
-      if (enemy && enemy.hp > 0) {
-        const newEHp = Math.max(0, enemy.hp - result.damageAmount);
-        const updated = eList.map(e => e.id === selectedEnemyId ? { ...e, hp: newEHp } : e);
-        setTurnEnemies(updated);
-        addLog(`💥 ${enemy.name} получает ${result.damageAmount} урона`, 'damage', 'player');
-        if (newEHp <= 0) addLog(`💀 ${enemy.name} повержен!`, 'system', 'system');
-        if (checkEnd(updated, playerHPRef.current)) { setActionMode('none'); setSelectedEnemyId(null); return; }
-      }
-    }
-    if (result.buffAc > 0) addLog(`🛡️ AC +${result.buffAc}`, 'defend', 'player');
-    if (result.buffAtk > 0) addLog(`⚔️ ATK +${result.buffAtk}`, 'attack', 'player');
-    if (result.condition) addLog(`✨ ${result.condition}`, 'spell', 'player');
-    setActionMode('none');
-    setUsedMainAction(true);
-    setSelectedEnemyId(null);
-  }, [playerName, addLog, checkEnd, selectedEnemyId]);
-
-  const handleFlee = useCallback(() => {
-    addLog(`🏃 ${playerName} отступает!`, 'system', 'player');
-    setTimeout(() => {
-      onBattleEnd({
-        victory: false,
-        xpGained: 0,
-        itemsGained: [],
-        damageTaken: playerStats.hp.current - playerHPRef.current,
-        enemiesDefeated: [],
-        log: [],
-      });
-    }, 500);
-  }, [playerName, playerStats, onBattleEnd]);
-
-  const processEnemies = useCallback(() => {
-    const eList = enemiesRef.current;
-    const hp = playerHPRef.current;
-    const currentRound = roundRef.current;
-    const aliveEnemies = eList.filter(e => e.hp > 0);
-
-    if (aliveEnemies.length === 0 || hp <= 0) {
-      setPhase('player_turn');
+    if (currentEnemies.every(enemy => enemy.hp <= 0)) {
+      finishBattle(true, hp, currentEnemies);
       return;
     }
 
-    addLog(`— Ход врагов (Раунд ${currentRound}) —`, 'round', 'system');
-    let newHP = hp;
-    let updatedEnemies = [...eList];
-    let idx = 0;
-
-    const processNext = () => {
-      if (idx >= aliveEnemies.length) {
-        setPlayerHP(newHP);
-        setTurnEnemies(updatedEnemies);
-        if (checkEnd(updatedEnemies, newHP)) return;
-        setRound(prev => prev + 1);
+    for (let offset = 1; offset <= initiativeOrder.length; offset++) {
+      const nextIndex = (fromIndex + offset) % initiativeOrder.length;
+      const entry = initiativeOrder[nextIndex];
+      if (entry.kind === 'enemy' && !currentEnemies.some(enemy => enemy.id === entry.id && enemy.hp > 0)) continue;
+      if (nextIndex <= fromIndex) {
+        setRound(value => value + 1);
+        roundRef.current += 1;
+      }
+      setTurnIndex(nextIndex);
+      setActionMode('none');
+      setSelectedEnemyId(null);
+      if (entry.kind === 'player') {
+        setPlayerDefending(false);
+        setUsedMainAction(false);
+        setUsedBonusAction(false);
         setPhase('player_turn');
-        return;
-      }
+        addLog(`— Раунд ${nextIndex <= fromIndex ? roundRef.current : roundRef.current}: ход ${playerName} —`, 'system', true);
+      } else setPhase('enemy_turn');
+      return;
+    }
+  }, [addLog, finishBattle, initiativeOrder, playerName]);
 
-      const enemy = aliveEnemies[idx];
-      const attack = enemyChooseAttack(enemy);
-      const ac = calcAC();
-      const res = resolveAttack(attack.toHit, attack.dice, attack.bonus, ac);
+  const handleAttack = useCallback((enemyId: string) => {
+    if (phase !== 'player_turn' || usedMainAction || finishedRef.current) return;
+    const copy = enemiesRef.current.map(enemy => ({ ...enemy }));
+    const result = processPlayerAttack(enemyId, copy, playerStats, buffs.attack, buffs.damage);
+    const updated = copy.map(enemy => enemy.id === enemyId ? { ...enemy, hp: result.enemyHp } : enemy);
+    enemiesRef.current = updated;
+    setTurnEnemies(updated);
+    setUsedMainAction(true);
+    setActionMode('none');
+    setSelectedEnemyId(null);
+    addLog(result.log, 'player');
+    if (updated.every(enemy => enemy.hp <= 0)) finishBattle(true, hpRef.current, updated);
+  }, [addLog, buffs.attack, buffs.damage, finishBattle, phase, playerStats, usedMainAction]);
 
-      if (res.fumble) {
-        addLog(`💀 ${enemy.name} критически промахивается!`, 'damage', 'enemy');
-      } else if (res.hit) {
-        newHP = Math.max(0, newHP - res.damage);
-        setPlayerHP(newHP);
-        addLog(`⚔️ ${enemy.name} → ${res.roll}+${attack.toHit}=${res.total} vs AC ${ac}`, 'attack', 'enemy');
-        addLog(`❤️ Урон: -${res.damage}${res.crit ? ' 🔥 КРИТ!' : ''}`, 'damage', 'enemy');
-        if (newHP <= 0) {
-          setPhase('defeat');
-          addLog('💀 Вы повержены!', 'system', 'system');
-          setTimeout(() => {
-            onBattleEnd({
-              victory: false,
-              xpGained: 0,
-              itemsGained: [],
-              damageTaken: playerStats.hp.current - newHP,
-              enemiesDefeated: [],
-              log: [],
-            });
-          }, 1500);
-          return;
-        }
-      } else {
-        addLog(`🛡️ ${enemy.name} → ${res.roll}+${attack.toHit}=${res.total} vs AC ${ac} — Промах`, 'defend', 'enemy');
-      }
+  const handleDefend = useCallback(() => {
+    if (phase !== 'player_turn' || usedMainAction) return;
+    setPlayerDefending(true);
+    setUsedMainAction(true);
+    addLog(`🛡️ ${playerName} защищается: +2 AC до следующего хода.`, 'player');
+  }, [addLog, phase, playerName, usedMainAction]);
 
-      idx++;
-      setTimeout(processNext, 700);
-    };
+  const handleDamageSpell = useCallback((enemyId: string) => {
+    if (phase !== 'player_turn' || usedMainAction || usedSpells.includes('bolt')) return;
+    const enemy = enemiesRef.current.find(candidate => candidate.id === enemyId && candidate.hp > 0);
+    if (!enemy) return;
+    const castingModifier = Math.max(
+      getAbilityModifier(playerStats.stats.intelligence),
+      getAbilityModifier(playerStats.stats.wisdom),
+      getAbilityModifier(playerStats.stats.charisma),
+    );
+    const result = resolveAttack(castingModifier + Math.ceil(Math.max(1, playerStats.level) / 4) + 1, '1d10', 0, enemy.ac);
+    const updated = enemiesRef.current.map(candidate => candidate.id === enemy.id ? { ...candidate, hp: Math.max(0, candidate.hp - result.damage) } : candidate);
+    enemiesRef.current = updated;
+    setTurnEnemies(updated);
+    setUsedMainAction(true);
+    setUsedSpells(previous => [...previous, 'bolt']);
+    addLog(result.hit ? `✨ Магический снаряд поражает ${enemy.name}: ${result.damage} урона.` : `✨ Магический снаряд не попадает по ${enemy.name}.`, 'player');
+    if (updated.every(candidate => candidate.hp <= 0)) finishBattle(true, hpRef.current, updated);
+  }, [addLog, finishBattle, phase, playerStats, usedMainAction, usedSpells]);
 
-    processNext();
-  }, [addLog, checkEnd, calcAC, onBattleEnd, playerStats]);
+  const handleHealingSpell = useCallback(() => {
+    if (phase !== 'player_turn' || usedBonusAction || usedSpells.includes('heal')) return;
+    const castingModifier = Math.max(0, getAbilityModifier(playerStats.stats.wisdom), getAbilityModifier(playerStats.stats.charisma));
+    const amount = Math.max(1, rollDice('1d4') + castingModifier);
+    const oldHp = hpRef.current;
+    const newHp = Math.min(playerStats.hp.max, oldHp + amount);
+    hpRef.current = newHp;
+    setPlayerHP(newHp);
+    setUsedBonusAction(true);
+    setUsedSpells(previous => [...previous, 'heal']);
+    addLog(`✨ Лечащее слово восстанавливает ${newHp - oldHp} HP.`, 'player');
+  }, [addLog, phase, playerStats, usedBonusAction, usedSpells]);
+
+  const handleUseItem = useCallback((itemName: string) => {
+    const useAsBonus = itemAction === 'bonus';
+    if (phase !== 'player_turn' || (useAsBonus ? usedBonusAction : usedMainAction)) return;
+    const result = processItemEffect(itemName, { ...playerStats, equipment });
+    if (!result.found) {
+      addLog(result.log, 'system');
+      return;
+    }
+    const targetId = selectedEnemyId || (turnEnemies.filter(enemy => enemy.hp > 0).length === 1 ? turnEnemies.find(enemy => enemy.hp > 0)?.id : null);
+    if (result.damageAmount > 0 && !targetId) {
+      addLog('Сначала выберите цель для предмета.', 'system');
+      return;
+    }
+
+    let updatedEnemies = enemiesRef.current;
+    if (result.damageAmount > 0 && targetId) {
+      updatedEnemies = enemiesRef.current.map(enemy => enemy.id === targetId ? { ...enemy, hp: Math.max(0, enemy.hp - result.damageAmount) } : enemy);
+      enemiesRef.current = updatedEnemies;
+      setTurnEnemies(updatedEnemies);
+    }
+    const newHp = Math.min(playerStats.hp.max, hpRef.current + result.healAmount);
+    hpRef.current = newHp;
+    tempHpRef.current = Math.max(tempHpRef.current, result.tempHpAmount);
+    setPlayerHP(newHp);
+    setTempHP(tempHpRef.current);
+    setBuffs(previous => ({
+      ac: previous.ac + result.buffAc,
+      attack: previous.attack + result.buffAtk,
+      damage: previous.damage + result.buffDmg,
+      conditions: result.condition ? [...previous.conditions, result.condition] : previous.conditions,
+    }));
+    setEquipment(previous => removeOne(previous, itemName));
+    consumedItemsRef.current = [...consumedItemsRef.current, itemName];
+    if (useAsBonus) setUsedBonusAction(true); else setUsedMainAction(true);
+    setActionMode('none');
+    setSelectedEnemyId(null);
+    addLog(result.log, 'player');
+    if (updatedEnemies.every(enemy => enemy.hp <= 0)) finishBattle(true, newHp, updatedEnemies);
+  }, [addLog, equipment, finishBattle, itemAction, phase, playerStats, selectedEnemyId, turnEnemies, usedBonusAction, usedMainAction]);
+
+  const handleFlee = useCallback(() => {
+    if (phase !== 'player_turn' || usedMainAction) return;
+    const roll = rollDice('1d20') + getAbilityModifier(playerStats.stats.dexterity);
+    const difficulty = 10 + turnEnemies.filter(enemy => enemy.hp > 0).length;
+    if (roll >= difficulty) {
+      addLog(`🏃 ${playerName} успешно отступает (${roll} против ${difficulty}).`, 'player');
+      finishBattle(false, hpRef.current, enemiesRef.current);
+    } else {
+      addLog(`🏃 Отступление не удалось (${roll} против ${difficulty}).`, 'player');
+      setUsedMainAction(true);
+      schedule(() => advanceTurn(turnIndex, enemiesRef.current, hpRef.current), 350);
+    }
+  }, [addLog, advanceTurn, finishBattle, phase, playerName, playerStats.stats.dexterity, schedule, turnEnemies, turnIndex, usedMainAction]);
+
+  const endPlayerTurn = useCallback(() => {
+    if (phase !== 'player_turn' || (!usedMainAction && !usedBonusAction)) return;
+    advanceTurn(turnIndex, enemiesRef.current, hpRef.current);
+  }, [advanceTurn, phase, turnIndex, usedBonusAction, usedMainAction]);
 
   useEffect(() => {
-    if (phase === 'enemy_turn') {
-      setActionMode('none');
-      setTimeout(processEnemies, 500);
+    if (!isOpen || phase !== 'enemy_turn' || finishedRef.current) return;
+    const entry = initiativeOrder[turnIndex];
+    const enemy = enemiesRef.current.find(candidate => candidate.id === entry?.id && candidate.hp > 0);
+    if (!enemy) {
+      advanceTurn(turnIndex, enemiesRef.current, hpRef.current);
+      return;
     }
-  }, [phase, processEnemies]);
 
-  const aliveEnemies = turnEnemies.filter(e => e.hp > 0);
-  const hpPercent = (playerHP / playerMaxHP) * 100;
-  const canMainAction = phase === 'player_turn' && !usedMainAction;
-  const canBonusAction = phase === 'player_turn' && !usedBonusAction;
-  const playerEquipment = playerStats.equipment || [];
+    addLog(`— Ход ${enemy.name} —`, 'system', true);
+    schedule(() => {
+      if (finishedRef.current) return;
+      const attack = enemyChooseAttack(enemy);
+      const ac = getPlayerAC(playerStats, buffs.ac + (playerDefending ? 2 : 0));
+      const result = resolveAttack(attack.toHit, attack.dice, attack.bonus, ac);
+      let newHp = hpRef.current;
+      if (result.hit) {
+        const absorbed = Math.min(tempHpRef.current, result.damage);
+        tempHpRef.current -= absorbed;
+        setTempHP(tempHpRef.current);
+        newHp = Math.max(0, newHp - (result.damage - absorbed));
+        hpRef.current = newHp;
+        setPlayerHP(newHp);
+        addLog(`⚔️ ${enemy.name}: ${result.roll}+${attack.toHit}=${result.total} против AC ${ac}. Урон: ${result.damage}${absorbed ? ` (${absorbed} поглощено)` : ''}${result.crit ? ' 🔥 КРИТ!' : ''}`, 'enemy');
+      } else addLog(result.fumble ? `💀 ${enemy.name} критически промахивается.` : `🛡️ ${enemy.name} промахивается (${result.total} против AC ${ac}).`, 'enemy');
+      advanceTurn(turnIndex, enemiesRef.current, newHp);
+    }, 650);
+  }, [addLog, advanceTurn, buffs.ac, initiativeOrder, isOpen, phase, playerDefending, playerStats, schedule, turnIndex]);
+
+  const aliveEnemies = turnEnemies.filter(enemy => enemy.hp > 0);
+  const canMain = phase === 'player_turn' && !usedMainAction;
+  const canBonus = phase === 'player_turn' && !usedBonusAction;
+  const currentActor = initiativeOrder[turnIndex];
 
   if (!isOpen) return null;
 
   return (
     <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4"
-        >
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.9, opacity: 0 }}
-            className="w-full h-full sm:h-auto sm:max-w-lg sm:max-h-[90vh] sm:rounded-2xl bg-zinc-950 sm:border sm:border-zinc-800 overflow-hidden flex flex-col"
-          >
-            {/* Header */}
-            <div className="shrink-0 px-4 py-3 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/80">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-red-500/10 border border-red-500/20">
-                  <Swords className="w-4 h-4 text-red-400" />
-                </div>
-                <span className="text-sm font-bold text-white">Битва</span>
-                <span className="text-xs font-mono text-zinc-500">Раунд {round}</span>
-              </div>
-              <button onClick={onClose} className="p-1.5 hover:bg-zinc-800 rounded-lg transition-colors text-zinc-400 hover:text-white">
-                <X className="w-4 h-4" />
-              </button>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-sm p-0 sm:p-4">
+        <motion.div initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="w-full h-full sm:h-auto sm:max-w-2xl sm:max-h-[92vh] sm:rounded-2xl bg-zinc-950 sm:border sm:border-zinc-800 overflow-hidden flex flex-col">
+          <header className="shrink-0 px-4 py-3 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/80">
+            <div className="flex items-center gap-2"><Swords className="w-4 h-4 text-red-400"/><strong className="text-sm text-white">Битва</strong><span className="text-xs font-mono text-zinc-500">Раунд {round}</span></div>
+            <span className="text-[10px] text-zinc-500">Чтобы выйти, используйте «Отступить»</span>
+          </header>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex flex-wrap gap-2">
+              {turnEnemies.map(enemy => {
+                const dead = enemy.hp <= 0;
+                const selectable = phase === 'player_turn' && !dead && (((actionMode === 'attack' || actionMode === 'spell') && canMain) || actionMode === 'item');
+                return (
+                  <button key={enemy.id} disabled={!selectable} onClick={() => { setSelectedEnemyId(enemy.id); if (actionMode === 'attack') handleAttack(enemy.id); if (actionMode === 'spell') handleDamageSpell(enemy.id); }} className={`w-32 rounded-xl border-2 p-2.5 text-left transition ${dead ? 'opacity-40 border-zinc-800' : selectedEnemyId === enemy.id ? 'border-amber-500 bg-amber-950/30' : selectable ? 'border-red-500/60 bg-red-950/20' : 'border-zinc-800'}`}>
+                    <div className="flex justify-between text-xs font-bold text-white"><span className="truncate">{enemy.name}</span>{dead ? <Skull className="w-3 h-3"/> : selectedEnemyId === enemy.id ? <Crosshair className="w-3 h-3 text-amber-400"/> : null}</div>
+                    {!dead && <><span className="text-[10px] text-zinc-500">AC {enemy.ac} · Иниц. {enemy.initiative}</span><div className="h-1 bg-zinc-800 rounded mt-2"><div className="h-full bg-red-500 rounded" style={{ width: `${Math.max(0, enemy.hp / enemy.maxHp * 100)}%` }}/></div><span className="text-[9px] text-zinc-600">{enemy.hp}/{enemy.maxHp}</span></>}
+                  </button>
+                );
+              })}
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {/* ═══ ВРАГИ ═══ */}
-              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-zinc-800">
-                {turnEnemies.map(enemy => {
-                  const isDead = enemy.hp <= 0;
-                  const isSelected = selectedEnemyId === enemy.id;
-                  return (
-                    <motion.button
-                      key={enemy.id}
-                      layout
-                      onClick={() => {
-                        if (isDead || !canMainAction || actionMode !== 'attack') return;
-                        setSelectedEnemyId(enemy.id);
-                        handleAttack(enemy.id);
-                      }}
-                      className={`shrink-0 w-28 rounded-xl border-2 transition-all overflow-hidden text-left ${
-                        isDead
-                          ? 'bg-zinc-950/80 border-zinc-800 opacity-40'
-                          : isSelected
-                          ? 'bg-gradient-to-b from-amber-950/60 to-zinc-950 border-amber-500 shadow-lg shadow-amber-500/20'
-                          : canMainAction && actionMode === 'attack' && !isDead
-                          ? 'bg-gradient-to-b from-red-950/40 to-zinc-950 border-red-500/60 hover:border-red-400 cursor-pointer animate-pulse'
-                          : 'bg-zinc-950/80 border-zinc-800/60'
-                      }`}
-                      disabled={isDead || phase !== 'player_turn'}
-                    >
-                      <div className="p-2.5">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className={`text-[11px] font-bold truncate max-w-[80px] ${isDead ? 'text-zinc-700 line-through' : 'text-white'}`}>
-                            {enemy.name}
-                          </span>
-                          {isDead && <Skull className="w-3 h-3 text-red-900" />}
-                          {isSelected && !isDead && <Crosshair className="w-3 h-3 text-amber-400" />}
-                        </div>
-                        {!isDead && (
-                          <>
-                            <span className="text-[10px] font-mono text-zinc-500">AC {enemy.ac}</span>
-                            <div className="mt-1.5 w-full h-1 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
-                              <div className={`h-full rounded-full transition-all duration-300 ${(enemy.hp / enemy.maxHp) * 100 > 50 ? 'bg-red-500' : (enemy.hp / enemy.maxHp) * 100 > 20 ? 'bg-amber-500' : 'bg-red-800'}`} style={{ width: `${Math.max(0, (enemy.hp / enemy.maxHp) * 100)}%` }} />
-                            </div>
-                            <span className="text-[9px] font-mono text-zinc-600 mt-0.5 block">{enemy.hp}/{enemy.maxHp}</span>
-                          </>
-                        )}
-                      </div>
-                    </motion.button>
-                  );
-                })}
-              </div>
+            <section className="p-3 rounded-xl bg-zinc-900/50 border border-zinc-800">
+              <div className="flex justify-between"><span className="flex items-center gap-1.5 text-xs font-bold text-white"><Heart className="w-3.5 h-3.5 text-red-500"/>{playerName}</span><span className="text-xs font-mono text-zinc-400">{playerHP}/{playerStats.hp.max}{tempHP > 0 ? ` + ${tempHP} врем.` : ''}</span></div>
+              <div className="h-2 bg-zinc-900 rounded mt-2"><div className="h-full bg-red-500 rounded transition-all" style={{ width: `${Math.max(0, playerHP / playerStats.hp.max * 100)}%` }}/></div>
+              <div className="flex flex-wrap gap-3 mt-2 text-[10px] font-mono text-zinc-500"><span>AC {getPlayerAC(playerStats, buffs.ac + (playerDefending ? 2 : 0))}</span><span>ATK {getPlayerAtkBonus(playerStats, buffs.attack) >= 0 ? '+' : ''}{getPlayerAtkBonus(playerStats, buffs.attack)}</span><span>Ход: {currentActor?.kind === 'player' ? playerName : turnEnemies.find(enemy => enemy.id === currentActor?.id)?.name}</span>{buffs.conditions.map(condition => <span key={condition} className="text-violet-400">{condition}</span>)}</div>
+            </section>
 
-              {/* ═══ ХАРАКТЕРИСТИКИ ИГРОКА ═══ */}
-              <div className="p-3 rounded-xl bg-zinc-900/50 border border-zinc-800">
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <Heart className="w-3.5 h-3.5 text-red-500" />
-                    <span className="text-xs font-bold text-white">{playerName}</span>
-                  </div>
-                  <span className="text-xs font-mono text-zinc-400">{playerHP}/{playerMaxHP}</span>
+            {phase === 'player_turn' && (
+              <section className="space-y-2">
+                <div className="flex items-center gap-1 text-[9px] text-zinc-600 uppercase font-bold"><ChevronRight className="w-3 h-3"/>Основное действие {usedMainAction ? 'использовано' : ''}</div>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                  <ActionButton label="Атака" icon={<Swords className="w-3.5 h-3.5"/>} disabled={!canMain} onClick={() => setActionMode(actionMode === 'attack' ? 'none' : 'attack')}/>
+                  <ActionButton label="Защита" icon={<Shield className="w-3.5 h-3.5"/>} disabled={!canMain} onClick={handleDefend}/>
+                  <ActionButton label="Снаряд" icon={<Zap className="w-3.5 h-3.5"/>} disabled={!canMain || usedSpells.includes('bolt') || aliveEnemies.length === 0} onClick={() => setActionMode(actionMode === 'spell' ? 'none' : 'spell')}/>
+                  <ActionButton label="Предмет" icon={<Briefcase className="w-3.5 h-3.5"/>} disabled={!canMain} onClick={() => { setItemAction('main'); setActionMode('item'); }}/>
+                  <ActionButton label="Отступить" icon={<span>🏃</span>} disabled={!canMain} onClick={handleFlee}/>
                 </div>
-                <div className="w-full h-2 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${Math.max(0, hpPercent)}%` }}
-                    transition={{ duration: 0.4, ease: 'easeOut' }}
-                    className={`h-full rounded-full ${hpPercent > 50 ? 'bg-red-500' : hpPercent > 20 ? 'bg-amber-500' : 'bg-red-800'}`}
-                  />
+                <div className="flex items-center gap-1 text-[9px] text-zinc-600 uppercase font-bold"><ChevronRight className="w-3 h-3"/>Бонусное действие {usedBonusAction ? 'использовано' : ''}</div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <ActionButton label="Лечащее слово" icon={<Zap className="w-3.5 h-3.5"/>} disabled={!canBonus || usedSpells.includes('heal')} onClick={handleHealingSpell}/>
+                  <ActionButton label="Зелье" icon={<FlaskRound className="w-3.5 h-3.5"/>} disabled={!canBonus} onClick={() => { setItemAction('bonus'); setActionMode('item'); }}/>
                 </div>
-                <div className="flex items-center gap-3 mt-1.5">
-                  <span className="text-[10px] font-mono text-zinc-600">AC {calcAC()}</span>
-                  {playerDefending && <span className="text-[10px] font-bold text-blue-400">🛡️ +2 AC</span>}
-                  <span className="text-[10px] font-mono text-zinc-600">ATK +{getPlayerAtkBonus(playerStats)}</span>
-                </div>
-              </div>
+                {actionMode === 'attack' && <p className="text-xs text-red-400">Выберите противника.</p>}
+                {actionMode === 'spell' && <p className="text-xs text-violet-400">Выберите цель магического снаряда.</p>}
+                {actionMode === 'item' && <div className="grid grid-cols-2 gap-1.5 p-2 border border-amber-900/30 rounded-xl">{equipment.length ? equipment.map((item, index) => <button key={`${item}-${index}`} onClick={() => handleUseItem(item)} className="text-left text-xs text-amber-300 border border-amber-900/40 rounded-lg p-2 hover:bg-amber-950/30">{item}</button>) : <span className="text-xs text-zinc-600">Нет предметов.</span>}</div>}
+                {(usedMainAction || usedBonusAction) && <button onClick={endPlayerTurn} className="w-full py-2 rounded-xl bg-zinc-800 text-xs font-bold text-zinc-300 hover:bg-zinc-700">Завершить ход →</button>}
+              </section>
+            )}
 
-              {/* ═══ КНОПКИ ДЕЙСТВИЙ ═══ */}
-              {phase === 'player_turn' && (
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-1 text-[9px] text-zinc-600 uppercase tracking-wider font-bold">
-                    <ChevronRight className="w-2.5 h-2.5" />
-                    Основное действие {usedMainAction ? '(использовано)' : ''}
-                  </div>
-                  <div className="grid grid-cols-4 gap-1.5">
-                    <button
-                      onClick={() => setActionMode(prev => prev === 'attack' ? 'none' : 'attack')}
-                      disabled={!canMainAction}
-                      className={`flex items-center justify-center gap-1 px-1 py-2.5 rounded-xl border text-[10px] font-bold uppercase tracking-wider transition-all ${
-                        !canMainAction ? 'opacity-30 cursor-not-allowed bg-zinc-900/30 border-zinc-800/30 text-zinc-600'
-                        : actionMode === 'attack' ? 'bg-red-600/20 border-red-500/50 text-red-400'
-                        : 'bg-zinc-900/50 border-zinc-800 text-zinc-300 hover:bg-zinc-800'
-                      }`}
-                    >
-                      <Swords className="w-3.5 h-3.5" /> Атака
-                    </button>
-                    <button
-                      onClick={handleDefend}
-                      disabled={!canMainAction}
-                      className={`flex items-center justify-center gap-1 px-1 py-2.5 rounded-xl border text-[10px] font-bold uppercase tracking-wider transition-all ${
-                        !canMainAction ? 'opacity-30 cursor-not-allowed bg-zinc-900/30 border-zinc-800/30 text-zinc-600'
-                        : 'bg-zinc-900/50 border-zinc-800 text-blue-300 hover:bg-zinc-800'
-                      }`}
-                    >
-                      <Shield className="w-3.5 h-3.5" /> Защита
-                    </button>
-                    <button
-                      onClick={() => setActionMode(prev => prev === 'spell' ? 'none' : 'spell')}
-                      disabled={!canMainAction}
-                      className={`flex items-center justify-center gap-1 px-1 py-2.5 rounded-xl border text-[10px] font-bold uppercase tracking-wider transition-all ${
-                        !canMainAction ? 'opacity-30 cursor-not-allowed bg-zinc-900/30 border-zinc-800/30 text-zinc-600'
-                        : actionMode === 'spell' ? 'bg-violet-600/20 border-violet-500/50 text-violet-400'
-                        : 'bg-zinc-900/50 border-zinc-800 text-violet-300 hover:bg-zinc-800'
-                      }`}
-                    >
-                      <Zap className="w-3.5 h-3.5" /> Закл.
-                    </button>
-                    <button
-                      onClick={() => setActionMode(prev => prev === 'item' ? 'none' : 'item')}
-                      disabled={!canMainAction}
-                      className={`flex items-center justify-center gap-1 px-1 py-2.5 rounded-xl border text-[10px] font-bold uppercase tracking-wider transition-all ${
-                        !canMainAction ? 'opacity-30 cursor-not-allowed bg-zinc-900/30 border-zinc-800/30 text-zinc-600'
-                        : actionMode === 'item' ? 'bg-amber-600/20 border-amber-500/50 text-amber-400'
-                        : 'bg-zinc-900/50 border-zinc-800 text-amber-300 hover:bg-zinc-800'
-                      }`}
-                    >
-                      <Briefcase className="w-3.5 h-3.5" /> Предмет
-                    </button>
-                  </div>
+            {phase === 'enemy_turn' && <div className="text-center text-xs text-zinc-500 animate-pulse">Действует противник…</div>}
+            {(phase === 'victory' || phase === 'defeat') && <div className="text-center space-y-2"><div className={`text-xl font-bold ${phase === 'victory' ? 'text-amber-400' : 'text-red-500'}`}>{phase === 'victory' ? '🏆 Победа!' : '💀 Поражение'}</div>{saveError && <><p className="text-xs text-red-400">{saveError}</p><button onClick={() => resultRef.current && submitResult(resultRef.current)} className="px-4 py-2 rounded-lg bg-red-700 text-xs font-bold text-white">Повторить сохранение</button></>}</div>}
 
-                  <div className="flex items-center gap-1 text-[9px] text-zinc-600 uppercase tracking-wider font-bold">
-                    <ChevronRight className="w-2.5 h-2.5" />
-                    Бонусное действие {usedBonusAction ? '(использовано)' : ''}
-                  </div>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <button
-                      onClick={() => setActionMode(prev => prev === 'item' ? 'none' : 'item')}
-                      disabled={!canBonusAction || actionMode === 'item'}
-                      className={`flex items-center justify-center gap-1 px-1 py-2.5 rounded-xl border text-[10px] font-bold uppercase tracking-wider transition-all ${
-                        !canBonusAction ? 'opacity-30 cursor-not-allowed bg-zinc-900/30 border-zinc-800/30 text-zinc-600'
-                        : 'bg-zinc-900/50 border-zinc-800 text-emerald-300 hover:bg-zinc-800'
-                      }`}
-                    >
-                      <Flask className="w-3.5 h-3.5" /> Зелье
-                    </button>
-                    <button
-                      onClick={handleFlee}
-                      className="flex items-center justify-center gap-1 px-1 py-2.5 rounded-xl border text-[10px] font-bold uppercase tracking-wider transition-all bg-zinc-900/50 border-zinc-800 text-zinc-500 hover:text-red-400 hover:border-red-800"
-                    >
-                      🏃 Сдаться
-                    </button>
-                  </div>
-
-                  {usedMainAction && canBonusAction && (
-                    <button onClick={endPlayerTurn} className="w-full py-2 rounded-xl bg-zinc-800/50 border border-zinc-700/50 text-[10px] font-bold uppercase tracking-wider text-zinc-400 hover:bg-zinc-700/50 transition-all">
-                      Завершить ход →
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {phase === 'enemy_turn' && (
-                <div className="flex items-center justify-center gap-2 py-3 text-zinc-500">
-                  <div className="w-2 h-2 bg-red-500/50 rounded-full animate-ping" />
-                  <span className="text-xs font-mono uppercase tracking-wider">Враги действуют...</span>
-                </div>
-              )}
-
-              {/* Spell input */}
-              {actionMode === 'spell' && (
-                <div className="flex gap-2">
-                  <input value={spellInput} onChange={e => setSpellInput(e.target.value)} placeholder="Название заклинания..." className="flex-1 bg-zinc-950 border border-violet-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-violet-500/50" onKeyDown={e => { if (e.key === 'Enter' && spellInput.trim()) handleCastSpell(); }} autoFocus />
-                  <button onClick={handleCastSpell} className="px-3 py-2 rounded-xl bg-violet-600 text-white text-xs font-bold transition-all hover:bg-violet-500">Каст</button>
-                  <button onClick={() => setActionMode('none')} className="px-3 py-2 rounded-xl bg-zinc-800 text-zinc-400 text-xs transition-all">X</button>
-                </div>
-              )}
-
-              {/* Item picker — показывает инвентарь */}
-              {actionMode === 'item' && (
-                <div className="space-y-1.5">
-                  <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Выбери предмет:</p>
-                  {playerEquipment.length === 0 ? (
-                    <p className="text-xs text-zinc-600 italic py-2">Нет предметов в инвентаре</p>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-1.5 max-h-32 overflow-y-auto">
-                      {playerEquipment.map((item, i) => (
-                          <button
-                            key={i}
-                            onClick={() => handleUseItem(item)}
-                            disabled={!canMainAction}
-                            className="flex items-center gap-1.5 px-2 py-2 rounded-xl border border-amber-800/30 bg-amber-900/10 text-amber-300 text-[10px] font-medium text-left hover:bg-amber-900/20 transition-all truncate"
-                          >
-                            <Briefcase className="w-3 h-3 shrink-0" />
-                            {item}
-                          </button>
-                        ))}
-                    </div>
-                  )}
-                  <button onClick={() => setActionMode('none')} className="text-[9px] text-zinc-600 underline">Отмена</button>
-                </div>
-              )}
-
-              {/* Log — сгруппированный по раундам */}
-              <div ref={logRef} className="max-h-44 overflow-y-auto space-y-0 p-2 rounded-xl bg-black/30 border border-zinc-800/60 scrollbar-thin scrollbar-thumb-zinc-800">
-                {log.length === 0 && <span className="text-[10px] text-zinc-600 italic">Бой начался...</span>}
-                {log.map((entry, i) => (
-                  <div key={i} className="text-[10px] leading-relaxed">
-                    {entry.type === 'round' ? (
-                      <div className="flex items-center gap-2 py-1">
-                        <div className="flex-1 h-px bg-zinc-800" />
-                        <span className="text-[9px] font-bold uppercase tracking-widest text-red-500/70">{entry.text}</span>
-                        <div className="flex-1 h-px bg-zinc-800" />
-                      </div>
-                    ) : (
-                      <p className={`${entry.actor === 'player' ? 'text-zinc-200' : entry.actor === 'enemy' ? 'text-zinc-400' : 'text-zinc-500'} leading-snug`}>
-                        <span className="opacity-50 text-[8px] mr-1 font-mono">{entry.round}.</span>
-                        {entry.text}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              {/* Victory / Defeat overlay */}
-              {(phase === 'victory' || phase === 'defeat') && (
-                <div className="text-center py-6 space-y-2">
-                  <div className={`text-3xl ${phase === 'victory' ? 'text-amber-400' : 'text-red-600'}`}>
-                    {phase === 'victory' ? '🏆' : '💀'}
-                  </div>
-                  <p className={`text-lg font-bold ${phase === 'victory' ? 'text-amber-300' : 'text-red-400'}`}>
-                    {phase === 'victory' ? 'Победа!' : 'Поражение'}
-                  </p>
-                  <p className="text-xs text-zinc-500">Закрытие...</p>
-                </div>
-              )}
+            <div ref={logRef} className="max-h-48 overflow-y-auto p-2 rounded-xl bg-black/30 border border-zinc-800/60">
+              {log.length === 0 && <span className="text-[10px] text-zinc-600 italic">Бой начался. Порядок инициативы определён.</span>}
+              {log.map((entry, index) => entry.divider ? <div key={index} className="my-1 text-center text-[9px] uppercase text-red-500/70">{entry.text}</div> : <p key={index} className={`text-[10px] leading-relaxed ${entry.actor === 'player' ? 'text-zinc-200' : entry.actor === 'enemy' ? 'text-zinc-400' : 'text-zinc-500'}`}><span className="opacity-50 mr-1">{entry.round}.</span>{entry.text}</p>)}
             </div>
-          </motion.div>
+          </div>
         </motion.div>
-      )}
+      </motion.div>
     </AnimatePresence>
   );
+}
+
+function ActionButton({ label, icon, disabled, onClick }: { label: string; icon: ReactNode; disabled: boolean; onClick: () => void }) {
+  return <button disabled={disabled} onClick={onClick} className="flex items-center justify-center gap-1 px-2 py-2.5 rounded-xl border border-zinc-800 bg-zinc-900/50 text-[10px] font-bold uppercase text-zinc-300 transition hover:bg-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed">{icon}{label}</button>;
 }

@@ -96,7 +96,7 @@ export default function App() {
   };
 
   const saveSessionToRecent = (id: string, characterName?: string) => {
-    const newRecent = [{ id, name: `Adventure ${id}`, characterName: characterName || '', lastPlayed: new Date().toISOString }, ...recentSessions.filter(r => r.id !== id)].slice(0, 5);
+    const newRecent = [{ id, name: `Adventure ${id}`, characterName: characterName || '', lastPlayed: new Date().toISOString() }, ...recentSessions.filter(r => r.id !== id)].slice(0, 5);
     setRecentSessions(newRecent);
     localStorage.setItem('recent_sessions', JSON.stringify(newRecent));
   };

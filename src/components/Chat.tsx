@@ -15,6 +15,7 @@ import { CharacterStats, Message, Room, Character, Enemy, BattleEnemy, BattleSta
 import { AIOrchestrator } from '../lib/ai-orchestrator';
 import { AI_MODELS } from '../lib/ai-config';
 import BattleModal from './BattleModal';
+import { parseBattleStartData } from '../lib/battle-engine';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -404,21 +405,17 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
   };
 
   const updateRoomStats = async (playerName: string, stats: CharacterStats) => {
-    try {
       console.log('💾 Updating character stats for:', playerName);
       console.log('Stats to save:', JSON.stringify(stats, null, 2));
 
       // Находим character_id по имени персонажа
-      const { data: charData } = await supabase
+      const { data: charData, error: lookupError } = await supabase
         .from('characters')
         .select('id')
         .eq('name', playerName)
         .single();
 
-      if (!charData?.id) {
-        console.error('Character not found:', playerName);
-        return;
-      }
+      if (lookupError || !charData?.id) throw lookupError || new Error(`Character not found: ${playerName}`);
 
       // Нормализуем equipment перед сохранением в БД
       const normalizedEquipment = (stats.equipment || []).map(normalizeItem);
@@ -440,14 +437,13 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
         })
         .eq('id', charData.id);
 
+      if (error) throw error;
+
       if (error) {
         console.error('❌ Error updating character:', error);
       } else {
         console.log('✅ Character updated successfully');
       }
-    } catch (err) {
-      console.error('Failed to update character stats:', err);
-    }
   };
 
   // Получаем характеристики текущего игрока или выбранного
@@ -664,9 +660,13 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
     const stats = getCurrentPlayerStats();
     if (!stats || !pendingBattle) return;
 
-    const newHP = Math.max(0, stats.hp.current - result.damageTaken);
+    const newHP = result.finalHp;
     const newXP = stats.xp + result.xpGained;
-    const newEquipment = [...(stats.equipment || [])];
+    let newEquipment = [...(stats.equipment || [])];
+    for (const consumed of result.itemsConsumed) {
+      const index = newEquipment.indexOf(consumed);
+      if (index >= 0) newEquipment = [...newEquipment.slice(0, index), ...newEquipment.slice(index + 1)];
+    }
     for (const item of result.itemsGained) {
       if (!newEquipment.includes(item)) newEquipment.push(item);
     }
@@ -679,20 +679,21 @@ export default function Chat({ sessionId, userName, character, onLeave, onCharac
     };
 
     // ⚡ Обновляем и БД, и локальное состояние
-    updateRoomStats(stats.name, updatedStats);
-    setCharacterStats(prev => prev ? { ...prev, [stats.name]: updatedStats } : prev);
+    await updateRoomStats(stats.name, updatedStats);
 
     const resultMsg = result.victory
       ? `⚔️ **Битва завершена! Победа!**\n⭐ XP: +${result.xpGained}\n🎒 Добыто: ${result.itemsGained.length > 0 ? result.itemsGained.join(', ') : 'нет'}\n❤️ Получено урона: ${result.damageTaken}`
       : `💀 **Вы пали в бою...**\n❤️ Потеряно HP: ${result.damageTaken}`;
 
-    await supabase.from('messages').insert({
+    const { error: messageError } = await supabase.from('messages').insert({
       session_id: sessionId,
       sender_id: 'system',
       sender_name: 'System',
       content: resultMsg,
       is_ai: false,
     });
+    if (messageError) throw messageError;
+    setCharacterStats(prev => prev ? { ...prev, [stats.name]: updatedStats } : prev);
 
     setShowBattleModal(false);
     setPendingBattle(null);
@@ -987,7 +988,8 @@ XP: ${stats.xp}
       console.log('🔍 battleStartJSON:', battleStartJSON ? 'found' : 'not found');
       if (battleStartJSON) {
         try {
-          const battleData = JSON.parse(battleStartJSON);
+          const battleData = parseBattleStartData(JSON.parse(battleStartJSON));
+          if (!battleData) throw new Error('BATTLE_START failed validation');
           const enemies = battleData.enemies;
           if (enemies && Array.isArray(enemies) && enemies.length > 0) {
             const parsedEnemies: BattleEnemy[] = enemies.map((e: any) => ({
@@ -999,7 +1001,7 @@ XP: ${stats.xp}
               initiative: e.initiative ?? 0,
               attacks: e.attacks || [{ name: 'Удар', toHit: 2, dice: '1d4', bonus: 1 }],
               statusEffects: e.statusEffects || [],
-              xpReward: e.xpReward || 25,
+              xpReward: e.xpReward ?? 25,
             }));
             const rewards = battleData.rewards || { xp: 0, items: [] };
             setPendingBattle({

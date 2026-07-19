@@ -39,7 +39,6 @@
     "framer-motion": "^12.36.0",
     "gensync": "^1.0.0-beta.2",
     "graceful-fs": "^4.2.11",
-
     "hast-util-from-dom": "^5.0.1",
     "hast-util-from-html": "^2.0.3",
     "hast-util-from-html-isomorphic": "^2.0.0",
@@ -181,7 +180,9 @@
     "zwitch": "^2.0.4"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build": "vite build"
   },
   "repository": {
     "type": "git",
@@ -198,6 +199,9 @@
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.2.1",
-    "@vitejs/plugin-react": "^5.2.0"
+    "@testing-library/react": "^16.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "jsdom": "^26.1.0",
+    "vitest": "^3.2.4"
   }
 }

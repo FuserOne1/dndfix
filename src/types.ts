@@ -204,6 +204,8 @@ export interface BattleResult {
   victory: boolean;
   xpGained: number;
   itemsGained: string[];
+  itemsConsumed: string[];
+  finalHp: number;
   damageTaken: number;
   enemiesDefeated: string[];
   log: string[];
