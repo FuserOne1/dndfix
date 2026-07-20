@@ -104,7 +104,7 @@ export interface GeneratedCampaignPackage {
 }
 
 export async function generateCampaignPackage(preferences: CampaignPreferences, characters: Character[]): Promise<GeneratedCampaignPackage> {
-  const system = `Ты — главный автор интерактивной текстовой RPG для оригинальной d20-системы. За один ответ создай библию всей кампании и полностью написанную первую сцену. История должна иметь заранее определённые тайны, личные линии героев, кульминацию и несколько возможных финалов. Не меняй факты и характеристики героев, не используй коммерческие франшизы. Ответ — только JSON вида {"bible":CampaignBible,"opening":StoryScene}.`;
+  const system = `Ты — главный автор интерактивной текстовой RPG для оригинальной d20-системы. За один ответ создай библию всей кампании и полностью написанную первую сцену. История должна иметь заранее определённые тайны, личные линии героев, кульминацию и несколько возможных финалов. Завязка, свободное пожелание игрока и предыстории героев — обязательные авторские обещания, а не необязательное вдохновение. Не меняй факты и характеристики героев, не используй коммерческие франшизы. Ответ — только JSON вида {"bible":CampaignBible,"opening":StoryScene}.`;
   const prompt = `НАСТРОЙКИ:\n${JSON.stringify(preferences)}
 
 ГЕРОИ:\n${JSON.stringify(characters.map(characterContext))}
@@ -114,12 +114,15 @@ export async function generateCampaignPackage(preferences: CampaignPreferences, 
 - актов: короткая кампания — 3, средняя — 4, длинная — 5;
 - каждый акт: id, title, goal, turningPoint, sceneSeeds;
 - для каждого героя отдельный characterHook с точным именем;
+- characterHook обязан исходить из цели, страха, тайны или сюжетных крючков предыстории, а не быть случайной новой биографией;
+- premise и customWish должны непосредственно влиять на центральный конфликт, акты или финал;
 - все тайны имеют заранее определённые ответы.
 
 ТРЕБОВАНИЯ К ПЕРВОЙ СЦЕНЕ:
 - id "scene-1", actId первого акта, type "narrative";
 - конкретная проблема с первых абзацев, без обязательного боя;
-- 2–5 выразительных абзацев и 3–5 содержательных вариантов;
+- 5–8 выразительных абзацев по 2–4 предложения и 3–5 содержательных вариантов;
+- сцена должна показать, чего хочет хотя бы один герой, почему он не может просто уйти и как проблема касается его лично;
 - поля StoryScene: id, actId, title, location, body, type, recap, choices;
 - каждый выбор: id, label, description, intent, необязательные check/requirements и consequences;
 - хотя бы один вариант должен учитывать конкретного героя.
@@ -128,12 +131,12 @@ export async function generateCampaignPackage(preferences: CampaignPreferences, 
 
   try {
     const generated = await requestJson<{ bible: CampaignBible; opening: StoryScene }>(system, prompt, { model: AI_MODELS.MAIN, maxTokens: 5200, timeoutMs: 65_000 });
-    const bible = ensureScenePlan(validateBible(generated.bible), preferences, characters);
+    const bible = ensureScenePlan(ensurePlayerPromises(validateBible(generated.bible), preferences, characters), preferences, characters);
     const opening = validateScene(generated.opening, bible.acts[0]?.id || 'act-1', 'scene-1', bible.scenePlan?.[0]);
     return { bible, opening };
   } catch (error) {
     console.warn('Campaign package generation failed, using local campaign:', error);
-    const bible = ensureScenePlan(createFallbackBible(preferences, characters), preferences, characters);
+    const bible = ensureScenePlan(ensurePlayerPromises(createFallbackBible(preferences, characters), preferences, characters), preferences, characters);
     return { bible, opening: createFallbackOpening(bible, characters, bible.scenePlan?.[0]) };
   }
 }
@@ -141,6 +144,23 @@ export async function generateCampaignPackage(preferences: CampaignPreferences, 
 export function compactBibleForScene(bible: CampaignBible) {
   const { scenePlan: _scenePlan, ...creativeBible } = bible;
   return creativeBible;
+}
+
+function ensurePlayerPromises(bible: CampaignBible, preferences: CampaignPreferences, characters: Character[]): CampaignBible {
+  const generated = bible.playerPromises || [];
+  const required: NonNullable<CampaignBible['playerPromises']> = [];
+  if (preferences.premise.trim()) required.push({ id: 'promise-premise', source: 'premise', text: preferences.premise.trim() });
+  if (preferences.customWish.trim()) required.push({ id: 'promise-wish', source: 'wish', text: preferences.customWish.trim() });
+  if (preferences.themes.trim()) required.push({ id: 'promise-themes', source: 'theme', text: preferences.themes.trim() });
+  for (const character of characters) {
+    const backstory = character.backstory_data;
+    const parts = [backstory?.goal, backstory?.fear, backstory?.secret, ...(backstory?.hooks || [])].filter(Boolean) as string[];
+    const hook = bible.characterHooks.find(item => item.characterName === character.name)?.hook;
+    const text = [...new Set([hook, ...parts].filter(Boolean) as string[])].join(' · ');
+    if (text) required.push({ id: `promise-character-${character.id || character.name}`, source: 'character', characterName: character.name, text });
+  }
+  const merged = [...required, ...generated.filter(item => !required.some(requiredItem => requiredItem.id === item.id))];
+  return { ...bible, playerPromises: merged };
 }
 
 function compactStateForScene(state: CampaignState) {
@@ -188,10 +208,10 @@ ${JSON.stringify(characters.map(characterContext), null, 2)}
 
 Количество актов: короткая 3, средняя 4, длинная 5. Для каждого героя обязательно создай личный крючок. Тайны должны иметь заранее определённые ответы.`;
   try {
-    return ensureScenePlan(validateBible(await requestJson<CampaignBible>(system, prompt, { model: AI_MODELS.MAIN, maxTokens: 3800, timeoutMs: 60_000 })), preferences, characters);
+    return ensureScenePlan(ensurePlayerPromises(validateBible(await requestJson<CampaignBible>(system, prompt, { model: AI_MODELS.MAIN, maxTokens: 3800, timeoutMs: 60_000 })), preferences, characters), preferences, characters);
   } catch (error) {
     console.warn('Campaign generation failed, using local campaign:', error);
-    return ensureScenePlan(createFallbackBible(preferences, characters), preferences, characters);
+    return ensureScenePlan(ensurePlayerPromises(createFallbackBible(preferences, characters), preferences, characters), preferences, characters);
   }
 }
 
@@ -209,7 +229,7 @@ ${JSON.stringify(characters.map(characterContext), null, 2)}
 НАСТРОЙКИ:
 ${JSON.stringify(preferences, null, 2)}
 
-Верни StoryScene в заданном формате. Дай 3–5 содержательных вариантов: прямой, осторожный, социальный и хотя бы один условный под конкретного героя.`;
+Верни StoryScene в заданном формате. Напиши 5–8 абзацев по 2–4 предложения: покажи мотивацию героев и связь проблемы с их прошлым. Дай 3–5 содержательных вариантов: прямой, осторожный, социальный и хотя бы один условный под конкретного героя.`;
   try {
     return validateScene(await requestJson<StoryScene>(system, `${prompt}\n\nSCENE CONTRACT (do not change its fields):\n${JSON.stringify(blueprint)}`, { model: AI_MODELS.MAIN, maxTokens: 2400, timeoutMs: 50_000 }), bible.acts[0]?.id || 'act-1', 'scene-1', blueprint);
   } catch (error) {
@@ -228,10 +248,11 @@ export async function generateNextScene(input: {
 }): Promise<StoryScene> {
   const nextId = `scene-${input.state.sceneNumber}`;
   const blueprint = chooseNextBlueprint(input);
+  const storyBible = ensurePlayerPromises(input.bible, input.preferences, input.characters);
   const prompt = `Продолжи кампанию строго в рамках библии. Учитывай фактический результат выбора, не переигрывай его и не добавляй новых глобальных тайн без необходимости.
 
 БИБЛИЯ:
-${JSON.stringify(compactBibleForScene(input.bible))}
+${JSON.stringify(compactBibleForScene(storyBible))}
 
 ПРЕДЫДУЩАЯ СЦЕНА:
 ${JSON.stringify(compactPreviousScene(input.previousScene))}
@@ -245,7 +266,10 @@ ${JSON.stringify(compactStateForScene(input.state))}
 ГЕРОИ:
 ${JSON.stringify(input.characters.map(characterContext), null, 2)}
 
-Верни следующую StoryScene. id должен быть "${nextId}".`;
+ОБЯЗАТЕЛЬСТВА ПЕРЕД ИГРОКАМИ:
+${JSON.stringify(storyBible.playerPromises || [])}
+
+Верни следующую StoryScene. id должен быть "${nextId}". Не перескакивай через последствия: сцена должна развить выбранный момент как небольшую главу, ясно показать мотивацию действующих героев и закончиться новой осмысленной развилкой.`;
   try {
     return validateScene(await requestJson<StoryScene>(sceneSystemPrompt(), `${prompt}\n\nSCENE CONTRACT (do not change its fields):\n${JSON.stringify(blueprint)}`, { model: AI_MODELS.MAIN, maxTokens: 2400, timeoutMs: 50_000 }), input.state.currentActId, nextId, blueprint);
   } catch (error) {
@@ -264,10 +288,10 @@ function sceneSystemPrompt() {
    "id":"choice-1","label":"короткое действие","description":"ожидаемый подход","intent":"что герой пытается сделать",
    "check":{"attribute":"strength|dexterity|constitution|intelligence|wisdom|charisma","difficulty":12},
    "requirements":{"classIds":[],"lineageIds":[],"items":[],"flags":[],"minAttribute":{}},
-   "consequences":{"successFlags":[],"failureFlags":[],"removeItems":[],"grantItems":[],"hpChange":0,"startsBattle":false,"battle":{"enemies":[],"rewards":{"xp":0,"items":[]},"description":"только если начинается бой"}}
+   "consequences":{"successFlags":[],"failureFlags":[],"removeItems":[],"grantItems":[],"hpChange":0,"successGold":0,"failureGold":0,"startsBattle":false,"battle":{"enemies":[],"rewards":{"xp":0,"items":[]},"description":"только если начинается бой"}}
  }]
 }
-Пиши выразительно, но компактно: 2–5 абзацев. Если передан SCENE CONTRACT, дословно соблюдай его type, audience, purpose, tension, services, actId и focusCharacter: ты отвечаешь только за прозу и варианты. Последствия в JSON являются предложением движку, а не уже свершившимся фактом. Не добавляй свободный ввод.`;
+Пиши как главу интерактивного романа: 5–8 абзацев по 2–4 предложения, с атмосферой, действиями, понятными желаниями героев и связью с предыдущим решением. Не пересказывай сцену сухой сводкой и не перескакивай сразу к следующей локации. Если передан SCENE CONTRACT, дословно соблюдай его type, audience, purpose, tension, services, actId и focusCharacter: ты отвечаешь только за прозу и варианты. В trade-сцене обязательно введи торговца в тексте и прямо сообщи, что у него можно купить и продать вещи. В loot-сцене дай хотя бы один способ получить золото или полезный предмет. Денежные награды обычной сцены держи в пределах 3–18 золотых. Последствия в JSON являются предложением движку, а не уже свершившимся фактом. Не добавляй свободный ввод.`;
 }
 
 function validateBible(value: CampaignBible): CampaignBible {

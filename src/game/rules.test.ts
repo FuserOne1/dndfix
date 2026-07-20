@@ -24,7 +24,7 @@ describe('Chronicles d20 character rules', () => {
 
   it('собирает структурированный снимок героя', () => {
     const draft = buildCharacterDraft({ name: 'Эйра', lineageId: 'aelir', classId: 'arcanist', originId: 'scholar', scores: { ...BASE_SCORES, intelligence: 15 }, skills: ['Природа', 'Медицина'], backstory: story, avatarIcon: 'arcanist' });
-    expect(draft).toMatchObject({ name: 'Эйра', race: 'Эльф', class: 'Арканист', background: 'Исследователь' });
+    expect(draft).toMatchObject({ name: 'Эйра', race: 'Эльф', class: 'Арканист', background: 'Исследователь', gold: 22 });
     expect(draft.rules_data?.selectedSkills).toEqual(expect.arrayContaining(['Знание', 'Расследование', 'Природа']));
     expect(draft.backstory_data?.hooks).toEqual(['Пропавший брат']);
   });
@@ -55,5 +55,10 @@ describe('story choices', () => {
     vi.spyOn(Math, 'random').mockReturnValueOnce(0.999).mockReturnValueOnce(0);
     expect(resolveChoice(choice, character).success).toBe(true);
     expect(resolveChoice({ ...choice, check: { attribute: 'intelligence', difficulty: 1 } }, character).success).toBe(false);
+  });
+
+  it('выдаёт золото за успешный сюжетный выбор', () => {
+    const choice: StoryChoice = { id: 'paid', label: 'Закончить заказ', intent: 'получить плату', consequences: { successGold: 9 } };
+    expect(resolveChoice(choice, character).goldChange).toBe(9);
   });
 });

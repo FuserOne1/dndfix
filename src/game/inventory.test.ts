@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ITEM_BY_ID } from './items';
 import {
   addInventoryItem, assignQuickSlot, buyPrice, createInventoryItem, createStartingInventory, equipInventoryItem,
-  equippedItemNames, generateMerchant, inventorySlotsUsed, normalizeInventory, passiveInventoryBonuses,
+  equippedItemNames, ensureMerchantBasics, generateMerchant, inventorySlotsUsed, normalizeInventory, passiveInventoryBonuses,
   removeInventoryItem, sellPrice,
 } from './inventory';
 
@@ -42,6 +42,13 @@ describe('inventory rules', () => {
     const inventory = createStartingInventory(['Длинный лук', 'Короткий меч']);
     expect(equippedItemNames(inventory)).toContain('Длинный лук');
     expect(equippedItemNames(inventory)).not.toContain('Короткий меч');
+  });
+
+  it('adds affordable essentials even to an old expensive merchant', () => {
+    const merchant = ensureMerchantBasics({ key: 'old', name: 'Старая лавка', buyModifier: 1.1, sellModifier: 0.45, stock: [{ templateId: 'plate-armor', quantity: 1, priceModifier: 1 }] });
+    expect(merchant.stock.map(item => item.templateId)).toEqual(expect.arrayContaining(['rope', 'dagger', 'healing-potion', 'lockpicks']));
+    const rope = merchant.stock.find(item => item.templateId === 'rope')!;
+    expect(rope.priceModifier).toBeLessThanOrEqual(0.75);
   });
 
   it('only assigns consumables to quick slots', () => {

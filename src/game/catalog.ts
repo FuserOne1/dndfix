@@ -46,14 +46,14 @@ export const CLASSES: ClassDefinition[] = [
 ];
 
 export const ORIGINS: OriginDefinition[] = [
-  { id: 'wanderer', name: 'Странник', icon: '⌖', summary: 'Дороги научили вас находить путь и замечать опасность.', skills: ['Выживание', 'Внимание'], equipment: ['Карта дорог', 'Верёвка'], gold: 8, storyTags: ['wanderer', 'roads'] },
-  { id: 'noble', name: 'Наследник', icon: '♜', summary: 'Имя вашей семьи открывает одни двери и закрывает другие.', skills: ['Убеждение', 'Знание'], equipment: ['Перстень рода', 'Парадная одежда'], gold: 25, storyTags: ['noble', 'politics'] },
-  { id: 'outlaw', name: 'Изгой', icon: '⌁', summary: 'Вы жили вне закона — по необходимости или убеждению.', skills: ['Скрытность', 'Обман'], equipment: ['Набор отмычек', 'Старый капюшон'], gold: 12, storyTags: ['outlaw', 'underworld'] },
-  { id: 'scholar', name: 'Исследователь', icon: '▤', summary: 'Вы посвятили годы книгам, руинам или запретной науке.', skills: ['Знание', 'Расследование'], equipment: ['Полевой дневник', 'Редкая книга'], gold: 10, storyTags: ['scholar', 'mystery'] },
-  { id: 'soldier', name: 'Ветеран', icon: '⚑', summary: 'Вы пережили войну и до сих пор помните цену приказов.', skills: ['Атлетика', 'Запугивание'], equipment: ['Знак отряда', 'Трофейный нож'], gold: 14, storyTags: ['soldier', 'war'] },
-  { id: 'acolyte', name: 'Послушник', icon: '✥', summary: 'Храм, культ или орден сформировали ваш взгляд на мир.', skills: ['Медицина', 'Проницательность'], equipment: ['Молитвенник', 'Благовония'], gold: 6, storyTags: ['faith', 'order'] },
-  { id: 'artisan', name: 'Ремесленник', icon: '⚒', summary: 'Ваше мастерство кормило вас до зова приключений.', skills: ['Ловкость рук', 'Расследование'], equipment: ['Инструменты ремесла', 'Образец работы'], gold: 18, storyTags: ['craft', 'guild'] },
-  { id: 'survivor', name: 'Выживший', icon: '☄', summary: 'Катастрофа отняла прежнюю жизнь, но не сломила вас.', skills: ['Выживание', 'Медицина'], equipment: ['Обгоревший талисман', 'Походное одеяло'], gold: 4, storyTags: ['survivor', 'tragedy'] },
+  { id: 'wanderer', name: 'Странник', icon: '⌖', summary: 'Дороги научили вас находить путь и замечать опасность.', skills: ['Выживание', 'Внимание'], equipment: ['Карта дорог', 'Верёвка'], gold: 20, storyTags: ['wanderer', 'roads'] },
+  { id: 'noble', name: 'Наследник', icon: '♜', summary: 'Имя вашей семьи открывает одни двери и закрывает другие.', skills: ['Убеждение', 'Знание'], equipment: ['Перстень рода', 'Парадная одежда'], gold: 45, storyTags: ['noble', 'politics'] },
+  { id: 'outlaw', name: 'Изгой', icon: '⌁', summary: 'Вы жили вне закона — по необходимости или убеждению.', skills: ['Скрытность', 'Обман'], equipment: ['Набор отмычек', 'Старый капюшон'], gold: 25, storyTags: ['outlaw', 'underworld'] },
+  { id: 'scholar', name: 'Исследователь', icon: '▤', summary: 'Вы посвятили годы книгам, руинам или запретной науке.', skills: ['Знание', 'Расследование'], equipment: ['Полевой дневник', 'Редкая книга'], gold: 22, storyTags: ['scholar', 'mystery'] },
+  { id: 'soldier', name: 'Ветеран', icon: '⚑', summary: 'Вы пережили войну и до сих пор помните цену приказов.', skills: ['Атлетика', 'Запугивание'], equipment: ['Знак отряда', 'Трофейный нож'], gold: 28, storyTags: ['soldier', 'war'] },
+  { id: 'acolyte', name: 'Послушник', icon: '✥', summary: 'Храм, культ или орден сформировали ваш взгляд на мир.', skills: ['Медицина', 'Проницательность'], equipment: ['Молитвенник', 'Благовония'], gold: 18, storyTags: ['faith', 'order'] },
+  { id: 'artisan', name: 'Ремесленник', icon: '⚒', summary: 'Ваше мастерство кормило вас до зова приключений.', skills: ['Ловкость рук', 'Расследование'], equipment: ['Инструменты ремесла', 'Образец работы'], gold: 34, storyTags: ['craft', 'guild'] },
+  { id: 'survivor', name: 'Выживший', icon: '☄', summary: 'Катастрофа отняла прежнюю жизнь, но не сломила вас.', skills: ['Выживание', 'Медицина'], equipment: ['Обгоревший талисман', 'Походное одеяло'], gold: 16, storyTags: ['survivor', 'tragedy'] },
 ];
 
 export function getLineage(id: string) { return LINEAGES.find(item => item.id === id) || LINEAGES[0]; }

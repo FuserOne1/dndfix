@@ -5,6 +5,8 @@ export type CampaignLength = 'short' | 'medium' | 'long';
 export type CampaignTone = 'heroic' | 'dark' | 'mystery' | 'adventure' | 'horror' | 'comedy';
 export type CombatFrequency = 'rare' | 'balanced' | 'frequent';
 export type CampaignStatus = 'setup' | 'generating' | 'playing' | 'finished';
+export type IllustrationMode = 'off' | 'important' | 'all';
+export type ArtStyle = 'dark-comic' | 'classic-fantasy' | 'graphic-novel' | 'watercolor' | 'anime';
 
 export interface RuleTrait {
   id: string;
@@ -125,7 +127,7 @@ export interface BackstoryData {
 }
 
 export interface CharacterRulesData {
-  rulesVersion: 1;
+  rulesVersion: 1 | 2;
   lineageId: string;
   classId: string;
   originId: string;
@@ -148,6 +150,8 @@ export interface CampaignPreferences {
   customWish: string;
   hideLockedChoices: boolean;
   voteTimerSeconds: number | null;
+  illustrationMode?: IllustrationMode;
+  artStyle?: ArtStyle;
 }
 
 export type SceneType =
@@ -212,6 +216,7 @@ export interface CampaignBible {
   truths: string[];
   endings: Array<{ id: string; title: string; condition: string }>;
   characterHooks: Array<{ characterName: string; hook: string; relatedNpc?: string }>;
+  playerPromises?: Array<{ id: string; source: 'premise' | 'wish' | 'theme' | 'character'; text: string; characterName?: string }>;
   scenePlan?: SceneBlueprint[];
 }
 
@@ -240,6 +245,8 @@ export interface StoryChoice {
     removeItems?: string[];
     grantItems?: string[];
     hpChange?: number;
+    successGold?: number;
+    failureGold?: number;
     startsBattle?: boolean;
     battle?: import('../types').BattleStartData;
   };
@@ -260,6 +267,27 @@ export interface StoryScene {
   focusCharacter?: string;
   choices: StoryChoice[];
   recap?: string;
+}
+
+export type SceneImageLayout = 'wide' | 'comic-3';
+export type SceneImageStatus = 'pending' | 'ready' | 'failed';
+
+export interface SceneImage {
+  id?: string;
+  campaignId: string;
+  sceneId: string;
+  sceneNumber: number;
+  status: SceneImageStatus;
+  layout: SceneImageLayout;
+  prompt?: string;
+  imageUrl?: string;
+  storagePath?: string;
+  model?: string;
+  error?: string;
+  version: number;
+  createdBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CampaignState {
@@ -283,6 +311,7 @@ export interface ChoiceResolution {
   gainedItems: string[];
   lostItems: string[];
   hpChange: number;
+  goldChange: number;
 }
 
 export interface CampaignRuntime {

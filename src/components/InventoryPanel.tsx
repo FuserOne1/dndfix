@@ -6,7 +6,7 @@ import type { EquipmentSlot, InventoryData, InventoryItem, MerchantData } from '
 import { ITEM_BY_ID } from '../game/items';
 import {
   EQUIPMENT_SLOTS, addInventoryItem, assignQuickSlot, buyPrice, createInventoryItem, equipInventoryItem,
-  equippedItemNames, generateMerchant, getItemDefinition, inventorySlotsUsed, normalizeInventory,
+  equippedItemNames, ensureMerchantBasics, generateMerchant, getItemDefinition, inventorySlotsUsed, normalizeInventory,
   removeInventoryItem, sellPrice, unequipSlot,
 } from '../game/inventory';
 
@@ -17,6 +17,7 @@ interface InventoryPanelProps {
   location?: string;
   sceneNumber?: number;
   canTrade?: boolean;
+  initialTab?: 'inventory' | 'trade' | 'stash';
   onSave: (character: Character) => void | Promise<void>;
   onClose: () => void;
 }
@@ -28,10 +29,10 @@ const SLOT_LABELS: Record<EquipmentSlot, string> = { mainHand: 'Основная
 const RARITY_CLASS = { common: 'text-zinc-400', uncommon: 'text-emerald-400', rare: 'text-sky-400', epic: 'text-violet-400' };
 const RARITY_LABEL = { common: 'Обычный', uncommon: 'Необычный', rare: 'Редкий', epic: 'Эпический' };
 
-export default function InventoryPanel({ character, campaignId, currentUserId = 'local', location = 'перекрёстка', sceneNumber = 1, canTrade = false, onSave, onClose }: InventoryPanelProps) {
+export default function InventoryPanel({ character, campaignId, currentUserId = 'local', location = 'перекрёстка', sceneNumber = 1, canTrade = false, initialTab = 'inventory', onSave, onClose }: InventoryPanelProps) {
   const [inventory, setInventory] = useState<InventoryData>(() => normalizeInventory(character));
   const [gold, setGold] = useState(character.gold || 0);
-  const [tab, setTab] = useState<Tab>('inventory');
+  const [tab, setTab] = useState<Tab>(initialTab === 'trade' && !canTrade ? 'inventory' : initialTab === 'stash' && !campaignId ? 'inventory' : initialTab);
   const [merchant, setMerchant] = useState<MerchantData>(() => generateMerchant(location, sceneNumber));
   const [stash, setStash] = useState<StashRow[]>([]);
   const [busy, setBusy] = useState('');
@@ -45,7 +46,7 @@ export default function InventoryPanel({ character, campaignId, currentUserId = 
     const { data, error: loadError } = await supabase.from('campaign_merchants').select('*').eq('campaign_id', campaignId).eq('merchant_key', generated.key).maybeSingle();
     if (loadError) { setNotice('Торговец работает локально. Для синхронизации примените обновлённую миграцию.'); return; }
     if (data) {
-      setMerchant({ key: data.merchant_key, name: data.name, stock: data.stock, buyModifier: Number(data.buy_modifier), sellModifier: Number(data.sell_modifier) });
+      setMerchant(ensureMerchantBasics({ key: data.merchant_key, name: data.name, stock: data.stock, buyModifier: Number(data.buy_modifier), sellModifier: Number(data.sell_modifier) }));
       return;
     }
     const { error: createError } = await supabase.from('campaign_merchants').insert({ campaign_id: campaignId, merchant_key: generated.key, name: generated.name, stock: generated.stock, buy_modifier: generated.buyModifier, sell_modifier: generated.sellModifier });

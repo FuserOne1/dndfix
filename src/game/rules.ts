@@ -57,7 +57,7 @@ export function buildCharacterDraft(input: {
   const finalScores = applyLineageBonuses(input.scores, input.lineageId);
   const hp = calculateMaxHp(input.classId, finalScores.constitution);
   const rulesData: CharacterRulesData = {
-    rulesVersion: 1,
+    rulesVersion: 2,
     lineageId: lineage.id,
     classId: classDefinition.id,
     originId: origin.id,
@@ -120,6 +120,7 @@ export function resolveChoice(choice: StoryChoice, character: Character): Choice
       gainedItems: choice.consequences.grantItems || [],
       lostItems: choice.consequences.removeItems || [],
       hpChange: choice.consequences.hpChange || 0,
+      goldChange: choice.consequences.successGold || 0,
     };
   }
 
@@ -138,5 +139,6 @@ export function resolveChoice(choice: StoryChoice, character: Character): Choice
     gainedItems: success ? choice.consequences.grantItems || [] : [],
     lostItems: choice.consequences.removeItems || [],
     hpChange: choice.consequences.hpChange || 0,
+    goldChange: success ? choice.consequences.successGold || 0 : choice.consequences.failureGold || 0,
   };
 }

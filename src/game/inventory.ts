@@ -175,14 +175,22 @@ export function generateMerchant(location: string, sceneNumber: number): Merchan
   const seed = hash(`${location}:${Math.ceil(sceneNumber / 3)}`);
   const rotating = ITEM_CATALOG.filter(item => item.type !== 'quest' && !['healing-potion', 'longsword', 'leather-armor', 'rope'].includes(item.id));
   const selected = Array.from({ length: 6 }, (_, index) => rotating[(seed + index * 7) % rotating.length]);
-  const templates = [ITEM_BY_ID.get('healing-potion')!, ITEM_BY_ID.get('rope')!, ...selected];
-  return {
+  const templates = [ITEM_BY_ID.get('healing-potion')!, ITEM_BY_ID.get('rope')!, ITEM_BY_ID.get('dagger')!, ITEM_BY_ID.get('lockpicks')!, ...selected];
+  return ensureMerchantBasics({
     key: `merchant-${hash(location).toString(36)}`,
     name: `Лавка у ${location}`,
     buyModifier: 1 + (seed % 16) / 100,
     sellModifier: 0.45,
     stock: [...new Map(templates.map((item, index) => [item.id, { templateId: item.id, quantity: item.type === 'consumable' ? 3 : 1, priceModifier: 1 + ((seed + index) % 11) / 100 }])).values()],
-  };
+  });
+}
+
+export function ensureMerchantBasics(merchant: MerchantData): MerchantData {
+  const essentials = ['rope', 'dagger', 'healing-potion', 'lockpicks'];
+  const missing = essentials.filter(templateId => !merchant.stock.some(item => item.templateId === templateId));
+  const stock = [...missing.map(templateId => ({ templateId, quantity: templateId === 'healing-potion' ? 3 : 1, priceModifier: 0.75 })), ...merchant.stock]
+    .map(item => essentials.includes(item.templateId) ? { ...item, priceModifier: Math.min(item.priceModifier, 0.75) } : item);
+  return { ...merchant, stock };
 }
 
 export function buyPrice(definition: ItemDefinition, merchant: MerchantData, stockModifier = 1): number {

@@ -6,6 +6,24 @@ ALTER TABLE characters ADD COLUMN IF NOT EXISTS backstory_data JSONB;
 ALTER TABLE characters ADD COLUMN IF NOT EXISTS gold INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE characters ADD COLUMN IF NOT EXISTS inventory_data JSONB NOT NULL DEFAULT '{"version":1,"capacity":18,"items":[],"equipped":{},"quickSlots":[null,null,null,null]}'::jsonb;
 
+-- Economy balance v2. Preserve everything a legacy hero earned or spent and
+-- add only the difference between the old and new starting purse, once.
+UPDATE characters
+SET gold = GREATEST(0, gold + CASE rules_data->>'originId'
+    WHEN 'wanderer' THEN 12
+    WHEN 'noble' THEN 20
+    WHEN 'outlaw' THEN 13
+    WHEN 'scholar' THEN 12
+    WHEN 'soldier' THEN 14
+    WHEN 'acolyte' THEN 12
+    WHEN 'artisan' THEN 16
+    WHEN 'survivor' THEN 12
+    ELSE 0
+  END),
+  rules_data = jsonb_set(rules_data, '{rulesVersion}', '2'::jsonb, true)
+WHERE rules_data IS NOT NULL
+  AND COALESCE((rules_data->>'rulesVersion')::integer, 1) < 2;
+
 CREATE TABLE IF NOT EXISTS campaigns (
   id TEXT PRIMARY KEY,
   mode TEXT NOT NULL CHECK (mode IN ('solo', 'party')),
@@ -83,12 +101,36 @@ CREATE TABLE IF NOT EXISTS campaign_merchants (
   UNIQUE(campaign_id, merchant_key)
 );
 
+CREATE TABLE IF NOT EXISTS campaign_scene_images (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+  scene_id TEXT NOT NULL,
+  scene_number INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'ready', 'failed')),
+  layout TEXT NOT NULL DEFAULT 'wide' CHECK (layout IN ('wide', 'comic-3')),
+  prompt TEXT,
+  image_url TEXT,
+  storage_path TEXT,
+  model TEXT,
+  error TEXT,
+  version INTEGER NOT NULL DEFAULT 1,
+  created_by TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(campaign_id, scene_id)
+);
+
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES ('scene-images', 'scene-images', true, 10485760, ARRAY['image/png', 'image/jpeg', 'image/webp'])
+ON CONFLICT (id) DO UPDATE SET public = EXCLUDED.public, file_size_limit = EXCLUDED.file_size_limit, allowed_mime_types = EXCLUDED.allowed_mime_types;
+
 CREATE INDEX IF NOT EXISTS idx_campaigns_updated ON campaigns(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_campaign_participants_campaign ON campaign_participants(campaign_id);
 CREATE INDEX IF NOT EXISTS idx_campaign_scenes_campaign_number ON campaign_scenes(campaign_id, scene_number);
 CREATE INDEX IF NOT EXISTS idx_campaign_votes_scene ON campaign_votes(campaign_id, scene_id);
 CREATE INDEX IF NOT EXISTS idx_campaign_stash_campaign ON campaign_stash_items(campaign_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_campaign_merchants_campaign ON campaign_merchants(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_campaign_scene_images_campaign_number ON campaign_scene_images(campaign_id, scene_number);
 
 ALTER TABLE campaigns ENABLE ROW LEVEL SECURITY;
 ALTER TABLE campaign_participants ENABLE ROW LEVEL SECURITY;
@@ -96,6 +138,7 @@ ALTER TABLE campaign_scenes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE campaign_votes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE campaign_stash_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE campaign_merchants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE campaign_scene_images ENABLE ROW LEVEL SECURITY;
 
 -- Текущая версия использует анонимные локальные идентификаторы участников.
 -- Политики намеренно повторяют существующую открытую модель приложения.
@@ -118,6 +161,17 @@ DROP POLICY IF EXISTS "campaign_stash_items_all" ON campaign_stash_items;
 CREATE POLICY "campaign_stash_items_all" ON campaign_stash_items FOR ALL USING (true) WITH CHECK (true);
 DROP POLICY IF EXISTS "campaign_merchants_all" ON campaign_merchants;
 CREATE POLICY "campaign_merchants_all" ON campaign_merchants FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "campaign_scene_images_all" ON campaign_scene_images;
+CREATE POLICY "campaign_scene_images_all" ON campaign_scene_images FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "scene_images_public_read" ON storage.objects;
+CREATE POLICY "scene_images_public_read" ON storage.objects FOR SELECT USING (bucket_id = 'scene-images');
+DROP POLICY IF EXISTS "scene_images_public_insert" ON storage.objects;
+CREATE POLICY "scene_images_public_insert" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'scene-images');
+DROP POLICY IF EXISTS "scene_images_public_update" ON storage.objects;
+CREATE POLICY "scene_images_public_update" ON storage.objects FOR UPDATE USING (bucket_id = 'scene-images') WITH CHECK (bucket_id = 'scene-images');
+DROP POLICY IF EXISTS "scene_images_public_delete" ON storage.objects;
+CREATE POLICY "scene_images_public_delete" ON storage.objects FOR DELETE USING (bucket_id = 'scene-images');
 
 DO $$
 BEGIN
@@ -146,6 +200,12 @@ END $$;
 DO $$
 BEGIN
   ALTER PUBLICATION supabase_realtime ADD TABLE campaign_merchants;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE campaign_scene_images;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 

@@ -26,4 +26,10 @@ describe('InventoryPanel', () => {
     expect(screen.getByText('5/18')).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Торговля' }) as HTMLButtonElement).disabled).toBe(true);
   });
+
+  it('opens directly on trade when the story explicitly offers a merchant', () => {
+    render(<InventoryPanel character={hero()} canTrade initialTab="trade" onSave={vi.fn()} onClose={vi.fn()}/>);
+    expect(screen.getByText('Купить')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Продать' })).toBeTruthy();
+  });
 });

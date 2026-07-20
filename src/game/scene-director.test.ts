@@ -11,7 +11,9 @@ const characters = [
 
 const bible: CampaignBible = {
   title: 'Тест', tagline: '', premise: 'Путь', setting: 'Предел', tone: ['mystery'], centralConflict: 'Остановить бурю',
-  antagonist: { name: 'Враг', role: 'регент', motive: 'власть' }, keyNpcs: [], truths: [], endings: [], characterHooks: [],
+  antagonist: { name: 'Враг', role: 'регент', motive: 'власть' }, keyNpcs: [], truths: [], endings: [], characterHooks: [
+    { characterName: 'Эйра', hook: 'найти пропавшего брата' }, { characterName: 'Бран', hook: 'вернуть честь рода' },
+  ],
   acts: [
     { id: 'act-1', title: 'След', goal: 'Найти след', turningPoint: 'След ведёт вниз', sceneSeeds: ['Ворота', 'Карта'] },
     { id: 'act-2', title: 'Глубина', goal: 'Спуститься', turningPoint: 'Предательство', sceneSeeds: ['Мост', 'Храм'] },
@@ -44,8 +46,10 @@ describe('scene director', () => {
     expect(plan.at(-1)?.type).toBe('ending');
     expect(plan.some(scene => scene.type === 'trade')).toBe(true);
     expect(plan.some(scene => scene.type === 'rest')).toBe(true);
+    expect(plan.slice(0, plan.findIndex(scene => scene.type === 'trade')).some(scene => scene.type === 'loot')).toBe(true);
     expect(plan.some(scene => scene.type === 'personal' && scene.focusCharacter === 'Эйра')).toBe(true);
     expect(plan.some(scene => scene.type === 'personal' && scene.focusCharacter === 'Бран')).toBe(true);
+    expect(plan.find(scene => scene.type === 'personal' && scene.focusCharacter === 'Эйра')?.purpose).toContain('пропавшего брата');
     expect(plan.some((scene, index) => scene.type === 'combat' && plan[index - 1]?.type === 'combat')).toBe(false);
   });
 
