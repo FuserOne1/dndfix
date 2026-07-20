@@ -10,6 +10,7 @@ interface AiRequestOptions {
   model?: string;
   maxTokens?: number;
   timeoutMs?: number;
+  temperature?: number;
 }
 
 async function requestJson<T>(system: string, prompt: string, options: AiRequestOptions = {}): Promise<T> {
@@ -19,6 +20,7 @@ async function requestJson<T>(system: string, prompt: string, options: AiRequest
     model: options.model || AI_MODELS.MAIN,
     maxTokens: options.maxTokens || 2600,
     timeoutMs: options.timeoutMs || 50_000,
+    temperature: options.temperature ?? 0.72,
   });
   try {
     return parseJson<T>(content);
@@ -29,7 +31,7 @@ async function requestJson<T>(system: string, prompt: string, options: AiRequest
       apiKey,
       'Ты технический JSON-редактор. Исправь только синтаксис и структуру JSON, не переписывай художественный текст и не добавляй новые факты. Ответ — только корректный JSON.',
       `Исправь JSON:\n${content}`,
-      { model: AI_MODELS.WORKHORSE, maxTokens: options.maxTokens || 2600, timeoutMs: 25_000 },
+      { model: AI_MODELS.WORKHORSE, maxTokens: options.maxTokens || 2600, timeoutMs: 25_000, temperature: 0.2 },
     );
     return parseJson<T>(repaired);
   }
@@ -51,9 +53,11 @@ async function requestCompletion(apiKey: string, system: string, prompt: string,
     },
     body: JSON.stringify({
       model: options.model,
-      temperature: 0.65,
+      temperature: options.temperature,
       max_tokens: options.maxTokens,
+      reasoning: { effort: 'none' },
       response_format: { type: 'json_object' },
+      plugins: [{ id: 'response-healing' }],
       messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }],
     }),
     });
@@ -63,7 +67,12 @@ async function requestCompletion(apiKey: string, system: string, prompt: string,
   } finally {
     window.clearTimeout(timeout);
   }
-  if (!response.ok) throw new Error(`Генератор кампании недоступен: ${response.status}`);
+  if (!response.ok) {
+    const details = await response.text();
+    let providerMessage = '';
+    try { providerMessage = JSON.parse(details)?.error?.message || ''; } catch { providerMessage = details; }
+    throw new Error(`OpenRouter вернул ${response.status}${providerMessage ? `: ${providerMessage.slice(0, 300)}` : ''}`);
+  }
   const payload = await response.json();
   const content = payload.choices?.[0]?.message?.content;
   if (typeof content !== 'string') throw new Error('Генератор вернул пустой ответ');
@@ -104,10 +113,16 @@ export interface GeneratedCampaignPackage {
 }
 
 export async function generateCampaignPackage(preferences: CampaignPreferences, characters: Character[]): Promise<GeneratedCampaignPackage> {
+  const variation = createCampaignVariation();
   const system = `Ты — главный автор интерактивной текстовой RPG для оригинальной d20-системы. За один ответ создай библию всей кампании и полностью написанную первую сцену. История должна иметь заранее определённые тайны, личные линии героев, кульминацию и несколько возможных финалов. Завязка, свободное пожелание игрока и предыстории героев — обязательные авторские обещания, а не необязательное вдохновение. Не меняй факты и характеристики героев, не используй коммерческие франшизы. Ответ — только JSON вида {"bible":CampaignBible,"opening":StoryScene}.`;
   const prompt = `НАСТРОЙКИ:\n${JSON.stringify(preferences)}
 
 ГЕРОИ:\n${JSON.stringify(characters.map(characterContext))}
+
+ТВОРЧЕСКИЙ КЛЮЧ ЭТОЙ ГЕНЕРАЦИИ:
+${JSON.stringify(variation)}
+
+Используй ключ как обязательное направление для новой истории. Даже при одинаковых настройках и героях результат должен отличаться местом действия, центральной угрозой, антагонистом, тайной и первой проблемой. Не начинай у безлюдных городских ворот, с брошенной телеги, сухого колодца или таинственного колокола, если этого прямо не просил игрок.
 
 ТРЕБОВАНИЯ К БИБЛИИ:
 - поля: title, tagline, premise, setting, tone, centralConflict, antagonist, keyNpcs, acts, truths, endings, characterHooks;
@@ -130,15 +145,25 @@ export async function generateCampaignPackage(preferences: CampaignPreferences, 
 Не включай scenePlan: технический план построит игровой движок.`;
 
   try {
-    const generated = await requestJson<{ bible: CampaignBible; opening: StoryScene }>(system, prompt, { model: AI_MODELS.MAIN, maxTokens: 5200, timeoutMs: 65_000 });
+    const generated = await requestJson<{ bible: CampaignBible; opening: StoryScene }>(system, prompt, { model: AI_MODELS.MAIN, maxTokens: 5200, timeoutMs: 105_000, temperature: 0.88 });
     const bible = ensureScenePlan(ensurePlayerPromises(validateBible(generated.bible), preferences, characters), preferences, characters);
     const opening = validateScene(generated.opening, bible.acts[0]?.id || 'act-1', 'scene-1', bible.scenePlan?.[0]);
     return { bible, opening };
   } catch (error) {
-    console.warn('Campaign package generation failed, using local campaign:', error);
-    const bible = ensureScenePlan(ensurePlayerPromises(createFallbackBible(preferences, characters), preferences, characters), preferences, characters);
-    return { bible, opening: createFallbackOpening(bible, characters, bible.scenePlan?.[0]) };
+    console.error('Campaign package generation failed:', error);
+    const reason = error instanceof Error ? error.message : 'неизвестная ошибка';
+    throw new Error(`Claude не создал кампанию, поэтому игра не будет подменять её одинаковой демо-историей. ${reason}`);
   }
+}
+
+export function createCampaignVariation() {
+  const pick = <T,>(items: readonly T[]): T => items[Math.floor(Math.random() * items.length)];
+  return {
+    id: typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    openingShape: pick(['публичное событие с внезапным нарушением порядка', 'личная встреча, которая оказывается ловушкой', 'прибытие во время необъяснимого природного явления', 'сделка с немедленной неприятной ценой', 'обнаружение невозможного предмета', 'праздник, ритуал или суд, сорванный открытием']),
+    conflictEngine: pick(['борьба за право владеть опасной правдой', 'распадающийся союз бывших врагов', 'цена спасения места, обречённого чужим решением', 'охота, в которой роли охотника и жертвы меняются', 'наследие, меняющее память живых', 'власть, исполняющая обещания слишком буквально']),
+    sensoryMotif: pick(['пепел и медь', 'стекло и холодный свет', 'цветущие растения и ржавчина', 'ветер и натянутые канаты', 'чернила и белый камень', 'тёплый дождь и звериные маски']),
+  };
 }
 
 export function compactBibleForScene(bible: CampaignBible) {
