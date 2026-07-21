@@ -3,7 +3,7 @@ import { ITEM_BY_ID } from './items';
 import {
   addInventoryItem, assignQuickSlot, buyPrice, createInventoryItem, createStartingInventory, equipInventoryItem,
   equippedItemNames, ensureMerchantBasics, generateMerchant, inventorySlotsUsed, normalizeInventory, passiveInventoryBonuses,
-  removeInventoryItem, sellPrice,
+  consumeItemByName, inventoryHasItem, removeInventoryItem, sellPrice,
 } from './inventory';
 
 describe('inventory rules', () => {
@@ -86,5 +86,18 @@ describe('inventory rules', () => {
     const empty = createStartingInventory([]);
     const inventory = normalizeInventory({ equipment: ['Щит'], inventory_data: empty });
     expect(inventory.items[0].name).toBe('Щит');
+  });
+
+  it('merges missing legacy items into an existing inventory without duplicates', () => {
+    const existing = createStartingInventory(['Кинжал']);
+    const inventory = normalizeInventory({ equipment: ['Кинжал', 'Верёвка'], inventory_data: existing });
+    expect(inventory.items.filter(item => item.templateId === 'dagger')).toHaveLength(1);
+    expect(inventoryHasItem(inventory, 'веревка')).toBe(true);
+  });
+
+  it('consumes catalog aliases instead of requiring an exact generated name', () => {
+    const inventory = createStartingInventory(['Зелье лечения']);
+    const consumed = consumeItemByName(inventory, 'лечебное зелье');
+    expect(consumed.items).toHaveLength(0);
   });
 });

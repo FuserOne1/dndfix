@@ -4,9 +4,8 @@ import App from './App.tsx';
 import './index.css';
 
 createRoot(document.getElementById('root')!).render(
-  // Временно отключаем StrictMode для отладки лобби
-  // <StrictMode>
+  <StrictMode>
     <App />
-  // </StrictMode>,
+  </StrictMode>,
 );
 "// FORCE REBUILD 1715"  

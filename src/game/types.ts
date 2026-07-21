@@ -394,6 +394,7 @@ export interface CampaignState {
   currentActId: string;
   currentSceneId: string;
   sceneNumber: number;
+  checkFailureStreak?: number;
   director?: SceneDirectorState;
   systems?: CampaignSystemsState;
 }
@@ -404,11 +405,23 @@ export interface ChoiceResolution {
   roll?: number;
   total?: number;
   difficulty?: number;
+  attribute?: AttributeKey;
+  attributeModifier?: number;
+  skill?: string;
+  proficiencyBonus?: number;
+  itemBonus?: number;
+  itemBonusLabel?: string;
+  rolls?: number[];
+  advantageReason?: string;
+  successChance?: number;
   summary: string;
   gainedItems: string[];
   lostItems: string[];
   hpChange: number;
   goldChange: number;
+  xpGained?: number;
+  levelBefore?: number;
+  levelAfter?: number;
 }
 
 export interface CampaignRuntime {

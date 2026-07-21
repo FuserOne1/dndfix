@@ -15,9 +15,14 @@ export function createInventoryItem(templateId: string, quantity = 1, itemUid = 
   return { uid: itemUid, templateId, name: definition.name, quantity: Math.max(1, Math.floor(quantity)) };
 }
 
-function legacyItem(name: string): InventoryItem {
+export function createStoryItem(name: string, description?: string): InventoryItem {
   const definition = findItemDefinition(name);
-  return definition ? createInventoryItem(definition.id) : { uid: uid(), templateId: 'legacy', name, quantity: 1 };
+  return definition ? createInventoryItem(definition.id) : { uid: uid(), templateId: 'story', name: name.trim(), quantity: 1, customDescription: description || 'Предмет, полученный во время приключения.' };
+}
+
+function legacyItem(name: string): InventoryItem {
+  const item = createStoryItem(name);
+  return item.templateId === 'story' ? { ...item, templateId: 'legacy', customDescription: 'Предмет из старой версии героя.' } : item;
 }
 
 export function getItemDefinition(item: InventoryItem): ItemDefinition | undefined {
@@ -43,12 +48,22 @@ export function createStartingInventory(names: string[]): InventoryData {
 
 export function normalizeInventory(character: Pick<Character, 'inventory_data' | 'equipment'>): InventoryData {
   const data = character.inventory_data;
-  if (data?.version === 1 && Array.isArray(data.items) && (data.items.length > 0 || !character.equipment?.length)) return {
+  if (data?.version === 1 && Array.isArray(data.items)) {
+    let normalized: InventoryData = {
     ...data,
     capacity: Math.max(1, data.capacity || DEFAULT_INVENTORY_CAPACITY),
     equipped: data.equipped || {},
     quickSlots: [...(data.quickSlots || []), null, null, null, null].slice(0, 4),
-  };
+    };
+    // Старые герои хранили всё в equipment. После появления inventory_data часть
+    // таких предметов могла остаться только в старом поле — аккуратно подмешиваем
+    // лишь отсутствующие, не создавая копии уже перенесённого снаряжения.
+    for (const name of character.equipment || []) {
+      if (inventoryHasItem(normalized, name)) continue;
+      normalized = addInventoryItem(normalized, legacyItem(name), true).inventory;
+    }
+    return normalized;
+  }
   return createStartingInventory(character.equipment || []);
 }
 
@@ -132,6 +147,25 @@ export function inventoryItemNames(inventory: InventoryData): string[] {
   return [...new Set(inventory.items.map(item => item.name))];
 }
 
+function normalizedItemName(name: string): string {
+  return name.trim().toLocaleLowerCase('ru').replace(/ё/g, 'е').replace(/[^a-zа-я0-9]+/gi, ' ').trim();
+}
+
+export function itemNamesMatch(left: string, right: string): boolean {
+  const leftDefinition = findItemDefinition(left);
+  const rightDefinition = findItemDefinition(right);
+  if (leftDefinition && rightDefinition) return leftDefinition.id === rightDefinition.id;
+  return normalizedItemName(left) === normalizedItemName(right);
+}
+
+export function inventoryHasItem(inventory: InventoryData, name: string): boolean {
+  return inventory.items.some(item => item.quantity > 0 && itemNamesMatch(item.name, name));
+}
+
+export function inventoryNamesHaveItem(names: string[], requiredName: string): boolean {
+  return names.some(name => itemNamesMatch(name, requiredName));
+}
+
 export function quickItemNames(inventory: InventoryData): string[] {
   return inventory.quickSlots.flatMap(itemUid => {
     const item = inventory.items.find(candidate => candidate.uid === itemUid);
@@ -155,13 +189,12 @@ export function passiveInventoryBonuses(inventory: InventoryData) {
 }
 
 export function consumeItemByName(inventory: InventoryData, name: string): InventoryData {
-  const item = inventory.items.find(candidate => candidate.name === name);
+  const item = inventory.items.find(candidate => itemNamesMatch(candidate.name, name));
   return item ? removeInventoryItem(inventory, item.uid, 1) : inventory;
 }
 
 export function addItemByName(inventory: InventoryData, name: string): InventoryData {
-  const definition = findItemDefinition(name);
-  const item = definition ? createInventoryItem(definition.id) : legacyItem(name);
+  const item = createStoryItem(name);
   return addInventoryItem(inventory, item).inventory;
 }
 

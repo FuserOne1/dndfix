@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Character } from '../types';
-import { BASE_SCORES, POINT_BUY_BUDGET, applyLineageBonuses, attributeModifier, buildCharacterDraft, calculateMaxHp, isChoiceAvailable, pointBuyCost, resolveChoice } from './rules';
+import { BASE_SCORES, POINT_BUY_BUDGET, applyLineageBonuses, attributeModifier, buildCharacterDraft, calculateMaxHp, isChoiceAvailable, pointBuyCost, previewChoiceCheck, resolveChoice } from './rules';
 import { BackstoryData, StoryChoice } from './types';
 
 const story: BackstoryData = { homeland: 'Север', goal: 'Найти брата', loss: 'Дом', connection: 'Наставник', fear: 'Глубина', secret: 'Вина', values: ['Верность'], hooks: ['Пропавший брат'], prose: 'Достаточно длинная предыстория героя для проверки.' };
@@ -43,18 +43,28 @@ describe('story choices', () => {
   });
 
   it('добавляет мастерство только к указанному изученному навыку', () => {
-    vi.spyOn(Math, 'random').mockReturnValue(0.45); // d20 = 10
     const trained: StoryChoice = { id: 'trained', label: 'Искать', intent: 'искать', check: { attribute: 'intelligence', difficulty: 17, skill: 'Расследование' }, consequences: {} };
     const untrained: StoryChoice = { ...trained, id: 'untrained', check: { ...trained.check!, skill: 'Природа' } };
-    expect(resolveChoice(trained, character)).toMatchObject({ total: 15, success: false });
-    expect(resolveChoice(untrained, character)).toMatchObject({ total: 13, success: false });
+    expect(resolveChoice(trained, character, { difficulty: 'dangerous', rollD20: () => 10 })).toMatchObject({ total: 15, difficulty: 18, success: false, proficiencyBonus: 2 });
+    expect(resolveChoice(untrained, character, { difficulty: 'dangerous', rollD20: () => 10 })).toMatchObject({ total: 13, difficulty: 18, success: false, proficiencyBonus: 0 });
   });
 
   it('натуральная двадцатка и единица имеют приоритет', () => {
     const choice: StoryChoice = { id: 'check', label: 'Проверка', intent: 'проверить', check: { attribute: 'strength', difficulty: 50 }, consequences: {} };
-    vi.spyOn(Math, 'random').mockReturnValueOnce(0.999).mockReturnValueOnce(0);
-    expect(resolveChoice(choice, character).success).toBe(true);
-    expect(resolveChoice({ ...choice, check: { attribute: 'intelligence', difficulty: 1 } }, character).success).toBe(false);
+    expect(resolveChoice(choice, character, { rollD20: () => 20 }).success).toBe(true);
+    expect(resolveChoice({ ...choice, check: { attribute: 'intelligence', difficulty: 1 } }, character, { rollD20: () => 1 }).success).toBe(false);
+  });
+
+  it('учитывает режим кампании и показывает шанс до броска', () => {
+    const choice: StoryChoice = { id: 'notice', label: 'Осмотреться', intent: 'искать', check: { attribute: 'wisdom', difficulty: 12, skill: 'Внимание' }, consequences: {} };
+    expect(previewChoiceCheck(choice, character, { difficulty: 'story' })).toMatchObject({ attribute: 'wisdom', difficulty: 10, successChance: 60 });
+    expect(previewChoiceCheck(choice, character, { difficulty: 'dangerous' })).toMatchObject({ difficulty: 14, successChance: 40 });
+  });
+
+  it('даёт преимущество после двух проваленных проверок', () => {
+    const rolls = [2, 14];
+    const choice: StoryChoice = { id: 'luck', label: 'Попытаться снова', intent: 'повторить', check: { attribute: 'charisma', difficulty: 12, skill: 'Убеждение' }, consequences: {} };
+    expect(resolveChoice(choice, character, { failureStreak: 2, rollD20: () => rolls.shift() || 1 })).toMatchObject({ roll: 14, rolls: [2, 14], advantageReason: 'Удача после серии неудач', success: true });
   });
 
   it('выдаёт золото за успешный сюжетный выбор', () => {

@@ -1,16 +1,22 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Backpack, BookOpen, Check, ChevronDown, Compass, Loader2, Lock, ScrollText, Shield, ShoppingBag, Users } from 'lucide-react';
 import { BattleResult, BattleStartData, Character, CharacterStats } from '../types';
 import { supabase } from '../lib/supabase';
 import { generateNextScene } from '../game/campaign-generator';
 import { CampaignRuntime, ChoiceResolution, StoryChoice } from '../game/types';
-import { isChoiceAvailable, resolveChoice } from '../game/rules';
-import { addInventoryItem, addItemByName, consumeItemByName, createInventoryItem, equippedItemNames, inventoryItemNames, itemEffectsMap, normalizeInventory, passiveInventoryBonuses, quickItemNames } from '../game/inventory';
+import { isChoiceAvailable, previewChoiceCheck, resolveChoice } from '../game/rules';
+import { addInventoryItem, consumeItemByName, createStoryItem, equippedItemNames, inventoryHasItem, inventoryItemNames, itemEffectsMap, itemNamesMatch, normalizeInventory, passiveInventoryBonuses, quickItemNames } from '../game/inventory';
 import { findItemDefinition } from '../game/items';
+import { applyExperience, experienceForScene } from '../game/progression';
 import { enterScene, normalizeSceneType, recordCompletedScene } from '../game/scene-director';
 import { applyWorldPatch, currentLocation, mergeWorldPatches, sanitizeWorldPatch, sceneEntryPatch, worldPatchForChoice } from '../game/world-state';
 import { commitWorldEvent } from '../game/world-state-store';
+import { getScenePresentation } from '../game/scene-presentation';
 import SceneIllustration from './SceneIllustration';
+import DiceCheckCard from './DiceCheckCard';
+import StoryText from './StoryText';
+import SceneAtmosphere from './SceneAtmosphere';
+import CharacterMedallion from './CharacterMedallion';
 const BattleModal = lazy(() => import('./BattleModal'));
 const InventoryPanel = lazy(() => import('./InventoryPanel'));
 const SceneArchive = lazy(() => import('./SceneArchive'));
@@ -35,14 +41,17 @@ export default function StoryReader({ campaign, characters, activeCharacter, cur
   const [votes, setVotes] = useState<Vote[]>([]);
   const [resolving, setResolving] = useState(false);
   const [lastResolution, setLastResolution] = useState<ChoiceResolution | null>(null);
+  const [rewardNotice, setRewardNotice] = useState<{ characterName: string; items: string[]; xp: number; levelUp?: number } | null>(null);
   const [error, setError] = useState('');
   const [showArchive, setShowArchive] = useState(false);
   const [showJournal, setShowJournal] = useState(false);
   const [showInventory, setShowInventory] = useState(false);
   const [inventoryInitialTab, setInventoryInitialTab] = useState<'inventory' | 'trade'>('inventory');
   const [pendingBattle, setPendingBattle] = useState<{ choice: StoryChoice; resolution: ChoiceResolution; data: BattleStartData } | null>(null);
+  const migratedLegacyInventoryRef = useRef('');
   const isHost = campaign.hostUserId === currentUserId;
   const scene = campaign.currentScene;
+  const presentation = useMemo(() => getScenePresentation(scene), [scene]);
   const availableStoryItems = useMemo(() => [...new Set([...campaign.state.inventory, ...inventoryItemNames(normalizeInventory(activeCharacter))])], [activeCharacter, campaign.state.inventory]);
   const canTradeHere = Boolean(scene.services?.trade || normalizeSceneType(scene.type) === 'trade');
   const personalHook = campaign.bible.characterHooks.find(hook => hook.characterName === activeCharacter.name)?.hook;
@@ -108,6 +117,28 @@ export default function StoryReader({ campaign, characters, activeCharacter, cur
     if (campaign.mode === 'party' && !isHost && campaign.status === 'finished') onLeave();
   }, [campaign.mode, campaign.status, isHost, onLeave]);
 
+  useEffect(() => {
+    if (campaign.mode === 'party' && !isHost) return;
+    const physicalItems = campaign.state.inventory.filter(item => findItemDefinition(item));
+    if (!physicalItems.length) return;
+    const migrationKey = `${campaign.id}:${activeCharacter.id}:${physicalItems.join('|')}`;
+    if (migratedLegacyInventoryRef.current === migrationKey) return;
+    migratedLegacyInventoryRef.current = migrationKey;
+    void (async () => {
+      try {
+        let inventory = normalizeInventory(activeCharacter);
+        for (const item of physicalItems) inventory = addInventoryItem(inventory, createStoryItem(item), true).inventory;
+        await onCharacterUpdate({ ...activeCharacter, inventory_data: inventory, equipment: equippedItemNames(inventory) });
+        await onUpdate({ ...campaign, state: { ...campaign.state, inventory: campaign.state.inventory.filter(item => !physicalItems.some(physical => itemNamesMatch(physical, item))) } });
+        setRewardNotice({ characterName: activeCharacter.name, items: physicalItems, xp: 0 });
+      } catch {
+        migratedLegacyInventoryRef.current = '';
+      }
+    })();
+  // Одноразовый мост для физических наград, сохранённых старой версией в state.inventory.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaign.id, activeCharacter.id]);
+
   const availableChoices = useMemo(() => scene.choices.map(choice => ({ choice, availability: isChoiceAvailable(choice, activeCharacter, campaign.state.flags, availableStoryItems) })), [activeCharacter, availableStoryItems, campaign.state.flags, scene.choices]);
 
   async function selectChoice(choice: StoryChoice) {
@@ -132,64 +163,63 @@ export default function StoryReader({ campaign, characters, activeCharacter, cur
   async function confirmChoice() {
     const choice = winningChoice();
     if (!choice || resolving) return;
-    setResolving(true); setError('');
+    setResolving(true); setError(''); setRewardNotice(null);
     try {
-      const actor = chooseActor(choice, characters, activeCharacter);
-      const resolution = resolveChoice(choice, actor);
+      const actor = chooseActor(choice, characters, activeCharacter, campaign.preferences.difficulty, campaign.state.checkFailureStreak);
+      const resolution = resolveChoice(choice, actor, { difficulty: campaign.preferences.difficulty, failureStreak: campaign.state.checkFailureStreak });
       setLastResolution(resolution);
       if (choice.consequences.startsBattle) {
         setPendingBattle({ choice, resolution, data: choice.consequences.battle || createDefaultBattle(campaign.state.sceneNumber) });
         setResolving(false);
         return;
       }
-      await continueStory(choice, resolution);
+      await continueStory(choice, resolution, actor);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Не удалось продолжить историю');
     } finally { setResolving(false); }
   }
 
-  async function continueStory(choice: StoryChoice, resolution: ChoiceResolution) {
+  async function continueStory(choice: StoryChoice, resolution: ChoiceResolution, actor: Character, baseCharacter: Character = actor, experienceOverride?: number) {
       const successFlags = resolution.success ? choice.consequences.successFlags || [] : choice.consequences.failureFlags || [];
-      const nextInventory = campaign.state.inventory.filter(item => !resolution.lostItems.includes(item));
-      let personalInventory = normalizeInventory(activeCharacter);
-      const nextHp = Math.max(0, Math.min(activeCharacter.hp_max, activeCharacter.hp_current + resolution.hpChange));
-      const nextGold = Math.max(0, (activeCharacter.gold || 0) + resolution.goldChange);
-      let personalChanged = nextHp !== activeCharacter.hp_current || nextGold !== (activeCharacter.gold || 0);
-      if (campaign.mode === 'solo') {
-        for (const lost of resolution.lostItems) {
-          if (personalInventory.items.some(item => item.name === lost)) {
-            personalInventory = consumeItemByName(personalInventory, lost);
-            personalChanged = true;
-          }
+      const nextInventory = campaign.state.inventory.filter(item => !resolution.lostItems.some(lost => itemNamesMatch(item, lost)));
+      let personalInventory = normalizeInventory(baseCharacter);
+      const nextHp = Math.max(0, Math.min(baseCharacter.hp_max, baseCharacter.hp_current + resolution.hpChange));
+      const nextGold = Math.max(0, (baseCharacter.gold || 0) + resolution.goldChange);
+      for (const lost of resolution.lostItems) {
+        if (inventoryHasItem(personalInventory, lost)) {
+          personalInventory = consumeItemByName(personalInventory, lost);
         }
       }
       for (const item of resolution.gainedItems) {
-        const definition = campaign.mode === 'solo' ? findItemDefinition(item) : undefined;
-        if (definition) {
-          const added = addInventoryItem(personalInventory, createInventoryItem(definition.id));
-          if (!added.error) { personalInventory = added.inventory; personalChanged = true; continue; }
-        }
-        if (!nextInventory.includes(item)) nextInventory.push(item);
+        // Сюжетная награда никогда не пропадает из-за несовпавшего названия или
+        // полного рюкзака: неизвестные предметы сохраняются как уникальные сюжетные.
+        personalInventory = addInventoryItem(personalInventory, createStoryItem(item), true).inventory;
       }
-      if (personalChanged) await onCharacterUpdate({ ...activeCharacter, hp_current: nextHp, gold: nextGold, inventory_data: personalInventory, equipment: equippedItemNames(personalInventory) });
-      const choicePatch = sanitizeWorldPatch(worldPatchForChoice(choice, resolution.success), { bible: campaign.bible, characters, systems: campaign.state.systems, scene });
+      const xpGained = experienceOverride ?? experienceForScene(scene, resolution);
+      const progression = applyExperience({ ...baseCharacter, hp_current: nextHp, gold: nextGold, inventory_data: personalInventory, equipment: equippedItemNames(personalInventory) }, xpGained);
+      const resolvedWithProgression: ChoiceResolution = { ...resolution, xpGained: progression.xpGained, levelBefore: progression.levelBefore, levelAfter: progression.levelAfter };
+      await onCharacterUpdate(progression.character);
+      const nextCharacters = characters.map(character => character.id === progression.character.id ? progression.character : character);
+      setRewardNotice({ characterName: progression.character.name, items: resolution.gainedItems, xp: progression.xpGained, levelUp: progression.levelAfter > progression.levelBefore ? progression.levelAfter : undefined });
+      const choicePatch = sanitizeWorldPatch(worldPatchForChoice(choice, resolution.success), { bible: campaign.bible, characters: nextCharacters, systems: campaign.state.systems, scene });
       const nextState = {
         ...campaign.state,
         flags: [...new Set([...campaign.state.flags, ...successFlags])],
         inventory: nextInventory,
         completedSceneIds: [...campaign.state.completedSceneIds, scene.id],
         sceneNumber: campaign.state.sceneNumber + 1,
-        director: recordCompletedScene(campaign.state.director, scene, characters),
+        checkFailureStreak: choice.check ? (resolution.success ? 0 : (campaign.state.checkFailureStreak || 0) + 1) : campaign.state.checkFailureStreak || 0,
+        director: recordCompletedScene(campaign.state.director, scene, nextCharacters),
         systems: applyWorldPatch(campaign.state.systems, choicePatch, scene.id, campaign.state.sceneNumber),
       };
-      const { error: archiveError } = await supabase.from('campaign_scenes').upsert({ campaign_id: campaign.id, scene_id: scene.id, act_id: scene.actId, scene_number: campaign.state.sceneNumber, content: scene, resolution }, { onConflict: 'campaign_id,scene_id' });
+      const { error: archiveError } = await supabase.from('campaign_scenes').upsert({ campaign_id: campaign.id, scene_id: scene.id, act_id: scene.actId, scene_number: campaign.state.sceneNumber, content: scene, resolution: resolvedWithProgression }, { onConflict: 'campaign_id,scene_id' });
       if (archiveError) console.warn('Scene resolution was not saved to the archive:', archiveError);
-      const nextScene = await generateNextScene({ bible: campaign.bible, previousScene: scene, resolution, state: nextState, characters, preferences: campaign.preferences });
+      const nextScene = await generateNextScene({ bible: campaign.bible, previousScene: scene, resolution: resolvedWithProgression, state: nextState, characters: nextCharacters, preferences: campaign.preferences });
       const locationPatch = sceneEntryPatch(nextScene, currentLocation(campaign.state.systems, scene));
       const systemPatch = mergeWorldPatches(choicePatch, locationPatch);
       const systems = applyWorldPatch(nextState.systems, locationPatch, nextScene.id, nextState.sceneNumber);
       const committedState = { ...nextState, systems, currentSceneId: nextScene.id, currentActId: nextScene.actId, director: enterScene(nextState.director, nextScene) };
-      const version = await commitWorldEvent({ campaignId: campaign.id, expectedVersion: campaign.state.version || 0, eventType: 'choice_resolved', sceneId: scene.id, choiceId: choice.id, actorId: actorIdForChoice(choice, characters, activeCharacter), summary: resolution.summary || choice.label, patch: systemPatch, systems, campaignState: committedState, currentScene: nextScene });
+      const version = await commitWorldEvent({ campaignId: campaign.id, expectedVersion: campaign.state.version || 0, eventType: 'choice_resolved', sceneId: scene.id, choiceId: choice.id, actorId: actor.id, summary: resolvedWithProgression.summary || choice.label, patch: systemPatch, systems, campaignState: committedState, currentScene: nextScene });
       const updated: CampaignRuntime = { ...campaign, state: { ...committedState, version }, currentScene: nextScene };
       await onUpdate(updated);
       if (campaign.mode === 'party') await supabase.from('campaign_votes').delete().eq('campaign_id', campaign.id).eq('scene_id', scene.id);
@@ -199,20 +229,18 @@ export default function StoryReader({ campaign, characters, activeCharacter, cur
     if (!pendingBattle) return;
     let inventory = normalizeInventory(activeCharacter);
     for (const consumed of result.itemsConsumed) inventory = consumeItemByName(inventory, consumed);
-    for (const item of result.itemsGained) inventory = addItemByName(inventory, item);
-    const updatedCharacter: Character = { ...activeCharacter, hp_current: result.finalHp, xp: activeCharacter.xp + result.xpGained, equipment: equippedItemNames(inventory), inventory_data: inventory };
-    await onCharacterUpdate(updatedCharacter);
+    const battleCharacter: Character = { ...activeCharacter, hp_current: result.finalHp, equipment: equippedItemNames(inventory), inventory_data: inventory };
     const resolution: ChoiceResolution = {
       ...pendingBattle.resolution,
       success: result.victory,
       summary: result.victory ? `Бой выигран. Побеждены: ${result.enemiesDefeated.join(', ')}.` : 'Герой потерпел поражение в бою.',
       gainedItems: [...new Set([...pendingBattle.resolution.gainedItems, ...result.itemsGained])],
-      hpChange: result.finalHp - activeCharacter.hp_current,
+      hpChange: 0,
     };
     const choice = pendingBattle.choice;
     setPendingBattle(null);
     setResolving(true);
-    try { await continueStory(choice, resolution); }
+    try { await continueStory(choice, resolution, activeCharacter, battleCharacter, result.xpGained); }
     finally { setResolving(false); }
   }
 
@@ -227,15 +255,18 @@ export default function StoryReader({ campaign, characters, activeCharacter, cur
     } finally { setResolving(false); }
   }
 
-  return <div className="min-h-screen bg-[#09090b] text-zinc-100">
+  return <div className={`scene-shell scene-theme-${presentation.palette} min-h-screen text-zinc-100`} data-scene={scene.id}>
+    <SceneAtmosphere presentation={presentation}/>
     <header className="sticky top-0 z-20 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur px-3 sm:px-4 py-3"><div className="max-w-6xl mx-auto flex justify-between items-center gap-2"><div className="flex items-center gap-2 sm:gap-3 min-w-0"><button onClick={onLeave} className="shrink-0 p-2.5 rounded-xl border border-zinc-800"><ArrowLeft className="w-4 h-4"/></button><div className="min-w-0"><p className="text-[10px] sm:text-xs text-amber-500 truncate">{campaign.bible.acts.find(act => act.id === scene.actId)?.title || 'Кампания'}</p><h1 className="font-bold text-sm sm:text-base truncate">{campaign.bible.title}</h1></div></div><div className="shrink-0 flex items-center gap-2"><span className="hidden sm:inline text-xs text-zinc-500">Сцена {campaign.state.sceneNumber}</span><button onClick={() => setShowJournal(true)} className="p-2.5 rounded-xl border border-zinc-800" aria-label="Открыть журнал приключения"><Compass className="w-4 h-4"/></button><button onClick={() => openInventory()} className="p-2.5 rounded-xl border border-zinc-800" aria-label="Открыть инвентарь"><Backpack className="w-4 h-4"/></button><button onClick={() => setShowArchive(true)} className="p-2.5 rounded-xl border border-zinc-800" aria-label="Открыть хронику"><ScrollText className="w-4 h-4"/></button></div></div></header>
     <div className="max-w-6xl mx-auto grid lg:grid-cols-[1fr_260px] gap-6 p-4 sm:p-8">
       <main className="max-w-3xl w-full mx-auto space-y-7">
-        <section><div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-zinc-600"><BookOpen className="w-3.5 h-3.5"/>{scene.location}</div><h2 className="text-3xl sm:text-4xl font-black mt-3 text-white">{scene.title}</h2><SceneIllustration campaignId={campaign.id} scene={scene} sceneNumber={campaign.state.sceneNumber} bible={campaign.bible} preferences={campaign.preferences} characters={characters} currentUserId={currentUserId} canGenerate={isHost} autoGenerate={isHost}/><div className="mt-6 space-y-5 text-[16px] sm:text-[17px] leading-8 text-zinc-300">{scene.body.map((paragraph, index) => <p key={index}>{paragraph}</p>)}</div></section>
+        <div className="scene-hero-ribbon"><CharacterMedallion character={activeCharacter}/><div className="scene-hero-stats"><span>♥ {activeCharacter.hp_current}/{activeCharacter.hp_max}</span><span>ур. {activeCharacter.level}</span><span>{activeCharacter.xp} XP</span></div></div>
+        <section key={scene.id} className="story-page scene-enter"><div className="scene-meta"><span className="scene-type-glyph">{presentation.glyph}</span><span>{presentation.label}</span><i/><BookOpen className="w-3.5 h-3.5"/><span>{scene.location}</span><b>опасность {presentation.tension}/5</b></div><h2 className="story-title">{scene.title}</h2><div className="story-ornament"><span>{presentation.glyph}</span></div><SceneIllustration campaignId={campaign.id} scene={scene} sceneNumber={campaign.state.sceneNumber} bible={campaign.bible} preferences={campaign.preferences} characters={characters} currentUserId={currentUserId} canGenerate={isHost} autoGenerate={isHost}/><div className="story-body">{scene.body.map((paragraph, index) => <div key={index} className="story-paragraph-reveal" style={{ animationDelay: `${Math.min(index * 75, 450)}ms` }}><StoryText first={index === 0}>{paragraph}</StoryText></div>)}</div></section>
         {canTradeHere && <section className="p-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3"><div className="flex gap-3"><ShoppingBag className="w-5 h-5 text-amber-400 shrink-0"/><div><strong className="text-amber-200">Здесь можно торговать</strong><p className="text-xs text-zinc-400 mt-1">Осмотрите товары, продайте добычу или просто узнайте, сколько она стоит.</p></div></div><button onClick={() => openInventory('trade')} className="px-4 py-3 rounded-xl bg-amber-500 text-zinc-950 text-sm font-black shrink-0">Открыть торговлю</button></section>}
-        {lastResolution && <div className={`p-4 rounded-2xl border ${lastResolution.success ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-red-500/30 bg-red-500/10'}`}><strong>{lastResolution.success ? 'Проверка пройдена' : 'Проверка провалена'}</strong>{lastResolution.roll && <p className="text-xs mt-1">Бросок {lastResolution.roll}, итог {lastResolution.total} против сложности {lastResolution.difficulty}</p>}</div>}
+        {lastResolution && <DiceCheckCard resolution={lastResolution}/>}
+        {rewardNotice && (rewardNotice.items.length > 0 || rewardNotice.xp > 0) && <section className="rounded-2xl border border-emerald-500/25 bg-emerald-500/10 p-4 text-sm"><strong className="text-emerald-300">Награды сохранены · {rewardNotice.characterName}</strong><div className="mt-2 flex flex-wrap gap-2">{rewardNotice.items.map((item, index) => <span key={`${item}-${index}`} className="rounded-lg bg-zinc-950/50 px-2 py-1">+ {item}</span>)}{rewardNotice.xp > 0 && <span className="rounded-lg bg-zinc-950/50 px-2 py-1">+{rewardNotice.xp} опыта</span>}{rewardNotice.levelUp && <span className="rounded-lg bg-amber-500/15 px-2 py-1 text-amber-300">Новый уровень: {rewardNotice.levelUp}</span>}</div></section>}
         {error && <div className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-300 text-sm">{error}</div>}
-        {normalizeSceneType(scene.type) === 'ending' ? <section className="p-5 rounded-2xl border border-amber-500/30 bg-amber-500/10"><p className="text-sm text-amber-200">История завершена. Этот финал сохранится в хронике кампании.</p><button disabled={resolving || (campaign.mode === 'party' && !isHost)} onClick={() => void finishCampaign()} className="w-full mt-4 p-4 rounded-2xl bg-amber-500 text-zinc-950 font-black disabled:opacity-40">{campaign.mode === 'party' && !isHost ? 'Ведущий завершает кампанию' : 'Закрыть хронику'}</button></section> : <section className="space-y-3"><div className="flex items-center justify-between"><h3 className="font-bold">Что вы сделаете?</h3>{campaign.mode === 'party' && <span className="text-xs text-zinc-500 flex items-center gap-1"><Users className="w-3.5 h-3.5"/>{votes.length} голосов</span>}</div>{availableChoices.map(({ choice, availability }, index) => { const voteCount = votes.filter(vote => vote.choice_id === choice.id).length; const selected = selectedChoiceId === choice.id || votes.some(vote => vote.user_session_id === currentUserId && vote.choice_id === choice.id); return <button key={choice.id} disabled={!availability.available || resolving} onClick={() => void selectChoice(choice)} className={`w-full text-left p-4 rounded-2xl border transition ${selected ? 'border-amber-400 bg-amber-500/10' : availability.available ? 'border-zinc-800 bg-zinc-900/60 hover:border-zinc-600' : 'border-zinc-900 bg-zinc-950 opacity-50'}`}><div className="flex gap-3"><span className="w-7 h-7 rounded-lg bg-zinc-800 flex items-center justify-center text-xs font-bold shrink-0">{availability.available ? index + 1 : <Lock className="w-3 h-3"/>}</span><div className="flex-1"><div className="flex justify-between gap-2"><strong className="text-sm">{choice.label}</strong>{voteCount > 0 && <span className="text-xs text-amber-400">{voteCount}</span>}</div>{choice.description && <p className="text-xs text-zinc-500 mt-1">{choice.description}</p>}{choice.check && <p className="text-[10px] text-violet-400 mt-2 uppercase">Проверка: {choice.check.attribute} · {choice.check.difficulty}</p>}{!availability.available && <p className="text-[10px] text-red-400 mt-1">{availability.reason}</p>}</div></div></button>; })}
+        {normalizeSceneType(scene.type) === 'ending' ? <section className="p-5 rounded-2xl border border-amber-500/30 bg-amber-500/10"><p className="text-sm text-amber-200">История завершена. Этот финал сохранится в хронике кампании.</p><button disabled={resolving || (campaign.mode === 'party' && !isHost)} onClick={() => void finishCampaign()} className="w-full mt-4 p-4 rounded-2xl bg-amber-500 text-zinc-950 font-black disabled:opacity-40">{campaign.mode === 'party' && !isHost ? 'Ведущий завершает кампанию' : 'Закрыть хронику'}</button></section> : <section className="space-y-3"><div className="flex items-center justify-between"><h3 className="story-choice-heading">Что вы сделаете?</h3>{campaign.mode === 'party' && <span className="text-xs text-zinc-500 flex items-center gap-1"><Users className="w-3.5 h-3.5"/>{votes.length} голосов</span>}</div>{availableChoices.map(({ choice, availability }, index) => { const voteCount = votes.filter(vote => vote.choice_id === choice.id).length; const selected = selectedChoiceId === choice.id || votes.some(vote => vote.user_session_id === currentUserId && vote.choice_id === choice.id); const actor = chooseActor(choice, characters, activeCharacter, campaign.preferences.difficulty, campaign.state.checkFailureStreak); const check = previewChoiceCheck(choice, actor, { difficulty: campaign.preferences.difficulty, failureStreak: campaign.state.checkFailureStreak }); return <button key={choice.id} disabled={!availability.available || resolving} onClick={() => void selectChoice(choice)} className={`story-choice ${selected ? 'story-choice-selected' : availability.available ? '' : 'story-choice-locked'}`}><div className="flex gap-3"><span className="story-choice-number">{availability.available ? index + 1 : <Lock className="w-3 h-3"/>}</span><div className="flex-1 min-w-0"><div className="flex justify-between gap-2"><strong>{choice.label}</strong>{voteCount > 0 && <span className="text-xs text-amber-400">{voteCount}</span>}</div>{choice.description && <p className="text-xs text-zinc-500 mt-1">{choice.description}</p>}{check && <div className="check-preview"><span>{check.skill || check.attributeLabel}</span><span>СЛ {check.difficulty}</span><strong>{check.successChance}%</strong>{check.advantageReason && <span className="check-advantage">◆ преимущество</span>}{campaign.mode === 'party' && <span>{actor.name}</span>}</div>}{!availability.available && <p className="text-[10px] text-red-400 mt-1">{availability.reason}</p>}</div></div></button>; })}
           <button disabled={resolving || !winningChoice() || (campaign.mode === 'party' && !isHost)} onClick={() => void confirmChoice()} className="w-full p-4 rounded-2xl bg-amber-500 text-zinc-950 font-black flex justify-center items-center gap-2 disabled:opacity-30">{resolving ? <Loader2 className="animate-spin"/> : <Check/>}{resolving ? 'Пишем следующую сцену…' : campaign.mode === 'party' ? isHost ? 'Подтвердить выбор группы' : 'Ожидаем ведущего' : 'Сделать выбор'}</button>
         </section>}
       </main>
@@ -248,13 +279,9 @@ export default function StoryReader({ campaign, characters, activeCharacter, cur
   </div>;
 }
 
-function chooseActor(choice: StoryChoice, characters: Character[], fallback: Character): Character {
+function chooseActor(choice: StoryChoice, characters: Character[], fallback: Character, difficulty: CampaignRuntime['preferences']['difficulty'] = 'normal', failureStreak = 0): Character {
   if (!choice.check || characters.length <= 1) return fallback;
-  return [...characters].sort((left, right) => right[choice.check!.attribute] - left[choice.check!.attribute])[0] || fallback;
-}
-
-function actorIdForChoice(choice: StoryChoice, characters: Character[], fallback: Character): string {
-  return chooseActor(choice, characters, fallback).id;
+  return [...characters].sort((left, right) => (previewChoiceCheck(choice, right, { difficulty, failureStreak })?.successChance || 0) - (previewChoiceCheck(choice, left, { difficulty, failureStreak })?.successChance || 0))[0] || fallback;
 }
 
 function toCharacterStats(character: Character): CharacterStats {

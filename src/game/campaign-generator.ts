@@ -3,6 +3,7 @@ import { AI_MODELS } from '../lib/ai-config';
 import { CampaignBible, CampaignPreferences, CampaignState, ChoiceResolution, SceneBlueprint, StoryScene } from './types';
 import { equippedItemNames, normalizeInventory } from './inventory';
 import { applyBlueprint, chooseNextBlueprint, ensureScenePlan, normalizeSceneType, servicesForScene } from './scene-director';
+import { normalizeChoiceCheck } from './rules';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -101,6 +102,8 @@ function characterContext(character: Character) {
     },
     backstory: character.backstory_data || character.story_summary || '',
     tags: character.rules_data?.storyTags || [],
+    skills: character.rules_data?.selectedSkills || [],
+    traits: character.rules_data?.traits || [],
     gold: character.gold || 0,
     equipped: equippedItemNames(inventory),
     inventory: inventory.items.map(item => ({ name: item.name, quantity: item.quantity })),
@@ -146,7 +149,8 @@ ${JSON.stringify(variation)}
 Не включай scenePlan: технический план построит игровой движок.`;
 
   try {
-    const generated = await requestJson<{ bible: CampaignBible; opening: StoryScene }>(system, prompt, { model: AI_MODELS.MAIN, maxTokens: 5200, timeoutMs: 105_000, temperature: 0.88 });
+    const rulesPrompt = `${prompt}\n\nRULES FOR CHECKS AND PROSE:\n- A check must include attribute, a fitting skill, and base difficulty from 10 to 15.\n- Allowed Russian skill names: Атлетика, Акробатика, Скрытность, Ловкость рук, Знание, Расследование, Природа, Медицина, Проницательность, Внимание, Выживание, Убеждение, Обман, Запугивание, Выступление.\n- Body paragraphs may moderately use **bold**, *italic*, > quotes and --- scene dividers. Do not use headings, tables or lists inside prose.`;
+    const generated = await requestJson<{ bible: CampaignBible; opening: StoryScene }>(system, rulesPrompt, { model: AI_MODELS.MAIN, maxTokens: 5200, timeoutMs: 105_000, temperature: 0.88 });
     const bible = ensureScenePlan(ensurePlayerPromises(validateBible(generated.bible), preferences, characters), preferences, characters);
     const opening = validateScene(generated.opening, bible.acts[0]?.id || 'act-1', 'scene-1', bible.scenePlan?.[0]);
     return { bible, opening };
@@ -265,7 +269,7 @@ ${JSON.stringify(preferences, null, 2)}
 
 Верни StoryScene в заданном формате. Напиши 5–8 абзацев по 2–4 предложения: покажи мотивацию героев и связь проблемы с их прошлым. Дай 3–5 содержательных вариантов: прямой, осторожный, социальный и хотя бы один условный под конкретного героя.`;
   try {
-    return validateScene(await requestJson<StoryScene>(system, `${prompt}\n\nSCENE CONTRACT (do not change its fields):\n${JSON.stringify(blueprint)}`, { model: AI_MODELS.MAIN, maxTokens: 2400, timeoutMs: 50_000 }), bible.acts[0]?.id || 'act-1', 'scene-1', blueprint);
+    return validateScene(await requestJson<StoryScene>(system, `${prompt}\n\nITEM-AWARE CHOICES: inspect the heroes' inventory. When an owned item can reasonably solve or alter the scene, include an additional choice requiring it. requirements.items must contain the exact item name from the inventory; removeItems only for a genuinely consumed or lost item.\n\nSCENE CONTRACT (do not change its fields):\n${JSON.stringify(blueprint)}`, { model: AI_MODELS.MAIN, maxTokens: 2400, timeoutMs: 50_000 }), bible.acts[0]?.id || 'act-1', 'scene-1', blueprint);
   } catch (error) {
     console.warn('Opening scene generation failed, using local scene:', error);
     return createFallbackOpening(bible, characters, blueprint);
@@ -305,7 +309,7 @@ ${JSON.stringify(storyBible.playerPromises || [])}
 
 Верни следующую StoryScene. id должен быть "${nextId}". Не перескакивай через последствия: сцена должна развить выбранный момент как небольшую главу, ясно показать мотивацию действующих героев и закончиться новой осмысленной развилкой.`;
   try {
-    return validateScene(await requestJson<StoryScene>(sceneSystemPrompt(), `${prompt}\n\nSCENE CONTRACT (do not change its fields):\n${JSON.stringify(blueprint)}`, { model: AI_MODELS.MAIN, maxTokens: 2400, timeoutMs: 50_000 }), input.state.currentActId, nextId, blueprint);
+    return validateScene(await requestJson<StoryScene>(sceneSystemPrompt(), `${prompt}\n\nRULES: checks use a fitting Russian skill from the allowed list and a base DC from 10 to 15. Campaign difficulty is ${input.preferences.difficulty}; the engine applies its modifier. Body paragraphs may use **bold**, *italic*, > quotes and --- scene dividers when artistically useful. Inspect every hero inventory: whenever an owned item can reasonably solve, simplify, or alter the scene, include an item-aware choice. Copy its exact inventory name into requirements.items. Put it in removeItems only when the action truly consumes or loses it. Never grant an item only in prose: every obtained item must also be listed in grantItems.\n\nSCENE CONTRACT (do not change its fields):\n${JSON.stringify(blueprint)}`, { model: AI_MODELS.MAIN, maxTokens: 2400, timeoutMs: 50_000 }), input.state.currentActId, nextId, blueprint);
   } catch (error) {
     console.warn('Next scene generation failed, using local continuation:', error);
     return createFallbackContinuation(input, nextId, blueprint);
@@ -320,7 +324,7 @@ function sceneSystemPrompt() {
  "audience":"group|personal|solo","purpose":"цель сцены","tension":1,"services":{"trade":false,"rest":false,"stash":false},"focusCharacter":"опционально","recap":"одно предложение",
  "choices":[{
    "id":"choice-1","label":"короткое действие","description":"ожидаемый подход","intent":"что герой пытается сделать",
-   "check":{"attribute":"strength|dexterity|constitution|intelligence|wisdom|charisma","difficulty":12},
+   "check":{"attribute":"strength|dexterity|constitution|intelligence|wisdom|charisma","skill":"Атлетика|Акробатика|Скрытность|Ловкость рук|Знание|Расследование|Природа|Медицина|Проницательность|Внимание|Выживание|Убеждение|Обман|Запугивание|Выступление","difficulty":12},
    "requirements":{"classIds":[],"lineageIds":[],"items":[],"flags":[],"minAttribute":{}},
    "consequences":{"successFlags":[],"failureFlags":[],"removeItems":[],"grantItems":[],"hpChange":0,"successGold":0,"failureGold":0,"startsBattle":false,"battle":{"enemies":[],"rewards":{"xp":0,"items":[]},"description":"только если начинается бой"},"world":{"relationships":[{"targetKey":"id существующего NPC или фракции","targetName":"имя","targetType":"npc|faction","trust":0,"respect":0,"fear":0,"affection":0,"reason":"конкретная причина"}],"conditions":[{"action":"add|remove","characterId":"id героя","key":"стабильный-id","name":"название","description":"эффект","severity":"minor|major|critical","durationScenes":2}],"locations":[{"key":"стабильный-id","name":"название","description":"что известно","status":"rumored|discovered|visited|blocked","danger":1,"services":{"trade":false,"rest":false,"stash":false}}],"routes":[{"fromKey":"id","toKey":"id","label":"маршрут","danger":1,"status":"open|blocked|unknown"}],"quests":[{"key":"id","title":"название","description":"цель","status":"active|completed|failed","stage":"текущий этап"}],"clues":[{"key":"id","title":"название","description":"факт","reliability":"uncertain|likely|confirmed"}]}}
  }]
@@ -350,6 +354,7 @@ function validateScene(value: StoryScene, fallbackActId: string, fallbackId: str
       id: choice.id || `choice-${index + 1}`,
       label: choice.label || `Вариант ${index + 1}`,
       intent: choice.intent || choice.label,
+      check: choice.check ? normalizeChoiceCheck(choice.check, `${choice.label || ''} ${choice.description || ''} ${choice.intent || ''}`) : undefined,
       consequences: choice.consequences || {},
     })),
   };

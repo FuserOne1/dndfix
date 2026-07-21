@@ -35,7 +35,7 @@ export function findItemDefinition(name: string): ItemDefinition | undefined {
     [/длинн.*меч/, 'longsword'], [/коротк.*меч/, 'shortsword'], [/кинжал/, 'dagger'], [/секир|двуруч/, 'great-axe'],
     [/длинн.*лук/, 'longbow'], [/арбалет/, 'crossbow'], [/посох|боевой посох/, 'staff'], [/щит/, 'shield'],
     [/кожан.*брон/, 'leather-armor'], [/кольчуг/, 'chain-mail'], [/чешуйн.*брон/, 'scale-mail'], [/лат/, 'plate-armor'],
-    [/больш.*зелье.*леч/, 'greater-healing-potion'], [/зелье.*леч/, 'healing-potion'], [/огненн.*бомб/, 'fire-bomb'],
+    [/больш.*(?:зелье.*леч|леч.*зелье)/, 'greater-healing-potion'], [/(?:зелье.*леч|леч.*зелье)/, 'healing-potion'], [/огненн.*бомб/, 'fire-bomb'],
     [/зелье.*скорост/, 'haste-potion'], [/отмыч/, 'lockpicks'], [/инструмент/, 'craft-tools'], [/верёв|верев/, 'rope'], [/кристалл/, 'arcane-focus'],
   ];
   const alias = aliases.find(([pattern]) => pattern.test(normalized));

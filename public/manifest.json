@@ -1,14 +1,14 @@
 {
-  "name": "D&D Dark Fantasy AI",
-  "short_name": "D&D AI",
-  "description": "Cooperative AI Dungeon Master for Dark Fantasy Adventures",
+  "name": "Chronicles — интерактивная RPG",
+  "short_name": "Chronicles",
+  "description": "Соло и кооперативные интерактивные приключения",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "orientation": "portrait",
   "background_color": "#09090b",
-  "theme_color": "#10b981",
+  "theme_color": "#09090b",
   "icons": [
     {
       "src": "/favicon/web-app-manifest-192x192.png",
