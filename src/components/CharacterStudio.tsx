@@ -6,6 +6,7 @@ import { ATTRIBUTE_LABELS, CLASSES, LINEAGES, ORIGINS, getClassDefinition, getLi
 import { BackstoryAnswers, suggestBackstories } from '../game/backstory-helper';
 import { AttributeKey, BackstoryData } from '../game/types';
 import { AttributeScores, BASE_SCORES, POINT_BUY_BUDGET, applyLineageBonuses, buildCharacterDraft, pointBuyCost } from '../game/rules';
+import { HomeAtmosphere } from './HomeScreen';
 
 interface CharacterStudioProps {
   onSelect: (character: Character) => void;
@@ -136,11 +137,11 @@ export default function CharacterStudio({ onSelect, onInventory, onBack, title =
 
   if (view === 'library') return (
     <Screen>
-      <div className="w-full max-w-5xl space-y-6">
+      <div className="creator-library w-full max-w-5xl space-y-6">
         <Header onBack={onBack} eyebrow="Библиотека героев" title={title} subtitle="Выберите героя для кампании или создайте нового."/>
         {error && <ErrorBox>{error}</ErrorBox>}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <button onClick={openCreator} className="min-h-52 rounded-2xl border border-dashed border-amber-500/40 bg-amber-500/5 hover:bg-amber-500/10 flex flex-col items-center justify-center gap-3 text-amber-300 transition"><span className="p-3 rounded-full bg-amber-500/10"><Plus/></span><strong>Создать героя</strong><span className="text-xs text-zinc-500">Раса, класс и предыстория</span></button>
+        <div className="creator-card-grid grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <button onClick={openCreator} className="creator-new-card min-h-52 rounded-2xl border border-dashed border-amber-500/40 bg-amber-500/5 hover:bg-amber-500/10 flex flex-col items-center justify-center gap-3 text-amber-300 transition"><span className="p-3 rounded-full bg-amber-500/10"><Plus/></span><strong>Создать героя</strong><span className="text-xs text-zinc-500">Раса, класс и предыстория</span></button>
           {characters.map(character => <CharacterCard key={character.id} character={character} onSelect={() => onSelect(character)} onInventory={onInventory ? () => onInventory(character) : undefined} onDelete={() => void deleteCharacter(character)}/>) }
         </div>
       </div>
@@ -149,11 +150,11 @@ export default function CharacterStudio({ onSelect, onInventory, onBack, title =
 
   return (
     <Screen>
-      <div className="w-full max-w-5xl space-y-5">
+      <div className="creator-workspace w-full max-w-5xl space-y-5">
         <Header onBack={() => stepIndex === 0 ? setView('library') : setStep(STEPS[stepIndex - 1])} eyebrow={`Создание героя · ${stepIndex + 1}/${STEPS.length}`} title={STEP_LABELS[step]} subtitle="Собственная система Chronicles d20"/>
-        <div className="flex gap-1">{STEPS.map((item, index) => <div key={item} className={`h-1 flex-1 rounded ${index <= stepIndex ? 'bg-amber-400' : 'bg-zinc-800'}`}/>)}</div>
+        <div className="creator-progress flex gap-1">{STEPS.map((item, index) => <div key={item} title={STEP_LABELS[item]} className={`h-1 flex-1 rounded ${index <= stepIndex ? 'bg-amber-400' : 'bg-zinc-800'}`}><span>{index + 1}</span></div>)}</div>
         {error && <ErrorBox>{error}</ErrorBox>}
-        <main className="rounded-3xl border border-zinc-800 bg-zinc-900/70 p-4 sm:p-7 min-h-[420px]">
+        <main className="creator-sheet rounded-3xl border border-zinc-800 bg-zinc-900/70 p-4 sm:p-7 min-h-[420px]">
           {step === 'identity' && <IdentityStep name={name} setName={setName}/>} 
           {step === 'lineage' && <OptionGrid items={LINEAGES} selectedId={lineageId} onSelect={setLineageId}/>} 
           {step === 'class' && <OptionGrid items={CLASSES} selectedId={classId} onSelect={id => { setClassId(id); setSkills([]); }}/>} 
@@ -163,27 +164,27 @@ export default function CharacterStudio({ onSelect, onInventory, onBack, title =
           {step === 'story' && <StoryStep answers={answers} setAnswers={setAnswers} variants={variants} selected={backstory} setSelected={setBackstory} generating={generatingStory} onGenerate={() => void generateStories()}/>} 
           {step === 'review' && <ReviewStep name={name} lineageId={lineageId} classId={classId} originId={originId} scores={finalScores} skills={[...origin.skills, ...skills]} backstory={backstory}/>} 
         </main>
-        <div className="grid grid-cols-2 gap-3 sm:flex sm:justify-between">
-          <button onClick={() => stepIndex === 0 ? setView('library') : setStep(STEPS[stepIndex - 1])} className="min-h-11 px-3 sm:px-4 py-3 rounded-xl border border-zinc-800 text-zinc-400 hover:bg-zinc-900 flex items-center justify-center gap-2"><ArrowLeft className="w-4 h-4"/>Назад</button>
-          {step !== 'review' ? <button onClick={nextStep} className="min-h-11 px-3 sm:px-5 py-3 rounded-xl bg-amber-500 text-zinc-950 text-sm sm:text-base font-bold flex items-center justify-center gap-2 hover:bg-amber-400">Продолжить<ArrowRight className="w-4 h-4"/></button> : <button disabled={saving} onClick={() => void saveCharacter()} className="min-h-11 px-3 sm:px-5 py-3 rounded-xl bg-emerald-500 text-zinc-950 text-sm sm:text-base font-bold flex items-center justify-center gap-2 disabled:opacity-50">{saving ? <Loader2 className="w-4 h-4 animate-spin"/> : <Check className="w-4 h-4"/>}Создать и выбрать</button>}
+        <div className="creator-navigation grid grid-cols-2 gap-3 sm:flex sm:justify-between">
+          <button onClick={() => stepIndex === 0 ? setView('library') : setStep(STEPS[stepIndex - 1])} className="creator-back min-h-11 px-3 sm:px-4 py-3 rounded-xl border border-zinc-800 text-zinc-400 hover:bg-zinc-900 flex items-center justify-center gap-2"><ArrowLeft className="w-4 h-4"/>Назад</button>
+          {step !== 'review' ? <button onClick={nextStep} className="creator-next min-h-11 px-3 sm:px-5 py-3 rounded-xl bg-amber-500 text-zinc-950 text-sm sm:text-base font-bold flex items-center justify-center gap-2 hover:bg-amber-400">Продолжить<ArrowRight className="w-4 h-4"/></button> : <button disabled={saving} onClick={() => void saveCharacter()} className="creator-next creator-finish min-h-11 px-3 sm:px-5 py-3 rounded-xl bg-emerald-500 text-zinc-950 text-sm sm:text-base font-bold flex items-center justify-center gap-2 disabled:opacity-50">{saving ? <Loader2 className="w-4 h-4 animate-spin"/> : <Check className="w-4 h-4"/>}Создать и выбрать</button>}
         </div>
       </div>
     </Screen>
   );
 }
 
-function Screen({ children }: { children: ReactNode }) { return <div className="min-h-screen bg-[#09090b] text-zinc-100 p-4 sm:p-8 flex justify-center items-start">{children}</div>; }
-function Header({ onBack, eyebrow, title, subtitle }: { onBack: () => void; eyebrow: string; title: string; subtitle: string }) { return <div className="flex items-start gap-3 sm:gap-4"><button onClick={onBack} className="shrink-0 p-3 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-800"><ArrowLeft className="w-5 h-5"/></button><div className="min-w-0"><p className="text-[10px] sm:text-xs uppercase tracking-[0.16em] sm:tracking-[0.22em] text-amber-500">{eyebrow}</p><h1 className="text-2xl sm:text-3xl font-black text-white break-words">{title}</h1><p className="text-sm text-zinc-500 mt-1">{subtitle}</p></div></div>; }
+function Screen({ children }: { children: ReactNode }) { return <div className="creator-shell home-shell min-h-screen text-zinc-100"><HomeAtmosphere/><div className="home-content min-h-screen p-4 sm:p-8 flex justify-center items-start">{children}</div></div>; }
+function Header({ onBack, eyebrow, title, subtitle }: { onBack: () => void; eyebrow: string; title: string; subtitle: string }) { return <div className="creator-header flex items-start gap-3 sm:gap-4"><button onClick={onBack} className="shrink-0 p-3 rounded-xl border border-zinc-800 bg-zinc-900 hover:bg-zinc-800"><ArrowLeft className="w-5 h-5"/></button><div className="min-w-0"><p className="text-[10px] sm:text-xs uppercase tracking-[0.16em] sm:tracking-[0.22em] text-amber-500">{eyebrow}</p><h1 className="text-2xl sm:text-3xl font-black text-white break-words">{title}</h1><p className="text-sm text-zinc-500 mt-1">{subtitle}</p></div></div>; }
 function ErrorBox({ children }: { children: ReactNode }) { return <div className="p-3 rounded-xl border border-red-500/30 bg-red-500/10 text-sm text-red-300">{children}</div>; }
 
 function CharacterCard({ character, onSelect, onInventory, onDelete }: { character: Character; onSelect: () => void; onInventory?: () => void; onDelete: () => void }) {
-  return <div className="rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 flex flex-col min-h-52"><div className="flex justify-between"><div className="w-11 h-11 rounded-xl bg-zinc-800 flex items-center justify-center text-xl">{getClassDefinition(character.rules_data?.classId || '').icon}</div><button onClick={onDelete} className="p-2 text-zinc-600 hover:text-red-400"><Trash2 className="w-4 h-4"/></button></div><h2 className="text-lg font-bold mt-4">{character.name}</h2><p className="text-sm text-zinc-400">{character.race} · {character.class}</p><p className="text-xs text-zinc-600 mt-1">Уровень {character.level} · {character.hp_current}/{character.hp_max} HP · {character.gold || 0} зол.</p><div className="mt-auto pt-4 flex justify-between gap-3">{onInventory && <button onClick={onInventory} className="text-sm font-bold text-zinc-400 hover:text-zinc-200 flex items-center gap-1"><Backpack className="w-4 h-4"/>Рюкзак</button>}<button onClick={onSelect} className="text-left text-sm font-bold text-amber-400 hover:text-amber-300">Выбрать →</button></div></div>;
+  return <div className="creator-character-card rounded-2xl border border-zinc-800 bg-zinc-900/70 p-4 flex flex-col min-h-52"><div className="flex justify-between"><div className="creator-character-icon w-11 h-11 rounded-xl bg-zinc-800 flex items-center justify-center text-xl">{getClassDefinition(character.rules_data?.classId || '').icon}</div><button onClick={onDelete} className="p-2 text-zinc-600 hover:text-red-400"><Trash2 className="w-4 h-4"/></button></div><h2 className="text-lg font-bold mt-4">{character.name}</h2><p className="text-sm text-zinc-400">{character.race} · {character.class}</p><p className="text-xs text-zinc-600 mt-1">Уровень {character.level} · {character.hp_current}/{character.hp_max} HP · {character.gold || 0} зол.</p><div className="mt-auto pt-4 flex justify-between gap-3">{onInventory && <button onClick={onInventory} className="text-sm font-bold text-zinc-400 hover:text-zinc-200 flex items-center gap-1"><Backpack className="w-4 h-4"/>Рюкзак</button>}<button onClick={onSelect} className="text-left text-sm font-bold text-amber-400 hover:text-amber-300">Выбрать →</button></div></div>;
 }
 
 function IdentityStep({ name, setName }: { name: string; setName: (value: string) => void }) { return <div className="max-w-xl mx-auto py-12 space-y-5 text-center"><div className="text-5xl">✦</div><div><h2 className="text-2xl font-bold">Как зовут вашего героя?</h2><p className="text-zinc-500 text-sm mt-2">Имя станет частью личных сюжетных линий.</p></div><input autoFocus value={name} onChange={event => setName(event.target.value)} maxLength={50} placeholder="Введите имя" className="w-full bg-zinc-950 border border-zinc-700 rounded-2xl px-5 py-4 text-center text-xl font-bold outline-none focus:border-amber-500"/></div>; }
 
 function OptionGrid({ items, selectedId, onSelect }: { items: Array<{ id: string; name: string; icon: string; summary: string; traits?: Array<{ name: string; description: string }> }>; selectedId: string; onSelect: (id: string) => void }) {
-  return <div className="grid sm:grid-cols-2 gap-3">{items.map(item => <button key={item.id} onClick={() => onSelect(item.id)} className={`text-left rounded-2xl border p-4 transition ${selectedId === item.id ? 'border-amber-400 bg-amber-500/10' : 'border-zinc-800 bg-zinc-950/50 hover:border-zinc-700'}`}><div className="flex gap-3"><span className="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center text-xl shrink-0">{item.icon}</span><div><h3 className="font-bold text-white">{item.name}</h3><p className="text-xs text-zinc-500 mt-1 leading-relaxed">{item.summary}</p>{item.traits?.[0] && <p className="text-xs text-amber-300/80 mt-2"><b>{item.traits[0].name}:</b> {item.traits[0].description}</p>}</div></div></button>)}</div>;
+  return <div className="creator-option-grid grid sm:grid-cols-2 gap-3">{items.map(item => <button key={item.id} onClick={() => onSelect(item.id)} className={`creator-option text-left rounded-2xl border p-4 transition ${selectedId === item.id ? 'creator-option-selected border-amber-400 bg-amber-500/10' : 'border-zinc-800 bg-zinc-950/50 hover:border-zinc-700'}`}><div className="flex gap-3"><span className="creator-option-icon w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center text-xl shrink-0">{item.icon}</span><div><h3 className="font-bold text-white">{item.name}</h3><p className="text-xs text-zinc-500 mt-1 leading-relaxed">{item.summary}</p>{item.traits?.[0] && <p className="text-xs text-amber-300/80 mt-2"><b>{item.traits[0].name}:</b> {item.traits[0].description}</p>}</div></div></button>)}</div>;
 }
 
 function AttributesStep({ scores, finalScores, bonuses, spent, onChange }: { scores: AttributeScores; finalScores: AttributeScores; bonuses: Partial<Record<AttributeKey, number>>; spent: number; onChange: (key: AttributeKey, delta: number) => void }) {

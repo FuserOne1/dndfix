@@ -707,3 +707,132 @@ html, body, #root {
   .home-shell *, .home-shell *::before, .home-shell *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   .home-grain { display: none; }
 }
+
+/* Pre-adventure flow: character folio, cartographer's desk and party hall. */
+.creator-shell .home-aurora { background: radial-gradient(circle at 16% 8%, rgba(110,58,34,.25), transparent 27%), radial-gradient(circle at 85% 56%, rgba(48,76,66,.14), transparent 32%), linear-gradient(145deg, #100d0b, #08090a 52%, #090b0a); }
+.creator-shell .home-grid { opacity: .07; mask-image: linear-gradient(#000, transparent 82%); }
+.creator-library, .creator-workspace { padding-top: clamp(1rem, 4vw, 2.8rem); padding-bottom: 4rem; }
+.creator-header { position: relative; align-items: center; padding-bottom: 1.5rem; border-bottom: 1px solid rgba(215,169,89,.13); }
+.creator-header > button, .campaign-setup-header > button, .waiting-header > button { border-color: rgba(215,169,89,.17); border-radius: .35rem; color: #9d8662; background: rgba(22,20,17,.72); }
+.creator-header h1, .campaign-setup-header h1, .waiting-header h1 { margin-top: .2rem; color: #f1ebdf; font-family: 'Yeseva One', Georgia, serif; font-weight: 400; letter-spacing: -.02em; }
+.creator-header p:first-child, .campaign-setup-header p:first-child, .waiting-header p:first-child { color: #ad8141; font-weight: 700; }
+.creator-card-grid { gap: 1rem; }
+.creator-new-card, .creator-character-card { position: relative; min-height: 245px; border-radius: .55rem; overflow: hidden; }
+.creator-new-card { border-color: rgba(215,169,89,.3); background: linear-gradient(145deg, rgba(215,169,89,.09), rgba(15,14,12,.55)); }
+.creator-new-card::before { content: '✦'; position: absolute; top: 1rem; right: 1rem; color: rgba(215,169,89,.3); font-size: .75rem; }
+.creator-new-card::after { content: ''; position: absolute; inset: 8px; border: 1px solid rgba(215,169,89,.07); border-radius: .35rem; pointer-events: none; }
+.creator-new-card > span:first-child { border: 1px solid rgba(215,169,89,.2); color: #d8ac62; background: rgba(215,169,89,.08); transition: transform .3s ease; }
+.creator-new-card:hover > span:first-child { transform: rotate(90deg) scale(1.07); }
+.creator-new-card strong, .creator-character-card h2 { color: #e9e2d5; font-family: 'Yeseva One', Georgia, serif; font-size: 1.18rem; font-weight: 400; }
+.creator-character-card { border-color: rgba(215,169,89,.12); background: linear-gradient(145deg, rgba(31,28,23,.82), rgba(11,11,10,.84)); box-shadow: 0 18px 50px rgba(0,0,0,.16); transition: transform .3s ease, border-color .3s ease, box-shadow .3s ease; }
+.creator-character-card::before { content: ''; position: absolute; inset: 0; opacity: .1; background: radial-gradient(circle at 15% 5%, var(--home-gold), transparent 32%); pointer-events: none; }
+.creator-character-card:hover { transform: translateY(-5px); border-color: rgba(215,169,89,.34); box-shadow: 0 24px 65px rgba(0,0,0,.28); }
+.creator-character-card > * { position: relative; z-index: 1; }
+.creator-character-icon { border: 1px solid rgba(215,169,89,.18); color: #e0b76e; background: rgba(215,169,89,.07); transform: rotate(3deg); }
+
+.creator-progress { position: relative; gap: .4rem; padding: .7rem 0 1.1rem; }
+.creator-progress > div { position: relative; height: 2px; background: #292621; }
+.creator-progress > div.bg-amber-400 { background: linear-gradient(90deg, #8d622d, #e0b86f); box-shadow: 0 0 8px rgba(215,169,89,.2); }
+.creator-progress span { position: absolute; top: .55rem; left: 50%; color: #4f4b44; font-size: .58rem; transform: translateX(-50%); }
+.creator-progress .bg-amber-400 span { color: #a6824b; }
+.creator-sheet { position: relative; border-color: rgba(215,169,89,.14); border-radius: .7rem; background: linear-gradient(145deg, rgba(27,25,21,.88), rgba(10,10,9,.9)); box-shadow: 0 30px 90px rgba(0,0,0,.28), inset 0 1px rgba(255,255,255,.025); overflow: hidden; }
+.creator-sheet::before { content: ''; position: absolute; inset: 8px; border: 1px solid rgba(215,169,89,.055); border-radius: .4rem; pointer-events: none; }
+.creator-sheet::after { content: 'CHRONICLES • HERO FOLIO'; position: absolute; right: 1.4rem; bottom: .65rem; color: rgba(215,169,89,.12); font-size: .5rem; font-weight: 700; letter-spacing: .18em; pointer-events: none; }
+.creator-sheet > * { position: relative; z-index: 1; }
+.creator-sheet h2 { color: #eee7da; font-family: 'Yeseva One', Georgia, serif; font-weight: 400; }
+.creator-sheet input, .creator-sheet textarea, .creator-sheet select { border-color: rgba(215,169,89,.14); border-radius: .4rem; color: #eee5d6; background: rgba(5,5,5,.56); }
+.creator-sheet input:focus, .creator-sheet textarea:focus, .creator-sheet select:focus { border-color: rgba(215,169,89,.55); box-shadow: 0 0 0 3px rgba(215,169,89,.05); }
+.creator-option-grid { gap: .75rem; }
+.creator-option { position: relative; border-radius: .5rem; border-color: rgba(215,169,89,.1); background: rgba(6,6,6,.36); overflow: hidden; transition: border-color .25s ease, transform .25s ease, background .25s ease; }
+.creator-option:hover { transform: translateY(-2px); border-color: rgba(215,169,89,.3); }
+.creator-option-selected { border-color: rgba(222,177,99,.65) !important; background: linear-gradient(130deg, rgba(215,169,89,.13), rgba(215,169,89,.025)) !important; box-shadow: inset 3px 0 #d2a354; }
+.creator-option-selected::after { content: '✓'; position: absolute; top: .7rem; right: .8rem; display: grid; width: 1.25rem; height: 1.25rem; place-items: center; border-radius: 50%; color: #17120b; background: #d8ab60; font-size: .65rem; font-weight: 900; }
+.creator-option-icon { border: 1px solid rgba(215,169,89,.12); border-radius: 50%; background: rgba(215,169,89,.055); }
+.creator-navigation { padding-top: .3rem; }
+.creator-back, .creator-next { border-radius: .35rem; }
+.creator-back { border-color: rgba(215,169,89,.14); background: rgba(16,15,13,.65); }
+.creator-next { border: 1px solid #dfb363; background: linear-gradient(110deg, #bc8740, #e0b461 52%, #ba8239); box-shadow: 0 12px 35px rgba(151,88,27,.16); transition: transform .2s ease, filter .2s ease; }
+.creator-next:hover { transform: translateY(-2px); filter: brightness(1.06); }
+.creator-finish { border-color: #83a974; background: linear-gradient(110deg, #688b5c, #91b27c, #6f905e); }
+
+.campaign-setup-shell .home-aurora { background: radial-gradient(circle at 80% 8%, rgba(41,74,69,.24), transparent 29%), radial-gradient(circle at 8% 65%, rgba(131,76,30,.19), transparent 36%), linear-gradient(145deg, #0b100f, #08090a 55%, #100c08); }
+.campaign-setup-shell .home-grid { opacity: .1; transform: rotate(1deg) scale(1.05); }
+.campaign-setup-header { position: relative; align-items: center; padding: clamp(1rem, 3vw, 2.4rem) 0 1.5rem; border-bottom: 1px solid rgba(215,169,89,.13); }
+.campaign-setup-header > div { flex: 1; }
+.campaign-seal { display: grid; width: 3.5rem; height: 3.5rem; flex: 0 0 auto; place-items: center; border: 1px solid rgba(215,169,89,.24); color: #bc8c47; transform: rotate(45deg); box-shadow: 0 0 25px rgba(215,169,89,.06); }
+.campaign-setup-layout { align-items: start; }
+.campaign-form { position: relative; border-color: rgba(215,169,89,.14); border-radius: .7rem; background: linear-gradient(150deg, rgba(27,25,21,.9), rgba(9,10,9,.91)); box-shadow: 0 30px 90px rgba(0,0,0,.26); }
+.campaign-form::before { content: ''; position: absolute; inset: 8px; border: 1px solid rgba(215,169,89,.05); border-radius: .4rem; pointer-events: none; }
+.campaign-form > * { position: relative; z-index: 1; padding-bottom: 1.15rem; border-bottom: 1px solid rgba(215,169,89,.075); }
+.campaign-form > *:last-child { padding-bottom: 0; border-bottom: 0; }
+.campaign-form label { color: #d9d1c4; }
+.campaign-form input, .campaign-form textarea, .campaign-form select { border-color: rgba(215,169,89,.14); border-radius: .35rem; color: #e9e1d4; background: rgba(4,5,5,.6); }
+.campaign-form input:focus, .campaign-form textarea:focus, .campaign-form select:focus { border-color: rgba(215,169,89,.55); box-shadow: 0 0 0 3px rgba(215,169,89,.045); }
+.campaign-form button { border-radius: .35rem; transition: border-color .2s ease, background .2s ease, transform .2s ease; }
+.campaign-form button:hover { transform: translateY(-1px); }
+.campaign-form button.border-amber-400 { border-color: rgba(222,177,99,.65); color: #e8c47f; background: linear-gradient(135deg, rgba(215,169,89,.15), rgba(215,169,89,.035)); box-shadow: inset 0 -2px rgba(215,169,89,.18); }
+.campaign-summary { position: sticky; top: 1rem; }
+.campaign-summary-card { position: relative; border-color: rgba(215,169,89,.13); border-radius: .5rem; background: linear-gradient(145deg, rgba(27,25,21,.85), rgba(10,10,9,.88)); overflow: hidden; }
+.campaign-summary-card::after { content: ''; position: absolute; right: -.7rem; bottom: -.7rem; width: 3rem; height: 3rem; border: 1px solid rgba(215,169,89,.08); transform: rotate(45deg); }
+.campaign-summary-card > p:first-child { color: #80663e; font-size: .58rem; font-weight: 700; letter-spacing: .14em; }
+.campaign-hero-card { border-color: rgba(215,169,89,.26); background: linear-gradient(145deg, rgba(85,57,27,.18), rgba(13,12,10,.9)); }
+.campaign-hero-card strong { color: #e8dfd0; font-family: 'Yeseva One', Georgia, serif; font-size: 1.1rem; font-weight: 400; }
+.campaign-start { border: 1px solid #dfb363; border-radius: .4rem; background: linear-gradient(110deg, #bc8740, #e0b461 52%, #ba8239); box-shadow: 0 16px 45px rgba(151,88,27,.2); transition: transform .2s ease, filter .2s ease; }
+.campaign-start:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.06); }
+
+.waiting-shell .home-aurora { background: radial-gradient(circle at 50% 8%, rgba(139,83,31,.27), transparent 29%), radial-gradient(circle at 5% 75%, rgba(62,83,67,.15), transparent 35%), linear-gradient(160deg, #110d09, #08090a 48%, #0a0d0b); }
+.waiting-header { position: relative; align-items: center; padding: clamp(1rem, 4vw, 2.4rem) 0 1.4rem; border-bottom: 1px solid rgba(215,169,89,.13); }
+.waiting-header > div { flex: 1; }
+.waiting-torch { color: #d8a857; font-size: 1.1rem; text-shadow: 0 0 15px #dc8f2d; animation: home-star-pulse 2.2s ease-in-out infinite; }
+.waiting-code { position: relative; border-color: rgba(215,169,89,.3); border-radius: .55rem; background: linear-gradient(135deg, rgba(114,75,31,.18), rgba(17,15,12,.78)); box-shadow: 0 20px 60px rgba(0,0,0,.22); overflow: hidden; transition: border-color .2s ease, transform .2s ease; }
+.waiting-code::before, .waiting-code::after { content: '◆'; position: absolute; top: 50%; color: rgba(215,169,89,.22); font-size: .7rem; transform: translateY(-50%); }
+.waiting-code::before { left: 1.4rem; }
+.waiting-code::after { right: 1.4rem; }
+.waiting-code:hover { transform: translateY(-2px); border-color: rgba(215,169,89,.55); }
+.waiting-code strong { display: inline-block; color: #e5bd73; font-family: 'Yeseva One', Georgia, serif; font-weight: 400; text-shadow: 0 0 25px rgba(215,169,89,.2); }
+.waiting-code small { display: block; margin-top: .25rem; color: #625e57; font-size: .64rem; }
+.waiting-party { border-color: rgba(215,169,89,.13); border-radius: .65rem; background: linear-gradient(150deg, rgba(27,25,21,.88), rgba(9,10,9,.91)); box-shadow: 0 26px 80px rgba(0,0,0,.25); }
+.waiting-party h2 { color: #ded6c9; font-family: 'Yeseva One', Georgia, serif; font-weight: 400; }
+.waiting-participant { position: relative; gap: .8rem; border-color: rgba(215,169,89,.1); border-radius: .4rem; background: rgba(4,5,5,.46); overflow: hidden; }
+.waiting-avatar { display: grid; width: 2.4rem; height: 2.4rem; flex: 0 0 auto; place-items: center; border: 1px solid rgba(215,169,89,.18); border-radius: 50%; color: #c69851; background: rgba(215,169,89,.06); font-weight: 700; }
+.waiting-status { display: flex; align-items: center; gap: .35rem; }
+.waiting-status i { width: 5px; height: 5px; border-radius: 50%; background: #4e4b46; }
+.waiting-status.is-ready i { background: #82a879; box-shadow: 0 0 8px #82a879; }
+.waiting-number { position: absolute; right: .4rem; bottom: -.25rem; color: rgba(215,169,89,.06); font-family: 'Yeseva One', Georgia, serif; font-size: 2rem; }
+.waiting-action { padding-bottom: 3rem; }
+.waiting-primary { border: 1px solid #dfb363; border-radius: .4rem; background: linear-gradient(110deg, #bc8740, #e0b461 52%, #ba8239); box-shadow: 0 15px 45px rgba(151,88,27,.18); transition: transform .2s ease, filter .2s ease; }
+.waiting-primary:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(1.06); }
+.waiting-primary.is-cancel { border-color: rgba(215,169,89,.15); color: #aaa49b; background: rgba(30,29,27,.86); box-shadow: none; }
+.waiting-action p { margin-top: .8rem; }
+
+@media (max-width: 1023px) {
+  .campaign-summary { position: static; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .campaign-summary > .campaign-start, .campaign-summary > p, .campaign-summary > div:nth-last-child(2):not(.campaign-summary-card) { grid-column: 1 / -1; }
+}
+
+@media (max-width: 640px) {
+  .creator-library, .creator-workspace { padding-top: .4rem; }
+  .creator-header, .campaign-setup-header, .waiting-header { align-items: flex-start; }
+  .creator-header h1, .campaign-setup-header h1, .waiting-header h1 { font-size: 1.65rem; line-height: 1.15; }
+  .creator-header > button, .campaign-setup-header > button, .waiting-header > button { padding: .65rem; }
+  .creator-sheet { padding: 1rem; }
+  .creator-progress { margin-bottom: .4rem; }
+  .creator-navigation { position: sticky; z-index: 5; bottom: .6rem; padding: .55rem; border: 1px solid rgba(215,169,89,.12); border-radius: .5rem; background: rgba(9,9,9,.88); backdrop-filter: blur(15px); }
+  .campaign-seal { display: none; }
+  .campaign-form { padding: 1rem; }
+  .campaign-form > * { padding-bottom: .9rem; }
+  .campaign-summary { grid-template-columns: 1fr 1fr; }
+  .campaign-summary-card:nth-child(3) { grid-column: 1 / -1; }
+  .waiting-code strong { font-size: 1.65rem; letter-spacing: .22em; }
+  .waiting-code::before, .waiting-code::after { display: none; }
+  .waiting-participant { align-items: center; }
+  .waiting-status { font-size: 0; }
+  .waiting-status i { width: 8px; height: 8px; }
+}
+
+@media (max-width: 420px) {
+  .campaign-summary { grid-template-columns: 1fr; }
+  .campaign-summary-card:nth-child(3) { grid-column: auto; }
+  .creator-card-grid { grid-template-columns: 1fr; }
+  .creator-navigation { grid-template-columns: minmax(0, .7fr) minmax(0, 1.3fr); }
+}
