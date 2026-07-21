@@ -399,6 +399,22 @@ export interface CampaignState {
   systems?: CampaignSystemsState;
 }
 
+export type SavepointKind = 'branch' | 'manual' | 'ending';
+
+export interface CampaignSavepoint {
+  id: string;
+  storyId: string;
+  campaignId: string;
+  label: string;
+  kind: SavepointKind;
+  sceneId: string;
+  sceneNumber: number;
+  state: CampaignState;
+  currentScene: StoryScene;
+  characterSnapshots: import('../types').Character[];
+  createdAt: string;
+}
+
 export interface ChoiceResolution {
   choiceId: string;
   success: boolean;
@@ -426,6 +442,12 @@ export interface ChoiceResolution {
 
 export interface CampaignRuntime {
   id: string;
+  storyId?: string;
+  timelineNumber?: number;
+  parentCampaignId?: string;
+  endingId?: string;
+  endingTitle?: string;
+  finishedAt?: string;
   mode: GameMode;
   status: CampaignStatus;
   hostUserId: string;

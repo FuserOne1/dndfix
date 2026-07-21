@@ -131,6 +131,7 @@ ${JSON.stringify(variation)}
 - поля: title, tagline, premise, setting, tone, centralConflict, antagonist, keyNpcs, acts, truths, endings, characterHooks;
 - актов: короткая кампания — 3, средняя — 4, длинная — 5;
 - каждый акт: id, title, goal, turningPoint, sceneSeeds;
+- создай 4–6 действительно разных концовок; у каждой стабильный id, выразительное title и проверяемое condition через решения, флаги, отношения, судьбы NPC или состояние мира;
 - для каждого героя отдельный characterHook с точным именем;
 - characterHook обязан исходить из цели, страха, тайны или сюжетных крючков предыстории, а не быть случайной новой биографией;
 - premise и customWish должны непосредственно влиять на центральный конфликт, акты или финал;
@@ -240,11 +241,11 @@ ${JSON.stringify(characters.map(characterContext), null, 2)}
   "keyNpcs":[{"id":"npc-1","name":"...","role":"...","motive":"...","secret":"..."}],
   "acts":[{"id":"act-1","title":"...","goal":"...","turningPoint":"...","sceneSeeds":["..."]}],
   "truths":["неизменный факт мира"],
-  "endings":[{"id":"ending-1","title":"...","condition":"..."}],
+  "endings":[{"id":"ending-1","title":"...","condition":"проверяемое условие через решения, отношения, флаги или судьбу NPC"}],
   "characterHooks":[{"characterName":"точное имя героя","hook":"личный конфликт","relatedNpc":"опционально"}]
 }
 
-Количество актов: короткая 3, средняя 4, длинная 5. Для каждого героя обязательно создай личный крючок. Тайны должны иметь заранее определённые ответы.`;
+Количество актов: короткая 3, средняя 4, длинная 5. Создай 4–6 разных концовок со стабильными id и конкретными условиями. Для каждого героя обязательно создай личный крючок. Тайны должны иметь заранее определённые ответы.`;
   try {
     return ensureScenePlan(ensurePlayerPromises(validateBible(await requestJson<CampaignBible>(system, prompt, { model: AI_MODELS.MAIN, maxTokens: 3800, timeoutMs: 60_000 })), preferences, characters), preferences, characters);
   } catch (error) {
@@ -309,7 +310,7 @@ ${JSON.stringify(storyBible.playerPromises || [])}
 
 Верни следующую StoryScene. id должен быть "${nextId}". Не перескакивай через последствия: сцена должна развить выбранный момент как небольшую главу, ясно показать мотивацию действующих героев и закончиться новой осмысленной развилкой.`;
   try {
-    return validateScene(await requestJson<StoryScene>(sceneSystemPrompt(), `${prompt}\n\nRULES: checks use a fitting Russian skill from the allowed list and a base DC from 10 to 15. Campaign difficulty is ${input.preferences.difficulty}; the engine applies its modifier. Body paragraphs may use **bold**, *italic*, > quotes and --- scene dividers when artistically useful. Inspect every hero inventory: whenever an owned item can reasonably solve, simplify, or alter the scene, include an item-aware choice. Copy its exact inventory name into requirements.items. Put it in removeItems only when the action truly consumes or loses it. Never grant an item only in prose: every obtained item must also be listed in grantItems.\n\nSCENE CONTRACT (do not change its fields):\n${JSON.stringify(blueprint)}`, { model: AI_MODELS.MAIN, maxTokens: 2400, timeoutMs: 50_000 }), input.state.currentActId, nextId, blueprint);
+    return validateScene(await requestJson<StoryScene>(sceneSystemPrompt(), `${prompt}\n\nRULES: checks use a fitting Russian skill from the allowed list and a base DC from 10 to 15. Campaign difficulty is ${input.preferences.difficulty}; the engine applies its modifier. Body paragraphs may use **bold**, *italic*, > quotes and --- scene dividers when artistically useful. Inspect every hero inventory: whenever an owned item can reasonably solve, simplify, or alter the scene, include an item-aware choice. Copy its exact inventory name into requirements.items. Put it in removeItems only when the action truly consumes or loses it. Never grant an item only in prose: every obtained item must also be listed in grantItems. If SCENE CONTRACT has type "ending", choose the single ending from BIBLE whose condition best matches the actual state and prior decisions, copy its title EXACTLY into StoryScene.title, resolve the consequences in full prose and return choices: []. Do not invent an extra ending.\n\nSCENE CONTRACT (do not change its fields):\n${JSON.stringify(blueprint)}`, { model: AI_MODELS.MAIN, maxTokens: 2400, timeoutMs: 50_000 }), input.state.currentActId, nextId, blueprint);
   } catch (error) {
     console.warn('Next scene generation failed, using local continuation:', error);
     return createFallbackContinuation(input, nextId, blueprint);
@@ -334,6 +335,7 @@ function sceneSystemPrompt() {
 
 function validateBible(value: CampaignBible): CampaignBible {
   if (!value?.title || !value?.premise || !Array.isArray(value.acts) || value.acts.length < 2) throw new Error('Некорректная библия кампании');
+  if (!Array.isArray(value.endings) || value.endings.length < 3) throw new Error('Кампания должна содержать минимум три разные концовки');
   return value;
 }
 

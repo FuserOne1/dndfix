@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Backpack, BookOpen, Check, ChevronDown, Compass, Loader2, Lock, ScrollText, Shield, ShoppingBag, Users } from 'lucide-react';
+import { ArrowLeft, Backpack, BookOpen, BookmarkPlus, Check, ChevronDown, Compass, Loader2, Lock, ScrollText, Shield, ShoppingBag, Users } from 'lucide-react';
 import { BattleResult, BattleStartData, Character, CharacterStats } from '../types';
 import { supabase } from '../lib/supabase';
 import { generateNextScene } from '../game/campaign-generator';
@@ -12,6 +12,7 @@ import { enterScene, normalizeSceneType, recordCompletedScene } from '../game/sc
 import { applyWorldPatch, currentLocation, mergeWorldPatches, sanitizeWorldPatch, sceneEntryPatch, worldPatchForChoice } from '../game/world-state';
 import { commitWorldEvent } from '../game/world-state-store';
 import { getScenePresentation } from '../game/scene-presentation';
+import { identifyEnding, savepointLabel, storyIdOf } from '../game/timelines';
 import SceneIllustration from './SceneIllustration';
 import DiceCheckCard from './DiceCheckCard';
 import StoryText from './StoryText';
@@ -47,6 +48,8 @@ export default function StoryReader({ campaign, characters, activeCharacter, cur
   const [showJournal, setShowJournal] = useState(false);
   const [showInventory, setShowInventory] = useState(false);
   const [inventoryInitialTab, setInventoryInitialTab] = useState<'inventory' | 'trade'>('inventory');
+  const [savingCheckpoint, setSavingCheckpoint] = useState(false);
+  const [checkpointNotice, setCheckpointNotice] = useState('');
   const [pendingBattle, setPendingBattle] = useState<{ choice: StoryChoice; resolution: ChoiceResolution; data: BattleStartData } | null>(null);
   const migratedLegacyInventoryRef = useRef('');
   const isHost = campaign.hostUserId === currentUserId;
@@ -165,6 +168,7 @@ export default function StoryReader({ campaign, characters, activeCharacter, cur
     if (!choice || resolving) return;
     setResolving(true); setError(''); setRewardNotice(null);
     try {
+      await persistSavepoint('branch');
       const actor = chooseActor(choice, characters, activeCharacter, campaign.preferences.difficulty, campaign.state.checkFailureStreak);
       const resolution = resolveChoice(choice, actor, { difficulty: campaign.preferences.difficulty, failureStreak: campaign.state.checkFailureStreak });
       setLastResolution(resolution);
@@ -248,16 +252,44 @@ export default function StoryReader({ campaign, characters, activeCharacter, cur
     if (campaign.mode === 'party' && !isHost) return;
     setResolving(true); setError('');
     try {
-      await onUpdate({ ...campaign, status: 'finished' });
+      const ending = identifyEnding(campaign.bible, scene);
+      await persistSavepoint('ending', `Финал · ${ending.title}`);
+      await onUpdate({ ...campaign, status: 'finished', endingId: ending.id, endingTitle: ending.title, finishedAt: new Date().toISOString() });
       onLeave();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Не удалось завершить кампанию');
     } finally { setResolving(false); }
   }
 
+  async function persistSavepoint(kind: 'branch' | 'manual' | 'ending', label = savepointLabel(campaign)) {
+    if (campaign.mode === 'party' && !isHost) return;
+    if (kind !== 'manual') {
+      const { data: existing, error: lookupError } = await supabase.from('campaign_savepoints').select('id').eq('campaign_id', campaign.id).eq('scene_id', scene.id).eq('kind', kind).maybeSingle();
+      if (lookupError) throw new Error(savepointError(lookupError.message));
+      if (existing) return;
+    }
+    const { error: saveError } = await supabase.from('campaign_savepoints').insert({
+      story_id: storyIdOf(campaign), campaign_id: campaign.id, created_by: currentUserId, label, kind,
+      scene_id: scene.id, scene_number: campaign.state.sceneNumber, state: campaign.state,
+      current_scene: scene, character_snapshots: characters,
+    });
+    if (saveError) throw new Error(savepointError(saveError.message));
+  }
+
+  async function createManualSavepoint() {
+    setSavingCheckpoint(true); setCheckpointNotice(''); setError('');
+    try {
+      await persistSavepoint('manual', `Сохранение · сцена ${campaign.state.sceneNumber}`);
+      setCheckpointNotice('Сохранение добавлено в «Мои хроники»');
+      window.setTimeout(() => setCheckpointNotice(''), 2500);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Не удалось сохранить хронику');
+    } finally { setSavingCheckpoint(false); }
+  }
+
   return <div className={`scene-shell scene-theme-${presentation.palette} min-h-screen text-zinc-100`} data-scene={scene.id}>
     <SceneAtmosphere presentation={presentation}/>
-    <header className="sticky top-0 z-20 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur px-3 sm:px-4 py-3"><div className="max-w-6xl mx-auto flex justify-between items-center gap-2"><div className="flex items-center gap-2 sm:gap-3 min-w-0"><button onClick={onLeave} className="shrink-0 p-2.5 rounded-xl border border-zinc-800"><ArrowLeft className="w-4 h-4"/></button><div className="min-w-0"><p className="text-[10px] sm:text-xs text-amber-500 truncate">{campaign.bible.acts.find(act => act.id === scene.actId)?.title || 'Кампания'}</p><h1 className="font-bold text-sm sm:text-base truncate">{campaign.bible.title}</h1></div></div><div className="shrink-0 flex items-center gap-2"><span className="hidden sm:inline text-xs text-zinc-500">Сцена {campaign.state.sceneNumber}</span><button onClick={() => setShowJournal(true)} className="p-2.5 rounded-xl border border-zinc-800" aria-label="Открыть журнал приключения"><Compass className="w-4 h-4"/></button><button onClick={() => openInventory()} className="p-2.5 rounded-xl border border-zinc-800" aria-label="Открыть инвентарь"><Backpack className="w-4 h-4"/></button><button onClick={() => setShowArchive(true)} className="p-2.5 rounded-xl border border-zinc-800" aria-label="Открыть хронику"><ScrollText className="w-4 h-4"/></button></div></div></header>
+    <header className="sticky top-0 z-20 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur px-3 sm:px-4 py-3"><div className="max-w-6xl mx-auto flex justify-between items-center gap-2"><div className="flex items-center gap-2 sm:gap-3 min-w-0"><button onClick={onLeave} className="shrink-0 p-2.5 rounded-xl border border-zinc-800"><ArrowLeft className="w-4 h-4"/></button><div className="min-w-0"><p className="text-[10px] sm:text-xs text-amber-500 truncate">{campaign.bible.acts.find(act => act.id === scene.actId)?.title || 'Кампания'}</p><h1 className="font-bold text-sm sm:text-base truncate">{campaign.bible.title}</h1></div></div><div className="shrink-0 flex items-center gap-2"><span className="hidden sm:inline text-xs text-zinc-500">Сцена {campaign.state.sceneNumber}</span>{(campaign.mode === 'solo' || isHost) && <button disabled={savingCheckpoint} onClick={() => void createManualSavepoint()} className="p-2.5 rounded-xl border border-zinc-800 disabled:opacity-40" aria-label="Создать сохранение"><BookmarkPlus className={`w-4 h-4 ${savingCheckpoint ? 'animate-pulse' : ''}`}/></button>}<button onClick={() => setShowJournal(true)} className="p-2.5 rounded-xl border border-zinc-800" aria-label="Открыть журнал приключения"><Compass className="w-4 h-4"/></button><button onClick={() => openInventory()} className="p-2.5 rounded-xl border border-zinc-800" aria-label="Открыть инвентарь"><Backpack className="w-4 h-4"/></button><button onClick={() => setShowArchive(true)} className="p-2.5 rounded-xl border border-zinc-800" aria-label="Открыть хронику"><ScrollText className="w-4 h-4"/></button></div></div>{checkpointNotice && <div className="absolute right-3 top-full mt-2 rounded-lg border border-emerald-500/20 bg-zinc-950/95 px-3 py-2 text-xs text-emerald-300 shadow-xl">{checkpointNotice}</div>}</header>
     <div className="max-w-6xl mx-auto grid lg:grid-cols-[1fr_260px] gap-6 p-4 sm:p-8">
       <main className="max-w-3xl w-full mx-auto space-y-7">
         <div className="scene-hero-ribbon"><CharacterMedallion character={activeCharacter}/><div className="scene-hero-stats"><span>♥ {activeCharacter.hp_current}/{activeCharacter.hp_max}</span><span>ур. {activeCharacter.level}</span><span>{activeCharacter.xp} XP</span></div></div>
@@ -282,6 +314,12 @@ export default function StoryReader({ campaign, characters, activeCharacter, cur
 function chooseActor(choice: StoryChoice, characters: Character[], fallback: Character, difficulty: CampaignRuntime['preferences']['difficulty'] = 'normal', failureStreak = 0): Character {
   if (!choice.check || characters.length <= 1) return fallback;
   return [...characters].sort((left, right) => (previewChoiceCheck(choice, right, { difficulty, failureStreak })?.successChance || 0) - (previewChoiceCheck(choice, left, { difficulty, failureStreak })?.successChance || 0))[0] || fallback;
+}
+
+function savepointError(message: string): string {
+  return /campaign_savepoints|campaign_stories|schema cache|relation/i.test(message)
+    ? `Система временных линий ещё не установлена. Выполните migration_story_timelines_v2.sql. Техническая ошибка: ${message}`
+    : message;
 }
 
 function toCharacterStats(character: Character): CharacterStats {

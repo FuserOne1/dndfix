@@ -1,6 +1,7 @@
 import {
   ArrowRight,
   BookOpen,
+  BookMarked,
   BookOpenText,
   Crown,
   Map,
@@ -18,6 +19,7 @@ interface HomeScreenProps {
   onParty: () => void;
   onJoin: () => void;
   onLibrary: () => void;
+  onChronicles: () => void;
   onContinue: (campaign: CampaignRuntime) => void;
   error: string;
 }
@@ -58,7 +60,7 @@ const actions = [
   },
 ];
 
-export default function HomeScreen({ campaigns, onSolo, onParty, onJoin, onLibrary, onContinue, error }: HomeScreenProps) {
+export default function HomeScreen({ campaigns, onSolo, onParty, onJoin, onLibrary, onChronicles, onContinue, error }: HomeScreenProps) {
   const handlers = { solo: onSolo, party: onParty, join: onJoin, library: onLibrary };
 
   return (
@@ -71,7 +73,7 @@ export default function HomeScreen({ campaigns, onSolo, onParty, onJoin, onLibra
             <span className="home-brand-mark" aria-hidden="true"><Crown size={19} /></span>
             <span><strong>Chronicles</strong><small>Живая ролевая хроника</small></span>
           </div>
-          <div className="home-memory"><i /><span>Мир помнит решения</span><ShieldCheck size={15} /></div>
+          <div className="home-nav-tools"><button onClick={onChronicles} className="home-chronicles-link"><BookMarked size={15} /><span>Мои хроники</span></button><div className="home-memory"><i /><span>Мир помнит решения</span><ShieldCheck size={15} /></div></div>
         </nav>
 
         <section className="home-hero">
