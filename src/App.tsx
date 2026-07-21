@@ -9,6 +9,8 @@ import { Character } from './types';
 import { generateCampaignPackage } from './game/campaign-generator';
 import { CampaignPreferences, CampaignRuntime, GameMode } from './game/types';
 import { createDirectorState } from './game/scene-director';
+import { createInitialSystems, normalizeSystems } from './game/world-state';
+import { bootstrapPatch, commitWorldEvent } from './game/world-state-store';
 
 const InventoryPanel = lazy(() => import('./components/InventoryPanel'));
 
@@ -96,10 +98,7 @@ export default function App() {
     if (lookupError || !data) { setError(migrationMessage(lookupError?.message || 'Кампания не найдена')); setLoading(false); return; }
     const { data: existing } = await supabase.from('campaign_participants').select('character_snapshot').eq('campaign_id', code).eq('user_session_id', userSessionId).maybeSingle();
     if (existing?.character_snapshot && data.status === 'playing') {
-      const { data: partyRows } = await supabase.from('campaign_participants').select('character_snapshot').eq('campaign_id', code);
-      setSelectedCharacter(existing.character_snapshot as Character);
-      setCampaignCharacters((partyRows || []).map((row: { character_snapshot: Character }) => row.character_snapshot));
-      setCampaign(rowToRuntime(data)); setScreen('story'); setLoading(false); return;
+      await openStartedCampaign(code); setLoading(false); return;
     }
     setJoinTargetId(code); setMode('party'); setFlow('join'); setScreen('characters'); setLoading(false);
   }
@@ -125,20 +124,21 @@ export default function App() {
         await supabase.from('campaigns').update({ status: 'generating', preferences }).eq('id', id);
       }
       const { bible, opening } = await generateCampaignPackage(preferences, characters);
-      const runtime: CampaignRuntime = {
+      let runtime: CampaignRuntime = {
         id, mode, status: 'playing', hostUserId: userSessionId, preferences, bible, currentScene: opening,
-        state: { flags: [], inventory: [], relationships: {}, completedSceneIds: [], currentActId: opening.actId, currentSceneId: opening.id, sceneNumber: 1, director: createDirectorState(opening, characters) },
+        state: { version: 0, flags: [], inventory: [], relationships: {}, completedSceneIds: [], currentActId: opening.actId, currentSceneId: opening.id, sceneNumber: 1, director: createDirectorState(opening, characters), systems: createInitialSystems(bible, opening, characters) },
       };
       setCampaignCharacters(characters);
       const payload = runtimeToRow(runtime);
       const operation = mode === 'party' ? supabase.from('campaigns').update(payload).eq('id', id) : supabase.from('campaigns').insert(payload);
       const { error: saveError } = await operation;
       if (saveError) {
-        if (mode === 'party') throw saveError;
-        setError(`Кампания запущена локально, но не сохранена: ${migrationMessage(saveError.message)}`);
+        throw new Error(`Кампания не запущена: системное состояние должно быть сохранено в БД. ${migrationMessage(saveError.message)}`);
       } else {
         if (mode === 'solo') await supabase.from('campaign_participants').insert({ campaign_id: id, user_session_id: userSessionId, character_id: selectedCharacter.id, character_snapshot: selectedCharacter, is_host: true, is_ready: true });
         await supabase.from('campaign_scenes').insert({ campaign_id: id, scene_id: opening.id, act_id: opening.actId, scene_number: 1, content: opening });
+        const version = await commitWorldEvent({ campaignId: id, expectedVersion: 0, eventType: 'campaign_started', sceneId: opening.id, actorId: selectedCharacter.id, summary: `Кампания «${bible.title}» началась в локации «${opening.location}».`, patch: bootstrapPatch(runtime.state.systems!), systems: runtime.state.systems!, campaignState: runtime.state, currentScene: opening });
+        runtime = { ...runtime, state: { ...runtime.state, version } };
       }
       setCampaign(runtime); setScreen('story'); void loadCampaigns();
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'Не удалось создать кампанию'); }
@@ -153,7 +153,17 @@ export default function App() {
     const ownCharacter = (participantRows || []).find((row: { user_session_id: string }) => row.user_session_id === userSessionId)?.character_snapshot as Character | undefined;
     if (ownCharacter) setSelectedCharacter(ownCharacter);
     setCampaignCharacters(snapshots);
-    setCampaign(rowToRuntime(data)); setScreen('story');
+    try {
+      let runtime = rowToRuntime(data);
+      if (!runtime.state.version) {
+        const systems = normalizeSystems(runtime.state.systems || createInitialSystems(runtime.bible, runtime.currentScene, snapshots));
+        const version = await commitWorldEvent({ campaignId: runtime.id, expectedVersion: 0, eventType: 'campaign_bootstrapped', sceneId: runtime.currentScene.id, actorId: ownCharacter?.id, summary: 'Системное состояние существующей кампании перенесено в журнал.', patch: bootstrapPatch(systems), systems, campaignState: { ...runtime.state, systems }, currentScene: runtime.currentScene });
+        runtime = { ...runtime, state: { ...runtime.state, version, systems } };
+      }
+      setCampaign(runtime); setScreen('story');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Не удалось загрузить системное состояние кампании');
+    }
   }, [userSessionId]);
 
   async function updateCampaign(runtime: CampaignRuntime) {
@@ -197,4 +207,7 @@ function ConfigurationScreen() { return <div className="min-h-screen bg-zinc-950
 function createCode() { return Math.random().toString(36).slice(2, 8).toUpperCase(); }
 function migrationMessage(message: string) { return /campaigns|campaign_participants|schema cache|relation/i.test(message) ? `Новая структура БД ещё не применена. Выполните migration_interactive_rpg_v1.sql. Техническая ошибка: ${message}` : message; }
 function runtimeToRow(runtime: CampaignRuntime) { return { id: runtime.id, mode: runtime.mode, status: runtime.status, host_user_id: runtime.hostUserId, title: runtime.bible.title, preferences: runtime.preferences, bible: runtime.bible, state: runtime.state, current_scene: runtime.currentScene, updated_at: new Date().toISOString() }; }
-function rowToRuntime(row: any): CampaignRuntime { return { id: row.id, mode: row.mode, status: row.status, hostUserId: row.host_user_id, preferences: row.preferences, bible: row.bible, state: row.state, currentScene: row.current_scene }; }
+function rowToRuntime(row: any): CampaignRuntime {
+  const systems = normalizeSystems(row.state?.systems || (row.bible && row.current_scene ? createInitialSystems(row.bible, row.current_scene, []) : undefined));
+  return { id: row.id, mode: row.mode, status: row.status, hostUserId: row.host_user_id, preferences: row.preferences, bible: row.bible, state: { ...row.state, version: row.state?.version ?? row.state_version ?? 0, systems }, currentScene: row.current_scene };
+}

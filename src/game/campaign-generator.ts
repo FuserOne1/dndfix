@@ -140,6 +140,7 @@ ${JSON.stringify(variation)}
 - сцена должна показать, чего хочет хотя бы один герой, почему он не может просто уйти и как проблема касается его лично;
 - поля StoryScene: id, actId, title, location, body, type, recap, choices;
 - каждый выбор: id, label, description, intent, необязательные check/requirements и consequences;
+- в consequences.world добавляй только логичные системные результаты выбора: изменение отношений с NPC, состояние героя, открытие локации, этап задания или улику; числовые изменения отношений от -10 до 10 и всегда с причиной;
 - хотя бы один вариант должен учитывать конкретного героя.
 
 Не включай scenePlan: технический план построит игровой движок.`;
@@ -198,6 +199,14 @@ function compactStateForScene(state: CampaignState) {
     recentSceneIds: state.completedSceneIds.slice(-6),
     recentTypes: state.director?.recentTypes,
     personalSceneCounts: state.director?.personalSceneCounts,
+    systems: state.systems ? {
+      relationships: state.systems.relationships,
+      conditions: state.systems.conditions,
+      locations: state.systems.locations,
+      routes: state.systems.routes,
+      quests: state.systems.quests,
+      clues: state.systems.clues,
+    } : undefined,
   };
 }
 
@@ -313,10 +322,10 @@ function sceneSystemPrompt() {
    "id":"choice-1","label":"короткое действие","description":"ожидаемый подход","intent":"что герой пытается сделать",
    "check":{"attribute":"strength|dexterity|constitution|intelligence|wisdom|charisma","difficulty":12},
    "requirements":{"classIds":[],"lineageIds":[],"items":[],"flags":[],"minAttribute":{}},
-   "consequences":{"successFlags":[],"failureFlags":[],"removeItems":[],"grantItems":[],"hpChange":0,"successGold":0,"failureGold":0,"startsBattle":false,"battle":{"enemies":[],"rewards":{"xp":0,"items":[]},"description":"только если начинается бой"}}
+   "consequences":{"successFlags":[],"failureFlags":[],"removeItems":[],"grantItems":[],"hpChange":0,"successGold":0,"failureGold":0,"startsBattle":false,"battle":{"enemies":[],"rewards":{"xp":0,"items":[]},"description":"только если начинается бой"},"world":{"relationships":[{"targetKey":"id существующего NPC или фракции","targetName":"имя","targetType":"npc|faction","trust":0,"respect":0,"fear":0,"affection":0,"reason":"конкретная причина"}],"conditions":[{"action":"add|remove","characterId":"id героя","key":"стабильный-id","name":"название","description":"эффект","severity":"minor|major|critical","durationScenes":2}],"locations":[{"key":"стабильный-id","name":"название","description":"что известно","status":"rumored|discovered|visited|blocked","danger":1,"services":{"trade":false,"rest":false,"stash":false}}],"routes":[{"fromKey":"id","toKey":"id","label":"маршрут","danger":1,"status":"open|blocked|unknown"}],"quests":[{"key":"id","title":"название","description":"цель","status":"active|completed|failed","stage":"текущий этап"}],"clues":[{"key":"id","title":"название","description":"факт","reliability":"uncertain|likely|confirmed"}]}}
  }]
 }
-Пиши как главу интерактивного романа: 5–8 абзацев по 2–4 предложения, с атмосферой, действиями, понятными желаниями героев и связью с предыдущим решением. Не пересказывай сцену сухой сводкой и не перескакивай сразу к следующей локации. Если передан SCENE CONTRACT, дословно соблюдай его type, audience, purpose, tension, services, actId и focusCharacter: ты отвечаешь только за прозу и варианты. В trade-сцене обязательно введи торговца в тексте и прямо сообщи, что у него можно купить и продать вещи. В loot-сцене дай хотя бы один способ получить золото или полезный предмет. Денежные награды обычной сцены держи в пределах 3–18 золотых. Последствия в JSON являются предложением движку, а не уже свершившимся фактом. Не добавляй свободный ввод.`;
+Пиши как главу интерактивного романа: 5–8 абзацев по 2–4 предложения, с атмосферой, действиями, понятными желаниями героев и связью с предыдущим решением. Не пересказывай сцену сухой сводкой и не перескакивай сразу к следующей локации. Если передан SCENE CONTRACT, дословно соблюдай его type, audience, purpose, tension, services, actId и focusCharacter: ты отвечаешь только за прозу и варианты. В trade-сцене обязательно введи торговца в тексте и прямо сообщи, что у него можно купить и продать вещи. В loot-сцене дай хотя бы один способ получить золото или полезный предмет. Денежные награды обычной сцены держи в пределах 3–18 золотых. Поле consequences.world описывает только проверяемые изменения систем игры: отношения, состояния, карту, задания и улики. Используй существующие стабильные key из СОСТОЯНИЯ; новый key создавай только для действительно новой сущности. Изменения отношений держи в диапазоне -10..10 за обычный выбор и всегда указывай конкретную reason. Не дублируй уже известные улики и локации. Последствия являются предложением движку, а не уже свершившимся фактом. Не добавляй свободный ввод.`;
 }
 
 function validateBible(value: CampaignBible): CampaignBible {

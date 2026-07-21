@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Backpack, BookOpen, Check, ChevronDown, Loader2, Lock, ScrollText, Shield, ShoppingBag, Users } from 'lucide-react';
+import { ArrowLeft, Backpack, BookOpen, Check, ChevronDown, Compass, Loader2, Lock, ScrollText, Shield, ShoppingBag, Users } from 'lucide-react';
 import { BattleResult, BattleStartData, Character, CharacterStats } from '../types';
 import { supabase } from '../lib/supabase';
 import { generateNextScene } from '../game/campaign-generator';
@@ -8,10 +8,13 @@ import { isChoiceAvailable, resolveChoice } from '../game/rules';
 import { addInventoryItem, addItemByName, consumeItemByName, createInventoryItem, equippedItemNames, inventoryItemNames, itemEffectsMap, normalizeInventory, passiveInventoryBonuses, quickItemNames } from '../game/inventory';
 import { findItemDefinition } from '../game/items';
 import { enterScene, normalizeSceneType, recordCompletedScene } from '../game/scene-director';
+import { applyWorldPatch, currentLocation, mergeWorldPatches, sanitizeWorldPatch, sceneEntryPatch, worldPatchForChoice } from '../game/world-state';
+import { commitWorldEvent } from '../game/world-state-store';
 import SceneIllustration from './SceneIllustration';
 const BattleModal = lazy(() => import('./BattleModal'));
 const InventoryPanel = lazy(() => import('./InventoryPanel'));
 const SceneArchive = lazy(() => import('./SceneArchive'));
+const AdventureJournal = lazy(() => import('./AdventureJournal'));
 
 interface StoryReaderProps {
   campaign: CampaignRuntime;
@@ -34,6 +37,7 @@ export default function StoryReader({ campaign, characters, activeCharacter, cur
   const [lastResolution, setLastResolution] = useState<ChoiceResolution | null>(null);
   const [error, setError] = useState('');
   const [showArchive, setShowArchive] = useState(false);
+  const [showJournal, setShowJournal] = useState(false);
   const [showInventory, setShowInventory] = useState(false);
   const [inventoryInitialTab, setInventoryInitialTab] = useState<'inventory' | 'trade'>('inventory');
   const [pendingBattle, setPendingBattle] = useState<{ choice: StoryChoice; resolution: ChoiceResolution; data: BattleStartData } | null>(null);
@@ -168,6 +172,7 @@ export default function StoryReader({ campaign, characters, activeCharacter, cur
         if (!nextInventory.includes(item)) nextInventory.push(item);
       }
       if (personalChanged) await onCharacterUpdate({ ...activeCharacter, hp_current: nextHp, gold: nextGold, inventory_data: personalInventory, equipment: equippedItemNames(personalInventory) });
+      const choicePatch = sanitizeWorldPatch(worldPatchForChoice(choice, resolution.success), { bible: campaign.bible, characters, systems: campaign.state.systems, scene });
       const nextState = {
         ...campaign.state,
         flags: [...new Set([...campaign.state.flags, ...successFlags])],
@@ -175,11 +180,17 @@ export default function StoryReader({ campaign, characters, activeCharacter, cur
         completedSceneIds: [...campaign.state.completedSceneIds, scene.id],
         sceneNumber: campaign.state.sceneNumber + 1,
         director: recordCompletedScene(campaign.state.director, scene, characters),
+        systems: applyWorldPatch(campaign.state.systems, choicePatch, scene.id, campaign.state.sceneNumber),
       };
       const { error: archiveError } = await supabase.from('campaign_scenes').upsert({ campaign_id: campaign.id, scene_id: scene.id, act_id: scene.actId, scene_number: campaign.state.sceneNumber, content: scene, resolution }, { onConflict: 'campaign_id,scene_id' });
       if (archiveError) console.warn('Scene resolution was not saved to the archive:', archiveError);
       const nextScene = await generateNextScene({ bible: campaign.bible, previousScene: scene, resolution, state: nextState, characters, preferences: campaign.preferences });
-      const updated: CampaignRuntime = { ...campaign, state: { ...nextState, currentSceneId: nextScene.id, currentActId: nextScene.actId, director: enterScene(nextState.director, nextScene) }, currentScene: nextScene };
+      const locationPatch = sceneEntryPatch(nextScene, currentLocation(campaign.state.systems, scene));
+      const systemPatch = mergeWorldPatches(choicePatch, locationPatch);
+      const systems = applyWorldPatch(nextState.systems, locationPatch, nextScene.id, nextState.sceneNumber);
+      const committedState = { ...nextState, systems, currentSceneId: nextScene.id, currentActId: nextScene.actId, director: enterScene(nextState.director, nextScene) };
+      const version = await commitWorldEvent({ campaignId: campaign.id, expectedVersion: campaign.state.version || 0, eventType: 'choice_resolved', sceneId: scene.id, choiceId: choice.id, actorId: actorIdForChoice(choice, characters, activeCharacter), summary: resolution.summary || choice.label, patch: systemPatch, systems, campaignState: committedState, currentScene: nextScene });
+      const updated: CampaignRuntime = { ...campaign, state: { ...committedState, version }, currentScene: nextScene };
       await onUpdate(updated);
       if (campaign.mode === 'party') await supabase.from('campaign_votes').delete().eq('campaign_id', campaign.id).eq('scene_id', scene.id);
   }
@@ -217,7 +228,7 @@ export default function StoryReader({ campaign, characters, activeCharacter, cur
   }
 
   return <div className="min-h-screen bg-[#09090b] text-zinc-100">
-    <header className="sticky top-0 z-20 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur px-3 sm:px-4 py-3"><div className="max-w-6xl mx-auto flex justify-between items-center gap-2"><div className="flex items-center gap-2 sm:gap-3 min-w-0"><button onClick={onLeave} className="shrink-0 p-2.5 rounded-xl border border-zinc-800"><ArrowLeft className="w-4 h-4"/></button><div className="min-w-0"><p className="text-[10px] sm:text-xs text-amber-500 truncate">{campaign.bible.acts.find(act => act.id === scene.actId)?.title || 'Кампания'}</p><h1 className="font-bold text-sm sm:text-base truncate">{campaign.bible.title}</h1></div></div><div className="shrink-0 flex items-center gap-2"><span className="hidden sm:inline text-xs text-zinc-500">Сцена {campaign.state.sceneNumber}</span><button onClick={() => openInventory()} className="p-2.5 rounded-xl border border-zinc-800" aria-label="Открыть инвентарь"><Backpack className="w-4 h-4"/></button><button onClick={() => setShowArchive(true)} className="p-2.5 rounded-xl border border-zinc-800" aria-label="Открыть хронику"><ScrollText className="w-4 h-4"/></button></div></div></header>
+    <header className="sticky top-0 z-20 border-b border-zinc-800 bg-zinc-950/90 backdrop-blur px-3 sm:px-4 py-3"><div className="max-w-6xl mx-auto flex justify-between items-center gap-2"><div className="flex items-center gap-2 sm:gap-3 min-w-0"><button onClick={onLeave} className="shrink-0 p-2.5 rounded-xl border border-zinc-800"><ArrowLeft className="w-4 h-4"/></button><div className="min-w-0"><p className="text-[10px] sm:text-xs text-amber-500 truncate">{campaign.bible.acts.find(act => act.id === scene.actId)?.title || 'Кампания'}</p><h1 className="font-bold text-sm sm:text-base truncate">{campaign.bible.title}</h1></div></div><div className="shrink-0 flex items-center gap-2"><span className="hidden sm:inline text-xs text-zinc-500">Сцена {campaign.state.sceneNumber}</span><button onClick={() => setShowJournal(true)} className="p-2.5 rounded-xl border border-zinc-800" aria-label="Открыть журнал приключения"><Compass className="w-4 h-4"/></button><button onClick={() => openInventory()} className="p-2.5 rounded-xl border border-zinc-800" aria-label="Открыть инвентарь"><Backpack className="w-4 h-4"/></button><button onClick={() => setShowArchive(true)} className="p-2.5 rounded-xl border border-zinc-800" aria-label="Открыть хронику"><ScrollText className="w-4 h-4"/></button></div></div></header>
     <div className="max-w-6xl mx-auto grid lg:grid-cols-[1fr_260px] gap-6 p-4 sm:p-8">
       <main className="max-w-3xl w-full mx-auto space-y-7">
         <section><div className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-zinc-600"><BookOpen className="w-3.5 h-3.5"/>{scene.location}</div><h2 className="text-3xl sm:text-4xl font-black mt-3 text-white">{scene.title}</h2><SceneIllustration campaignId={campaign.id} scene={scene} sceneNumber={campaign.state.sceneNumber} bible={campaign.bible} preferences={campaign.preferences} characters={characters} currentUserId={currentUserId} canGenerate={isHost} autoGenerate={isHost}/><div className="mt-6 space-y-5 text-[16px] sm:text-[17px] leading-8 text-zinc-300">{scene.body.map((paragraph, index) => <p key={index}>{paragraph}</p>)}</div></section>
@@ -228,10 +239,11 @@ export default function StoryReader({ campaign, characters, activeCharacter, cur
           <button disabled={resolving || !winningChoice() || (campaign.mode === 'party' && !isHost)} onClick={() => void confirmChoice()} className="w-full p-4 rounded-2xl bg-amber-500 text-zinc-950 font-black flex justify-center items-center gap-2 disabled:opacity-30">{resolving ? <Loader2 className="animate-spin"/> : <Check/>}{resolving ? 'Пишем следующую сцену…' : campaign.mode === 'party' ? isHost ? 'Подтвердить выбор группы' : 'Ожидаем ведущего' : 'Сделать выбор'}</button>
         </section>}
       </main>
-      <aside className="space-y-3"><div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4"><p className="text-xs uppercase text-zinc-600">Герой</p><strong className="block mt-2">{activeCharacter.name}</strong><span className="text-xs text-zinc-500">{activeCharacter.race} · {activeCharacter.class}</span><div className="flex flex-wrap gap-2 mt-3 text-xs"><span className="px-2 py-1 rounded bg-red-500/10 text-red-400">♥ {activeCharacter.hp_current}/{activeCharacter.hp_max}</span><span className="px-2 py-1 rounded bg-zinc-800">ур. {activeCharacter.level}</span><span className="px-2 py-1 rounded bg-amber-500/10 text-amber-300">{activeCharacter.gold || 0} зол.</span></div></div>{personalHook && <div className="rounded-2xl border border-violet-500/20 bg-violet-500/5 p-4"><p className="text-xs uppercase text-violet-400">Личная цель</p><p className="text-xs leading-relaxed text-zinc-300 mt-2">{personalHook}</p></div>}<div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4"><p className="text-xs uppercase text-zinc-600">Группа</p><div className="mt-3 space-y-2">{characters.map(character => <div key={character.id} className="flex items-center justify-between text-xs"><span>{character.name}</span><span className="text-zinc-600">{character.hp_current} HP</span></div>)}</div></div><button onClick={() => setShowArchive(true)} className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 text-left hover:border-amber-500/30"><p className="text-xs uppercase text-zinc-600">Хроника</p><strong className="block mt-2 text-sm">Прочитать предыдущие сцены</strong><span className="text-xs text-zinc-500 mt-1 block">Сохранено: {campaign.state.completedSceneIds.length}</span></button><div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4"><p className="text-xs uppercase text-zinc-600">Инвентарь истории</p><div className="mt-2 flex flex-wrap gap-1">{campaign.state.inventory.length ? campaign.state.inventory.map(item => <span key={item} className="text-[10px] px-2 py-1 rounded bg-zinc-800">{item}</span>) : <span className="text-xs text-zinc-600">Пусто</span>}</div></div></aside>
+      <aside className="space-y-3"><button onClick={() => setShowJournal(true)} className="w-full rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-left hover:border-amber-400"><p className="text-xs uppercase text-amber-500">Системная память · v{campaign.state.version || 0}</p><strong className="block mt-2 text-sm">Герой, связи, карта и задания</strong><span className="text-xs text-zinc-500 mt-1 block">Все изменения подтверждены движком</span></button><div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4"><p className="text-xs uppercase text-zinc-600">Герой</p><strong className="block mt-2">{activeCharacter.name}</strong><span className="text-xs text-zinc-500">{activeCharacter.race} · {activeCharacter.class}</span><div className="flex flex-wrap gap-2 mt-3 text-xs"><span className="px-2 py-1 rounded bg-red-500/10 text-red-400">♥ {activeCharacter.hp_current}/{activeCharacter.hp_max}</span><span className="px-2 py-1 rounded bg-zinc-800">ур. {activeCharacter.level}</span><span className="px-2 py-1 rounded bg-amber-500/10 text-amber-300">{activeCharacter.gold || 0} зол.</span></div></div>{personalHook && <div className="rounded-2xl border border-violet-500/20 bg-violet-500/5 p-4"><p className="text-xs uppercase text-violet-400">Личная цель</p><p className="text-xs leading-relaxed text-zinc-300 mt-2">{personalHook}</p></div>}<div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4"><p className="text-xs uppercase text-zinc-600">Группа</p><div className="mt-3 space-y-2">{characters.map(character => <div key={character.id} className="flex items-center justify-between text-xs"><span>{character.name}</span><span className="text-zinc-600">{character.hp_current} HP</span></div>)}</div></div><button onClick={() => setShowArchive(true)} className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4 text-left hover:border-amber-500/30"><p className="text-xs uppercase text-zinc-600">Хроника</p><strong className="block mt-2 text-sm">Прочитать предыдущие сцены</strong><span className="text-xs text-zinc-500 mt-1 block">Сохранено: {campaign.state.completedSceneIds.length}</span></button><div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-4"><p className="text-xs uppercase text-zinc-600">Инвентарь истории</p><div className="mt-2 flex flex-wrap gap-1">{campaign.state.inventory.length ? campaign.state.inventory.map(item => <span key={item} className="text-[10px] px-2 py-1 rounded bg-zinc-800">{item}</span>) : <span className="text-xs text-zinc-600">Пусто</span>}</div></div></aside>
     </div>
     {showInventory && <Suspense fallback={<div className="fixed inset-0 z-[90] bg-zinc-950 flex items-center justify-center"><Loader2 className="animate-spin text-amber-400"/></div>}><InventoryPanel character={activeCharacter} campaignId={campaign.id} currentUserId={currentUserId} location={scene.location} sceneNumber={campaign.state.sceneNumber} canTrade={canTradeHere} initialTab={inventoryInitialTab} onSave={onCharacterUpdate} onClose={() => setShowInventory(false)}/></Suspense>}
     {showArchive && <Suspense fallback={<div className="fixed inset-0 z-[95] bg-zinc-950 flex items-center justify-center"><Loader2 className="animate-spin text-amber-400"/></div>}><SceneArchive campaignId={campaign.id} campaignTitle={campaign.bible.title} acts={campaign.bible.acts} currentScene={scene} currentSceneNumber={campaign.state.sceneNumber} onClose={() => setShowArchive(false)}/></Suspense>}
+    {showJournal && <Suspense fallback={<div className="fixed inset-0 z-[98] bg-zinc-950 flex items-center justify-center"><Loader2 className="animate-spin text-amber-400"/></div>}><AdventureJournal campaign={campaign} character={activeCharacter} onClose={() => setShowJournal(false)}/></Suspense>}
     {pendingBattle && <Suspense fallback={<div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center"><Loader2 className="animate-spin text-amber-400"/></div>}><BattleModal isOpen enemies={pendingBattle.data.enemies} playerStats={toCharacterStats(activeCharacter)} playerName={activeCharacter.name} rewards={pendingBattle.data.rewards} onBattleEnd={finishBattle} onClose={() => setPendingBattle(null)}/></Suspense>} 
   </div>;
 }
@@ -239,6 +251,10 @@ export default function StoryReader({ campaign, characters, activeCharacter, cur
 function chooseActor(choice: StoryChoice, characters: Character[], fallback: Character): Character {
   if (!choice.check || characters.length <= 1) return fallback;
   return [...characters].sort((left, right) => right[choice.check!.attribute] - left[choice.check!.attribute])[0] || fallback;
+}
+
+function actorIdForChoice(choice: StoryChoice, characters: Character[], fallback: Character): string {
+  return chooseActor(choice, characters, fallback).id;
 }
 
 function toCharacterStats(character: Character): CharacterStats {

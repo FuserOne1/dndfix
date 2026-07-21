@@ -249,7 +249,102 @@ export interface StoryChoice {
     failureGold?: number;
     startsBattle?: boolean;
     battle?: import('../types').BattleStartData;
+    world?: WorldStatePatch;
   };
+}
+
+export type RelationshipTargetType = 'npc' | 'faction';
+export type LocationStatus = 'rumored' | 'discovered' | 'visited' | 'blocked';
+export type QuestStatus = 'active' | 'completed' | 'failed';
+
+export interface CampaignRelationship {
+  targetKey: string;
+  targetName: string;
+  targetType: RelationshipTargetType;
+  trust: number;
+  respect: number;
+  fear: number;
+  affection: number;
+  reason?: string;
+  updatedSceneId?: string;
+}
+
+export interface CharacterCondition {
+  characterId: string;
+  key: string;
+  name: string;
+  description: string;
+  severity: 'minor' | 'major' | 'critical';
+  expiresAtScene?: number;
+  sourceSceneId?: string;
+}
+
+export interface CampaignLocation {
+  key: string;
+  name: string;
+  description: string;
+  status: LocationStatus;
+  danger: 0 | 1 | 2 | 3 | 4 | 5;
+  services: SceneServices;
+  discoveredSceneId?: string;
+}
+
+export interface CampaignRoute {
+  key: string;
+  fromKey: string;
+  toKey: string;
+  label: string;
+  danger: 0 | 1 | 2 | 3 | 4 | 5;
+  status: 'open' | 'blocked' | 'unknown';
+}
+
+export interface CampaignQuest {
+  key: string;
+  title: string;
+  description: string;
+  status: QuestStatus;
+  stage: string;
+  relatedLocationKey?: string;
+  updatedSceneId?: string;
+}
+
+export interface CampaignClue {
+  key: string;
+  title: string;
+  description: string;
+  relatedQuestKey?: string;
+  reliability: 'uncertain' | 'likely' | 'confirmed';
+  discoveredSceneId?: string;
+}
+
+export interface CampaignSystemsState {
+  relationships: CampaignRelationship[];
+  conditions: CharacterCondition[];
+  locations: CampaignLocation[];
+  routes: CampaignRoute[];
+  quests: CampaignQuest[];
+  clues: CampaignClue[];
+}
+
+export interface WorldStatePatch {
+  relationships?: Array<Partial<Pick<CampaignRelationship, 'targetKey' | 'targetType'>> & Pick<CampaignRelationship, 'targetName'> & { trust?: number; respect?: number; fear?: number; affection?: number; reason: string }>;
+  conditions?: Array<Pick<CharacterCondition, 'characterId' | 'key' | 'name' | 'description' | 'severity'> & { action: 'add' | 'remove'; durationScenes?: number }>;
+  locations?: Array<Pick<CampaignLocation, 'key' | 'name'> & Partial<Pick<CampaignLocation, 'description' | 'status' | 'danger' | 'services'>>>;
+  routes?: Array<Pick<CampaignRoute, 'fromKey' | 'toKey'> & Partial<Pick<CampaignRoute, 'key' | 'label' | 'danger' | 'status'>>>;
+  quests?: Array<Pick<CampaignQuest, 'key' | 'title'> & Partial<Pick<CampaignQuest, 'description' | 'status' | 'stage' | 'relatedLocationKey'>>>;
+  clues?: Array<Pick<CampaignClue, 'key' | 'title' | 'description'> & Partial<Pick<CampaignClue, 'relatedQuestKey' | 'reliability'>>>;
+}
+
+export interface CampaignEvent {
+  id?: string;
+  sequence: number;
+  eventType: string;
+  sceneId?: string;
+  choiceId?: string;
+  actorId?: string;
+  summary: string;
+  payload: WorldStatePatch;
+  createdAt?: string;
 }
 
 export interface StoryScene {
@@ -291,6 +386,7 @@ export interface SceneImage {
 }
 
 export interface CampaignState {
+  version?: number;
   flags: string[];
   inventory: string[];
   relationships: Record<string, number>;
@@ -299,6 +395,7 @@ export interface CampaignState {
   currentSceneId: string;
   sceneNumber: number;
   director?: SceneDirectorState;
+  systems?: CampaignSystemsState;
 }
 
 export interface ChoiceResolution {
