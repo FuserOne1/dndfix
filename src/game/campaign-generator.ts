@@ -84,11 +84,11 @@ function parseJson<T>(content: string): T {
 
 function truncate(text: string, max: number): string { return text.length > max ? text.slice(0, max) + '…' : text; }
 
-function characterContext(character: Character) {
+function characterContext(character: Character, includeInventory = false) {
   const inventory = normalizeInventory(character);
   const bd = character.backstory_data;
   const backstory = bd ? [bd.goal, bd.fear, bd.secret, ...bd.hooks].filter(Boolean).map(s => truncate(s, 200)).join(' · ') : character.story_summary || '';
-  return {
+  const ctx: Record<string, unknown> = {
     name: character.name,
     lineage: character.race,
     class: character.class,
@@ -106,6 +106,8 @@ function characterContext(character: Character) {
     gold: character.gold || 0,
     equipped: equippedItemNames(inventory),
   };
+  if (includeInventory) ctx.inventory = inventory.items.map(item => item.name);
+  return ctx;
 }
 
 export interface GeneratedCampaignPackage {
@@ -261,7 +263,7 @@ export async function generateOpeningScene(bible: CampaignBible, preferences: Ca
 ${JSON.stringify(compactBibleForScene(bible))}
 
 ГЕРОИ:
-${JSON.stringify(characters.map(characterContext), null, 2)}
+${JSON.stringify(characters.map(c => characterContext(c, true)), null, 2)}
 
 НАСТРОЙКИ:
 ${JSON.stringify(preferences, null, 2)}
@@ -301,7 +303,7 @@ ${JSON.stringify(input.resolution, null, 2)}
 ${JSON.stringify(compactStateForScene(input.state))}
 
 ГЕРОИ:
-${JSON.stringify(input.characters.map(characterContext), null, 2)}
+${JSON.stringify(input.characters.map(c => characterContext(c, true)), null, 2)}
 
 ОБЯЗАТЕЛЬСТВА ПЕРЕД ИГРОКАМИ:
 ${JSON.stringify(storyBible.playerPromises || [])}
