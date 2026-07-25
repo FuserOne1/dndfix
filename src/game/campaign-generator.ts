@@ -9,7 +9,6 @@ const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 interface AiRequestOptions {
   model?: string;
-  maxTokens?: number;
   timeoutMs?: number;
   temperature?: number;
 }
@@ -19,7 +18,6 @@ async function requestJson<T>(system: string, prompt: string, options: AiRequest
   if (!apiKey) throw new Error('VITE_OPENROUTER_API_KEY не настроен');
   const content = await requestCompletion(apiKey, system, prompt, {
     model: options.model || AI_MODELS.MAIN,
-    maxTokens: options.maxTokens || 2600,
     timeoutMs: options.timeoutMs || 50_000,
     temperature: options.temperature ?? 0.72,
   });
@@ -32,7 +30,7 @@ async function requestJson<T>(system: string, prompt: string, options: AiRequest
       apiKey,
       'Ты технический JSON-редактор. Исправь только синтаксис и структуру JSON, не переписывай художественный текст и не добавляй новые факты. Ответ — только корректный JSON.',
       `Исправь JSON:\n${content}`,
-      { model: AI_MODELS.WORKHORSE, maxTokens: options.maxTokens || 2600, timeoutMs: 25_000, temperature: 0.2 },
+      { model: AI_MODELS.WORKHORSE, timeoutMs: 25_000, temperature: 0.2 },
     );
     return parseJson<T>(repaired);
   }
@@ -55,7 +53,7 @@ async function requestCompletion(apiKey: string, system: string, prompt: string,
     body: JSON.stringify({
       model: options.model,
       temperature: options.temperature,
-      max_tokens: options.maxTokens,
+
       reasoning: { effort: 'none' },
       response_format: { type: 'json_object' },
       plugins: [{ id: 'response-healing' }],
@@ -151,7 +149,7 @@ ${JSON.stringify(variation)}
 
   try {
     const rulesPrompt = `${prompt}\n\nRULES FOR CHECKS AND PROSE:\n- A check must include attribute, a fitting skill, and base difficulty from 10 to 15.\n- Allowed Russian skill names: Атлетика, Акробатика, Скрытность, Ловкость рук, Знание, Расследование, Природа, Медицина, Проницательность, Внимание, Выживание, Убеждение, Обман, Запугивание, Выступление.\n- Body paragraphs may moderately use **bold**, *italic*, > quotes and --- scene dividers. Do not use headings, tables or lists inside prose.`;
-    const generated = await requestJson<{ bible: CampaignBible; opening: StoryScene }>(system, rulesPrompt, { model: AI_MODELS.MAIN, maxTokens: 5200, timeoutMs: 105_000, temperature: 0.88 });
+    const generated = await requestJson<{ bible: CampaignBible; opening: StoryScene }>(system, rulesPrompt, { model: AI_MODELS.MAIN, timeoutMs: 105_000, temperature: 0.88 });
     const bible = ensureScenePlan(ensurePlayerPromises(validateBible(generated.bible), preferences, characters), preferences, characters);
     const opening = validateScene(generated.opening, bible.acts[0]?.id || 'act-1', 'scene-1', bible.scenePlan?.[0]);
     return { bible, opening };
@@ -247,7 +245,7 @@ ${JSON.stringify(characters.map(characterContext), null, 2)}
 
 Количество актов: короткая 3, средняя 4, длинная 5. Создай 4–6 разных концовок со стабильными id и конкретными условиями. Для каждого героя обязательно создай личный крючок. Тайны должны иметь заранее определённые ответы.`;
   try {
-    return ensureScenePlan(ensurePlayerPromises(validateBible(await requestJson<CampaignBible>(system, prompt, { model: AI_MODELS.MAIN, maxTokens: 3800, timeoutMs: 60_000 })), preferences, characters), preferences, characters);
+    return ensureScenePlan(ensurePlayerPromises(validateBible(await requestJson<CampaignBible>(system, prompt, { model: AI_MODELS.MAIN, timeoutMs: 60_000 })), preferences, characters), preferences, characters);
   } catch (error) {
     console.warn('Campaign generation failed, using local campaign:', error);
     return ensureScenePlan(ensurePlayerPromises(createFallbackBible(preferences, characters), preferences, characters), preferences, characters);
@@ -270,7 +268,7 @@ ${JSON.stringify(preferences, null, 2)}
 
 Верни StoryScene в заданном формате. Напиши 5–8 абзацев по 2–4 предложения: покажи мотивацию героев и связь проблемы с их прошлым. Дай 3–5 содержательных вариантов: прямой, осторожный, социальный и хотя бы один условный под конкретного героя.`;
   try {
-    return validateScene(await requestJson<StoryScene>(system, `${prompt}\n\nITEM-AWARE CHOICES: inspect the heroes' inventory. When an owned item can reasonably solve or alter the scene, include an additional choice requiring it. requirements.items must contain the exact item name from the inventory; removeItems only for a genuinely consumed or lost item.\n\nSCENE CONTRACT (do not change its fields):\n${JSON.stringify(blueprint)}`, { model: AI_MODELS.MAIN, maxTokens: 2400, timeoutMs: 50_000 }), bible.acts[0]?.id || 'act-1', 'scene-1', blueprint);
+    return validateScene(await requestJson<StoryScene>(system, `${prompt}\n\nITEM-AWARE CHOICES: inspect the heroes' inventory. When an owned item can reasonably solve or alter the scene, include an additional choice requiring it. requirements.items must contain the exact item name from the inventory; removeItems only for a genuinely consumed or lost item.\n\nSCENE CONTRACT (do not change its fields):\n${JSON.stringify(blueprint)}`, { model: AI_MODELS.MAIN, timeoutMs: 50_000 }), bible.acts[0]?.id || 'act-1', 'scene-1', blueprint);
   } catch (error) {
     console.warn('Opening scene generation failed, using local scene:', error);
     return createFallbackOpening(bible, characters, blueprint);
@@ -310,7 +308,7 @@ ${JSON.stringify(storyBible.playerPromises || [])}
 
 Верни следующую StoryScene. id должен быть "${nextId}". Не перескакивай через последствия: сцена должна развить выбранный момент как небольшую главу, ясно показать мотивацию действующих героев и закончиться новой осмысленной развилкой.`;
   try {
-    return validateScene(await requestJson<StoryScene>(sceneSystemPrompt(), `${prompt}\n\nRULES: checks use a fitting Russian skill from the allowed list and a base DC from 10 to 15. Campaign difficulty is ${input.preferences.difficulty}; the engine applies its modifier. Body paragraphs may use **bold**, *italic*, > quotes and --- scene dividers when artistically useful. Inspect every hero inventory: whenever an owned item can reasonably solve, simplify, or alter the scene, include an item-aware choice. Copy its exact inventory name into requirements.items. Put it in removeItems only when the action truly consumes or loses it. Never grant an item only in prose: every obtained item must also be listed in grantItems. If SCENE CONTRACT has type "ending", choose the single ending from BIBLE whose condition best matches the actual state and prior decisions, copy its title EXACTLY into StoryScene.title, resolve the consequences in full prose and return choices: []. Do not invent an extra ending.\n\nSCENE CONTRACT (do not change its fields):\n${JSON.stringify(blueprint)}`, { model: AI_MODELS.MAIN, maxTokens: 2400, timeoutMs: 50_000 }), input.state.currentActId, nextId, blueprint);
+    return validateScene(await requestJson<StoryScene>(sceneSystemPrompt(), `${prompt}\n\nRULES: checks use a fitting Russian skill from the allowed list and a base DC from 10 to 15. Campaign difficulty is ${input.preferences.difficulty}; the engine applies its modifier. Body paragraphs may use **bold**, *italic*, > quotes and --- scene dividers when artistically useful. Inspect every hero inventory: whenever an owned item can reasonably solve, simplify, or alter the scene, include an item-aware choice. Copy its exact inventory name into requirements.items. Put it in removeItems only when the action truly consumes or loses it. Never grant an item only in prose: every obtained item must also be listed in grantItems. If SCENE CONTRACT has type "ending", choose the single ending from BIBLE whose condition best matches the actual state and prior decisions, copy its title EXACTLY into StoryScene.title, resolve the consequences in full prose and return choices: []. Do not invent an extra ending.\n\nSCENE CONTRACT (do not change its fields):\n${JSON.stringify(blueprint)}`, { model: AI_MODELS.MAIN, timeoutMs: 50_000 }), input.state.currentActId, nextId, blueprint);
   } catch (error) {
     console.warn('Next scene generation failed, using local continuation:', error);
     return createFallbackContinuation(input, nextId, blueprint);
