@@ -53,8 +53,7 @@ async function requestCompletion(apiKey: string, system: string, prompt: string,
     body: JSON.stringify({
       model: options.model,
       temperature: options.temperature,
-
-      reasoning: { effort: 'none' },
+      max_tokens: 16000,
       response_format: { type: 'json_object' },
       plugins: [{ id: 'response-healing' }],
       messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }],
