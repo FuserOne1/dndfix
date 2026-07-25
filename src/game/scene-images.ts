@@ -101,14 +101,72 @@ async function createPrompt(apiKey: string, scene: StoryScene, bible: CampaignBi
   } finally { window.clearTimeout(timeout); }
 }
 
+const SAFETY_SETTINGS = [
+  { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+  { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+  { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+  { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+];
+
+function sanitizeForSafety(prompt: string): string {
+  return prompt
+    .replace(/\bdark\b/gi, 'moody')
+    .replace(/\bchiaroscuro\b/gi, 'dramatic lighting')
+    .replace(/\bviolence\b/gi, 'tension')
+    .replace(/\bviolent\b/gi, 'intense')
+    .replace(/\bblood\b/gi, 'red dust')
+    .replace(/\b血腥\b/gi, 'red mist')
+    .replace(/\bkill\b/gi, 'defeat')
+    .replace(/\bdeath\b/gi, 'danger')
+    .replace(/\bdead\b/gi, 'fallen')
+    .replace(/\bcorpse\b/gi, 'remains')
+    .replace(/\bgore\b/gi, 'dust')
+    .replace(/\bbrutal\b/gi, 'fierce')
+    .replace(/\bslash\b/gi, 'strike')
+    .replace(/\bstab\b/gi, 'thrust')
+    .replace(/\bsevered\b/gi, 'broken')
+    .replace(/\bmaim\b/gi, 'wound')
+    .replace(/\bmutilat\b/gi, 'injure')
+    .replace(/\bhorror\b/gi, 'dread')
+    .replace(/\bnightmare\b/gi, 'shadow')
+    .replace(/\bdemon\b/gi, 'fiend')
+    .replace(/\bdevil\b/gi, 'fiend')
+    .replace(/\bhell\b/gi, 'abyss')
+    .replace(/\bskull\b/gi, 'symbol')
+    .replace(/\bskeleton\b/gi, 'ancient figure')
+    .replace(/\bzombie\b/gi, 'undead creature')
+    .replace(/\bundead\b/gi, 'spectral figure')
+    .replace(/\bweapon\b/gi, 'tool')
+    .replace(/\bsword\b/gi, 'blade')
+    .replace(/\baxe\b/gi, 'cleaver')
+    .replace(/\bchain\b/gi, 'rope');
+}
+
 async function requestImage(apiKey: string, prompt: string): Promise<{ base64: string; mediaType: string }> {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 90_000);
   try {
-    const response = await fetch(OPENROUTER_IMAGE_URL, { method: 'POST', signal: controller.signal, headers: headers(apiKey), body: JSON.stringify({ model: AI_MODELS.IMAGE, prompt, n: 1, aspect_ratio: '16:9' }) });
+    const body: Record<string, unknown> = { model: AI_MODELS.IMAGE, prompt, n: 1, aspect_ratio: '16:9', safety_settings: SAFETY_SETTINGS };
+    let response = await fetch(OPENROUTER_IMAGE_URL, { method: 'POST', signal: controller.signal, headers: headers(apiKey), body: JSON.stringify(body) });
     if (!response.ok) {
       const detail = await response.text();
-      throw new Error(`Nano Banana не смогла нарисовать сцену (${response.status}): ${detail.slice(0, 240)}`);
+      const isSafety = /IMAGE_SAFETY/i.test(detail);
+      if (isSafety) {
+        console.warn('Gemini IMAGE_SAFETY triggered, retrying with sanitized prompt');
+        const safePrompt = sanitizeForSafety(prompt);
+        controller.abort();
+        const controller2 = new AbortController();
+        const timeout2 = window.setTimeout(() => controller2.abort(), 90_000);
+        try {
+          response = await fetch(OPENROUTER_IMAGE_URL, { method: 'POST', signal: controller2.signal, headers: headers(apiKey), body: JSON.stringify({ ...body, prompt: safePrompt }) });
+        } finally { window.clearTimeout(timeout2); }
+        if (!response.ok) {
+          const detail2 = await response.text();
+          throw new Error(`Nano Banana не смогла нарисовать сцену (${response.status}): ${detail2.slice(0, 240)}`);
+        }
+      } else {
+        throw new Error(`Nano Banana не смогла нарисовать сцену (${response.status}): ${detail.slice(0, 240)}`);
+      }
     }
     const payload = await response.json();
     const image = payload.data?.[0];
