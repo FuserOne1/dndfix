@@ -82,8 +82,12 @@ function parseJson<T>(content: string): T {
   return JSON.parse(fenced) as T;
 }
 
+function truncate(text: string, max: number): string { return text.length > max ? text.slice(0, max) + '…' : text; }
+
 function characterContext(character: Character) {
   const inventory = normalizeInventory(character);
+  const bd = character.backstory_data;
+  const backstory = bd ? [bd.goal, bd.fear, bd.secret, ...bd.hooks].filter(Boolean).map(s => truncate(s, 200)).join(' · ') : character.story_summary || '';
   return {
     name: character.name,
     lineage: character.race,
@@ -97,13 +101,10 @@ function characterContext(character: Character) {
       wisdom: character.wisdom,
       charisma: character.charisma,
     },
-    backstory: character.backstory_data || character.story_summary || '',
+    backstory,
     tags: character.rules_data?.storyTags || [],
-    skills: character.rules_data?.selectedSkills || [],
-    traits: character.rules_data?.traits || [],
     gold: character.gold || 0,
     equipped: equippedItemNames(inventory),
-    inventory: inventory.items.map(item => ({ name: item.name, quantity: item.quantity })),
   };
 }
 
