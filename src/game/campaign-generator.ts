@@ -93,6 +93,7 @@ function characterContext(character: Character, includeInventory = false) {
     lineage: character.race,
     class: character.class,
     origin: character.background,
+    hp: `${character.hp_current}/${character.hp_max}`,
     attributes: {
       strength: character.strength,
       dexterity: character.dexterity,
@@ -308,7 +309,7 @@ ${JSON.stringify(input.characters.map(c => characterContext(c, true)), null, 2)}
 ОБЯЗАТЕЛЬСТВА ПЕРЕД ИГРОКАМИ:
 ${JSON.stringify(storyBible.playerPromises || [])}
 
-Верни следующую StoryScene. id должен быть "${nextId}". Не перескакивай через последствия: сцена должна развить выбранный момент как небольшую главу, ясно показать мотивацию действующих героев и закончиться новой осмысленной развилкой.`;
+Верни следующую StoryScene. id должен быть "${nextId}". Не перескакивай через последствия: сцена должна развить выбранный момент как небольшую главу, ясно показать мотивацию действующих героев и закончиться новой осмысленной развилкой. Если у героя hp "0/X", он без сознания и требует лечения — создай хотя бы один вариант с использованием зелья, свитка или иного исцеления.`;
   try {
     return validateScene(await requestJson<StoryScene>(sceneSystemPrompt(), `${prompt}\n\nRULES: checks use a fitting Russian skill from the allowed list and a base DC from 10 to 15. Campaign difficulty is ${input.preferences.difficulty}; the engine applies its modifier. Body paragraphs may use **bold**, *italic*, > quotes and --- scene dividers when artistically useful. Inspect every hero inventory: whenever an owned item can reasonably solve, simplify, or alter the scene, include an item-aware choice. Copy its exact inventory name into requirements.items. Put it in removeItems only when the action truly consumes or loses it. Never grant an item only in prose: every obtained item must also be listed in grantItems. If SCENE CONTRACT has type "ending", choose the single ending from BIBLE whose condition best matches the actual state and prior decisions, copy its title EXACTLY into StoryScene.title, resolve the consequences in full prose and return choices: []. Do not invent an extra ending.\n\nSCENE CONTRACT (do not change its fields):\n${JSON.stringify(blueprint)}`, { model: AI_MODELS.MAIN, timeoutMs: 50_000 }), input.state.currentActId, nextId, blueprint);
   } catch (error) {

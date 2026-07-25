@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, ChevronRight, Loader2, Plus, Users } from 'lucide-react';
 import { supabase, isSupabaseConfigured, supabaseAnonKey, supabaseUrl } from './lib/supabase';
 import { Character } from './types';
@@ -41,6 +41,15 @@ export default function App() {
   });
 
   useEffect(() => { void loadCampaigns(); }, []);
+
+  const selectedCharacterRef = useRef(selectedCharacter);
+  selectedCharacterRef.current = selectedCharacter;
+  useEffect(() => {
+    const sel = selectedCharacterRef.current;
+    if (!sel || !campaignCharacters.length) return;
+    const fresh = campaignCharacters.find(c => c.id === sel.id);
+    if (fresh && (fresh.hp_current !== sel.hp_current || fresh.xp !== sel.xp || fresh.level !== sel.level || fresh.gold !== sel.gold)) setSelectedCharacter(fresh);
+  }, [campaignCharacters]);
 
   async function loadCampaigns() {
     if (!isSupabaseConfigured) return;
