@@ -143,7 +143,19 @@ export default function StoryReader({ campaign, characters, activeCharacter, cur
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaign.id, activeCharacter.id]);
 
-  const availableChoices = useMemo(() => scene.choices.map(choice => ({ choice, availability: isChoiceAvailable(choice, activeCharacter, campaign.state.flags, availableStoryItems) })), [activeCharacter, availableStoryItems, campaign.state.flags, scene.choices]);
+  const availableChoices = useMemo(() => {
+    const sceneChoices = scene.choices.map(choice => ({ choice, availability: isChoiceAvailable(choice, activeCharacter, campaign.state.flags, availableStoryItems) }));
+    if (campaign.mode !== 'party') return sceneChoices;
+    const downed = characters.filter(c => c.hp_current <= 0 && c.id !== activeCharacter.id);
+    for (const ally of downed) {
+      const helpChoice: StoryChoice = { id: `help-${ally.id}`, label: `Помочь ${ally.name}`, description: `Стабилизировать ${ally.name} и вернуть его в строй.`, intent: `помочь ${ally.name}`, consequences: { hpChange: Math.max(1, Math.floor(ally.hp_max * 0.3)), successFlags: [`helped-${ally.id}`] } };
+      sceneChoices.push({ choice: helpChoice, availability: { available: true } });
+    }
+    return sceneChoices;
+  }, [activeCharacter, availableStoryItems, campaign.mode, campaign.state.flags, characters, scene.choices]);
+
+  const isHelpChoice = (id: string) => id.startsWith('help-');
+  const helpTargetId = (id: string) => id.replace('help-', '');
 
   async function selectChoice(choice: StoryChoice) {
     const availability = isChoiceAvailable(choice, activeCharacter, campaign.state.flags, availableStoryItems);
@@ -159,9 +171,12 @@ export default function StoryReader({ campaign, characters, activeCharacter, cur
   }
 
   function winningChoice(): StoryChoice | undefined {
-    if (campaign.mode === 'solo') return scene.choices.find(choice => choice.id === selectedChoiceId);
+    if (campaign.mode === 'solo') return scene.choices.find(choice => choice.id === selectedChoiceId) || (isHelpChoice(selectedChoiceId) ? availableChoices.find(item => item.choice.id === selectedChoiceId)?.choice : undefined);
     const counts = votes.reduce<Record<string, number>>((result, vote) => ({ ...result, [vote.choice_id]: (result[vote.choice_id] || 0) + 1 }), {});
-    return scene.choices.filter(choice => counts[choice.id]).sort((left, right) => (counts[right.id] || 0) - (counts[left.id] || 0))[0] || scene.choices.find(choice => choice.id === selectedChoiceId);
+    const allIds = [...scene.choices.map(c => c.id), ...availableChoices.filter(item => isHelpChoice(item.choice.id)).map(item => item.choice.id)];
+    const winner = allIds.filter(id => counts[id]).sort((left, right) => (counts[right] || 0) - (counts[left] || 0))[0];
+    if (winner) return availableChoices.find(item => item.choice.id === winner)?.choice || scene.choices.find(c => c.id === winner);
+    return scene.choices.find(choice => choice.id === selectedChoiceId);
   }
 
   async function confirmChoice() {
@@ -170,6 +185,26 @@ export default function StoryReader({ campaign, characters, activeCharacter, cur
     setResolving(true); setError(''); setRewardNotice(null);
     try {
       await persistSavepoint('branch');
+      if (isHelpChoice(choice.id)) {
+        const targetId = helpTargetId(choice.id);
+        const target = characters.find(c => c.id === targetId);
+        if (!target) { setError('Герой не найден'); setResolving(false); return; }
+        const healAmount = choice.consequences.hpChange || Math.max(1, Math.floor(target.hp_max * 0.3));
+        const healed: Character = { ...target, hp_current: Math.min(target.hp_max, target.hp_current + healAmount) };
+        await onCharacterUpdate(healed);
+        const nextCharacters = characters.map(c => c.id === target.id ? healed : c);
+        setRewardNotice({ characterName: target.name, items: [], xp: 0 });
+        setLastResolution({ success: true, summary: `${activeCharacter.name} стабилизировал ${target.name}.`, hpChange: 0, goldChange: 0, lostItems: [], gainedItems: [], roll: null, successFlags: [`helped-${target.id}`], failureFlags: [] });
+        const nextState = { ...campaign.state, flags: [...new Set([...campaign.state.flags, `helped-${target.id}`])], completedSceneIds: [...campaign.state.completedSceneIds, scene.id], sceneNumber: campaign.state.sceneNumber + 1, checkFailureStreak: 0, director: recordCompletedScene(campaign.state.director, scene, nextCharacters) };
+        const nextScene = await generateNextScene({ bible: campaign.bible, previousScene: scene, resolution: { success: true, summary: `${activeCharacter.name} стабилизировал ${target.name}.`, hpChange: 0, goldChange: 0, lostItems: [], gainedItems: [], roll: null }, state: nextState, characters: nextCharacters, preferences: campaign.preferences });
+        const systems = applyWorldPatch(nextState.systems, {}, nextScene.id, nextState.sceneNumber);
+        const committedState = { ...nextState, systems, currentSceneId: nextScene.id, currentActId: nextScene.actId, director: enterScene(nextState.director, nextScene) };
+        const version = await commitWorldEvent({ campaignId: campaign.id, expectedVersion: campaign.state.version || 0, eventType: 'choice_resolved', sceneId: scene.id, choiceId: choice.id, actorId: activeCharacter.id, summary: `Стабилизация ${target.name}.`, patch: {}, systems, campaignState: committedState, currentScene: nextScene });
+        const updated: CampaignRuntime = { ...campaign, state: { ...committedState, version }, currentScene: nextScene };
+        await onUpdate(updated);
+        if (campaign.mode === 'party') await supabase.from('campaign_votes').delete().eq('campaign_id', campaign.id).eq('scene_id', scene.id);
+        return;
+      }
       const actor = chooseActor(choice, characters, activeCharacter, campaign.preferences.difficulty, campaign.state.checkFailureStreak);
       const resolution = resolveChoice(choice, actor, { difficulty: campaign.preferences.difficulty, failureStreak: campaign.state.checkFailureStreak });
       setLastResolution(resolution);
