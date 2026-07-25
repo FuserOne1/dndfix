@@ -337,7 +337,11 @@ function validateBible(value: CampaignBible): CampaignBible {
 }
 
 function validateScene(value: StoryScene, fallbackActId: string, fallbackId: string, blueprint?: SceneBlueprint): StoryScene {
-  if (!value || !Array.isArray(value.body) || value.body.length === 0 || !Array.isArray(value.choices)) throw new Error('Некорректная сцена');
+  if (!value) throw new Error('Некорректная сцена');
+  const rawBody = typeof value.body === 'string' ? [value.body] : Array.isArray(value.body) ? value.body : [];
+  const body = rawBody.length > 0 ? rawBody : ['Сцена без описания.'];
+  const choices = Array.isArray(value.choices) ? value.choices : [];
+  if (!Array.isArray(value.body) || !Array.isArray(value.choices)) console.warn('Scene normalized: body or choices were not arrays', { bodyType: typeof value.body, choicesType: typeof value.choices });
   const type = normalizeSceneType(value.type);
   const validated: StoryScene = {
     ...value,
@@ -345,10 +349,11 @@ function validateScene(value: StoryScene, fallbackActId: string, fallbackId: str
     actId: value.actId || fallbackActId,
     title: value.title || 'Безымянная сцена',
     location: value.location || 'Неизвестное место',
+    body,
     type,
     audience: value.audience || (type === 'personal' ? 'personal' : 'group'),
     services: value.services || servicesForScene(type),
-    choices: value.choices.slice(0, 6).map((choice, index) => ({
+    choices: choices.slice(0, 6).map((choice, index) => ({
       ...choice,
       id: choice.id || `choice-${index + 1}`,
       label: choice.label || `Вариант ${index + 1}`,
