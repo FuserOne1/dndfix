@@ -143,10 +143,11 @@ export function chooseNextBlueprint(input: {
   const previousType = normalizeSceneType(input.previousScene.type);
   const director = input.state.director;
   const partyNeedsRest = input.characters.some(character => character.hp_max > 0 && character.hp_current / character.hp_max <= 0.35);
+  const partyCritically = input.characters.some(character => character.hp_current <= 0);
 
   if (blueprint.type === 'combat' && previousType === 'combat') {
     blueprint = adaptBlueprint(blueprint, 'camp', 'Передышка после боя и разбор его последствий');
-  } else if (partyNeedsRest && (director?.scenesSinceRest ?? 3) >= 3 && !['combat', 'climax', 'ending'].includes(blueprint.type)) {
+  } else if (partyNeedsRest && !partyCritically && (director?.scenesSinceRest ?? 3) >= 3 && !['combat', 'climax', 'ending'].includes(blueprint.type)) {
     blueprint = adaptBlueprint(blueprint, 'rest', 'Восстановление израненной группы перед продолжением пути');
   }
   if (blueprint.type === 'ending' && index < plan.length - 1) blueprint = adaptBlueprint(blueprint, 'narrative', blueprint.purpose);
