@@ -121,7 +121,7 @@ export async function generateCampaignPackage(preferences: CampaignPreferences, 
   const system = `Ты — главный автор интерактивной текстовой RPG для оригинальной d20-системы. За один ответ создай библию всей кампании и полностью написанную первую сцену. История должна иметь заранее определённые тайны, личные линии героев, кульминацию и несколько возможных финалов. Завязка, свободное пожелание игрока и предыстории героев — обязательные авторские обещания, а не необязательное вдохновение. Не меняй факты и характеристики героев, не используй коммерческие франшизы. Ответ — только JSON вида {"bible":CampaignBible,"opening":StoryScene}.`;
   const prompt = `НАСТРОЙКИ:\n${JSON.stringify(preferences)}
 
-ГЕРОИ:\n${JSON.stringify(characters.map(characterContext))}
+ГЕРОИ:\n${JSON.stringify(characters.map(c => characterContext(c)))}
 
 ТВОРЧЕСКИЙ КЛЮЧ ЭТОЙ ГЕНЕРАЦИИ:
 ${JSON.stringify(variation)}
@@ -232,7 +232,7 @@ export async function generateCampaignBible(preferences: CampaignPreferences, ch
 ${JSON.stringify(preferences, null, 2)}
 
 ГЕРОИ:
-${JSON.stringify(characters.map(characterContext), null, 2)}
+${JSON.stringify(characters.map(c => characterContext(c)), null, 2)}
 
 Верни объект CampaignBible:
 {
